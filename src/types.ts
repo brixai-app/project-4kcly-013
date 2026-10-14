@@ -1,82 +1,84 @@
-export type Size = 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46;
-export type ShoeSize = Size;
-export type Category = "sneakers" | "loafers" | "boots" | "heels" | "sandals";
-export type CatalogSort = "featured" | "price-asc" | "price-desc" | "newest";
+export type Size = 'EU 36' | 'EU 37' | 'EU 38' | 'EU 39' | 'EU 40' | 'EU 41' | 'EU 42' | 'EU 43' | 'EU 44';
+
+export type ColorVariant = 'Black' | 'White' | 'Tan' | 'Cognac' | 'Ivory' | 'Burgundy' | 'Navy' | 'Olive';
+
+export type StockKey = `${Size}-${ColorVariant}`;
+
+export type Category =
+  | 'Heels'
+  | 'Loafers'
+  | 'Sneakers'
+  | 'Sandals'
+  | 'Boots'
+  | 'Mules'
+  | 'Slides';
+
+export interface ProductImage {
+  url: string;
+  alt: string;
+}
 
 export interface Product {
   id: string;
-  slug: string;
   name: string;
-  category: Category;
-  collection: string;
+  slug: string;
   description: string;
   price: number;
-  image: string;
-  images: string[];
+  currency: 'INR';
+  category: Category;
+  collection: string;
+  featured: boolean;
+  images: ProductImage[];
   sizes: Size[];
-  stock: Partial<Record<Size, number>>;
-  color: string;
-  material: string;
-  featured?: boolean;
-  isNew?: boolean;
+  colors: ColorVariant[];
+  stockByKey: Record<StockKey, number>;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CartItem {
   id: string;
-  product: Product;
-  size: Size;
-  quantity: number;
-}
-
-export interface UserProfile {
-  id: string;
+  productId: string;
   name: string;
-  email: string;
-  wishlist: string[];
+  price: number;
+  currency: 'INR';
+  size: Size;
+  color: ColorVariant;
+  quantity: number;
+  imageUrl: string;
+  maxAvailable: number;
 }
 
-export interface CatalogFilters {
-  search: string;
-  categories: Category[];
-  sizes: Size[];
-  minPrice: number | null;
-  maxPrice: number | null;
-  sort: CatalogSort;
-  inStockOnly: boolean;
-}
-
-export interface EditorialStory {
-  id: string;
-  title: string;
-  subtitle: string;
-  description: string;
-  image: string;
-  href: string;
-  caption?: string;
-}
-
-export interface CheckoutValues {
+export interface ShippingInfo {
   fullName: string;
   email: string;
-  address: string;
+  phone: string;
+  addressLine1: string;
+  addressLine2?: string;
   city: string;
+  state: string;
   postalCode: string;
   country: string;
-  phone?: string;
 }
+
+export type PaymentMethod = 'card' | 'upi' | 'cod';
 
 export interface Order {
   id: string;
   items: CartItem[];
-  customer: CheckoutValues;
   subtotal: number;
-  shipping: number;
+  shippingFee: number;
   total: number;
-  currency: "INR";
+  currency: 'INR';
+  shippingInfo: ShippingInfo;
+  paymentMethod: PaymentMethod;
   createdAt: string;
-  status: "confirmed" | "cancelled";
-  isMock: true;
 }
 
-export type types = { Product: Product; CartItem: CartItem; UserProfile: UserProfile; CatalogFilters: CatalogFilters; EditorialStory: EditorialStory; CheckoutValues: CheckoutValues; Order: Order; Size: Size; Category: Category };
-export type { types as default };
+export interface CartState {
+  items: CartItem[];
+  lastUpdated: string | null;
+}
+
+const defaultTypes = {};
+export default defaultTypes;

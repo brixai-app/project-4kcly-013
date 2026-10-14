@@ -1,105 +1,212 @@
-import type { Category, CatalogSort, EditorialStory, Product, Size } from "@/types";
+import { Product, ProductImage, Size, ColorVariant, StockKey } from '@/types';
 
-export const assets = {
-  sneaker: "https://images.unsplash.com/photo-1552346154-21d32810aba3?auto=format&fit=crop&w=800&q=80",
-  runway: "https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&w=1400&q=85",
-  wardrobe: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80",
-  lookbook: "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1400&q=85",
-  portrait: "https://images.unsplash.com/photo-1509967419530-da38b4704bc6?auto=format&fit=crop&w=800&q=80",
-  interior: "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=1200&q=80",
-  atelier: "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?auto=format&fit=crop&w=800&q=80".replace("5170230230", "5170230"),
-} as const;
+const baseSizes: Size[] = ['EU 36', 'EU 37', 'EU 38', 'EU 39', 'EU 40', 'EU 41', 'EU 42', 'EU 43', 'EU 44'];
+const now = new Date().toISOString();
 
-export const imageryDisclosure = "Representative catalog photography: all sneaker styles share one supplied sample image. It does not depict each style, color, or material. Editorial images illustrate the mood of the collection.";
-export const mockCheckoutDisclosure = "Demonstration boutique. Checkout is simulated; no payment is collected and no products are shipped.";
-export const sizeOptions: Size[] = [35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46];
-export const sizes = sizeOptions;
-export const currency = "INR" as const;
-export const locale = "en-IN";
+function makeImages(urls: string[], altBase: string): ProductImage[] {
+  return urls.map((url, index) => ({
+    url,
+    alt: `${altBase} view ${index + 1}`,
+  }));
+}
 
-const makeProduct = (
-  id: string, slug: string, name: string, collection: string, price: number,
-  color: string, material: string, description: string, featured = false, isNew = false,
-): Product => ({
-  id, slug, name, collection, price, color, material, description,
-  category: "sneakers", image: assets?.sneaker ?? "", images: [assets?.sneaker ?? ""],
-  sizes: [...sizeOptions],
-  stock: { 35: 2, 36: 3, 37: 4, 38: 5, 39: 6, 40: 6, 41: 5, 42: 4, 43: 3, 44: 2, 45: 1, 46: 0 },
-  featured, isNew,
-});
+function buildStock(sizes: Size[], colors: ColorVariant[], base: number): Record<StockKey, number> {
+  const stock: Partial<Record<StockKey, number>> = {};
+  sizes.forEach((size, sIndex) => {
+    colors.forEach((color, cIndex) => {
+      const key = `${size}-${color}` as StockKey;
+      const variantFactor = (sIndex + cIndex) % 3;
+      const qty = base + variantFactor * 2;
+      stock[key] = qty;
+    });
+  });
+  return stock as Record<StockKey, number>;
+}
 
 export const products: Product[] = [
-  makeProduct("se-001", "court-01", "Court 01", "The Everyday Edit", 8490, "Ivory", "Leather upper, rubber sole", "A pared-back court silhouette imagined for unhurried days. Sample specification; photography is representative.", true, true),
-  makeProduct("se-002", "atelier-low", "Atelier Low", "Atelier Collection", 11490, "Chalk", "Suede and leather upper, rubber sole", "Soft textures meet a restrained low profile. Sample specification; photography is representative.", true, true),
-  makeProduct("se-003", "city-runner", "City Runner", "Urban Rhythm", 9990, "Stone", "Mesh and suede upper, rubber sole", "A layered runner concept for the everyday city wardrobe. Sample specification; photography is representative.", true),
-  makeProduct("se-004", "linea-02", "Linea 02", "The Everyday Edit", 7490, "Charcoal", "Leather upper, rubber sole", "Clean lines and understated proportions define this wardrobe staple. Sample specification; photography is representative.", true),
-  makeProduct("se-005", "studio-high", "Studio High", "Atelier Collection", 12990, "Warm white", "Canvas and leather upper, rubber sole", "An elevated high-top concept with an architectural silhouette. Sample specification; photography is representative.", false, true),
-  makeProduct("se-006", "weekend-court", "Weekend Court", "Off Duty", 6990, "Sand", "Canvas upper, rubber sole", "An easy court-inspired shape for a relaxed wardrobe. Sample specification; photography is representative."),
-  makeProduct("se-007", "terra-runner", "Terra Runner", "Urban Rhythm", 10490, "Taupe", "Textile and suede upper, rubber sole", "Earth-toned layers give this runner concept a quiet presence. Sample specification; photography is representative.", false, true),
-  makeProduct("se-008", "signature-low", "Signature Low", "Atelier Collection", 14490, "Ivory / crimson", "Leather upper, rubber sole", "A minimal low-top concept with a restrained crimson accent. Sample specification; photography is representative."),
+  {
+    id: 'jootiya-atelier-heel-01',
+    name: 'Atelier Curved Strap Heel',
+    slug: 'atelier-curved-strap-heel',
+    description:
+      'A sculptural 90mm heel in Italian leather, finished with a curved instep strap and hand-painted edges for a gallery-ready silhouette.',
+    price: 14990,
+    currency: 'INR',
+    category: 'Heels',
+    collection: 'Gallery Evenings',
+    featured: true,
+    images: makeImages(
+      [
+        'https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&w=1400&q=85',
+        'https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1400&q=85',
+      ],
+      'Atelier curved strap heel',
+    ),
+    sizes: baseSizes.slice(1, 7),
+    colors: ['Black', 'Ivory', 'Burgundy'],
+    stockByKey: buildStock(baseSizes.slice(1, 7), ['Black', 'Ivory', 'Burgundy'], 4),
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'jootiya-monk-loafer-01',
+    name: 'Monk Strap City Loafer',
+    slug: 'monk-strap-city-loafer',
+    description:
+      'A low-slung city loafer with double monk hardware in brushed metal, balanced on a slim leather sole for long-haul elegance.',
+    price: 12990,
+    currency: 'INR',
+    category: 'Loafers',
+    collection: 'Concrete Ballet',
+    featured: true,
+    images: makeImages(
+      [
+        'https://images.unsplash.com/photo-1552346154-21d32810aba3?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1200&q=80',
+      ],
+      'Monk strap city loafer',
+    ),
+    sizes: baseSizes.slice(2),
+    colors: ['Cognac', 'Black', 'Navy'],
+    stockByKey: buildStock(baseSizes.slice(2), ['Cognac', 'Black', 'Navy'], 5),
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'jootiya-orbit-sneaker-01',
+    name: 'Orbit Low Volume Sneaker',
+    slug: 'orbit-low-volume-sneaker',
+    description:
+      'An ultra-clean leather sneaker with hidden stitching, low-volume padding, and a tonal rubber cupsole for silent movement.',
+    price: 9990,
+    currency: 'INR',
+    category: 'Sneakers',
+    collection: 'Studio Off-Duty',
+    featured: true,
+    images: makeImages(
+      [
+        'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=1200&q=80',
+        'https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=800&q=80',
+      ],
+      'Orbit low volume sneaker',
+    ),
+    sizes: baseSizes.slice(1),
+    colors: ['White', 'Tan', 'Navy'],
+    stockByKey: buildStock(baseSizes.slice(1), ['White', 'Tan', 'Navy'], 6),
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'jootiya-stride-sandal-01',
+    name: 'Offset Strap Gallery Sandal',
+    slug: 'offset-strap-gallery-sandal',
+    description:
+      'Minimalist leather straps intersect over a padded footbed, with squared-off toes and a low architectural heel for all-day installations.',
+    price: 8990,
+    currency: 'INR',
+    category: 'Sandals',
+    collection: 'Summer Edit',
+    featured: false,
+    images: makeImages(
+      [
+        'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1200&q=80',
+        'https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=800&q=80',
+      ],
+      'Offset strap gallery sandal',
+    ),
+    sizes: baseSizes.slice(0, 7),
+    colors: ['Tan', 'Ivory'],
+    stockByKey: buildStock(baseSizes.slice(0, 7), ['Tan', 'Ivory'], 7),
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'jootiya-column-boot-01',
+    name: 'Column Mid Shaft Boot',
+    slug: 'column-mid-shaft-boot',
+    description:
+      'A columnar mid shaft boot with a subtle square toe and internal zip, cut from smooth calf leather that pools softly at the ankle.',
+    price: 17990,
+    currency: 'INR',
+    category: 'Boots',
+    collection: 'Noir Season',
+    featured: true,
+    images: makeImages(
+      [
+        'https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&w=1400&q=85',
+        'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80',
+      ],
+      'Column mid shaft boot',
+    ),
+    sizes: baseSizes.slice(2),
+    colors: ['Black', 'Olive'],
+    stockByKey: buildStock(baseSizes.slice(2), ['Black', 'Olive'], 3),
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'jootiya-arc-mule-01',
+    name: 'Arc Backless Mule',
+    slug: 'arc-backless-mule',
+    description:
+      'Backless slip-on mule with a soft arc across the vamp, molded leather insole, and a beveled micro-heel for quiet entrances.',
+    price: 10990,
+    currency: 'INR',
+    category: 'Mules',
+    collection: 'Lobby Hours',
+    featured: false,
+    images: makeImages(
+      [
+        'https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=800&q=80',
+      ],
+      'Arc backless mule',
+    ),
+    sizes: baseSizes.slice(1, 8),
+    colors: ['Ivory', 'Cognac'],
+    stockByKey: buildStock(baseSizes.slice(1, 8), ['Ivory', 'Cognac'], 4),
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'jootiya-soft-slide-01',
+    name: 'Sculpted Padded Slide',
+    slug: 'sculpted-padded-slide',
+    description:
+      'A sculpted padded slide with oversized straps and a lightly contoured footbed, finished in matte leather for slow coastal days.',
+    price: 7990,
+    currency: 'INR',
+    category: 'Slides',
+    collection: 'Resort Lines',
+    featured: false,
+    images: makeImages(
+      [
+        'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1200&q=80',
+        'https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&w=1400&q=85',
+      ],
+      'Sculpted padded slide',
+    ),
+    sizes: baseSizes.slice(0, 6),
+    colors: ['Tan', 'White'],
+    stockByKey: buildStock(baseSizes.slice(0, 6), ['Tan', 'White'], 8),
+    createdAt: now,
+    updatedAt: now,
+  },
 ];
 
-export const categories: { value: Category; label: string }[] = [
-  { value: "sneakers", label: "Sneakers" },
-  { value: "loafers", label: "Loafers" },
-  { value: "boots", label: "Boots" },
-  { value: "heels", label: "Heels" },
-  { value: "sandals", label: "Sandals" },
-];
+export function getProductById(id: string): Product | undefined {
+  return products.find((p) => p.id === id);
+}
 
-export const navigationLinks = [
-  { label: "New arrivals", href: "/shop?sort=newest" },
-  { label: "Sneakers", href: "/shop?category=sneakers" },
-  { label: "All footwear", href: "/shop" },
-  { label: "Our story", href: "/#our-story" },
-];
-
-export const collections = [
-  { id: "everyday", name: "The Everyday Edit", href: "/shop?collection=The%20Everyday%20Edit", image: assets?.lookbook ?? "" },
-  { id: "atelier", name: "Atelier Collection", href: "/shop?collection=Atelier%20Collection", image: assets?.atelier ?? "" },
-  { id: "urban", name: "Urban Rhythm", href: "/shop?collection=Urban%20Rhythm", image: assets?.runway ?? "" },
-  { id: "off-duty", name: "Off Duty", href: "/shop?collection=Off%20Duty", image: assets?.lookbook ?? "" },
-];
-
-export const editorialStories: EditorialStory[] = [
-  { id: "hero", title: "A quieter kind of statement.", subtitle: "SOLE ÉLITE / Collection 01", description: "Considered silhouettes. An instinct for the everyday extraordinary.", image: assets?.runway ?? "", href: "/shop", caption: "THE NEW EDIT — 01" },
-  { id: "everyday", title: "Beyond the ordinary.", subtitle: "The Everyday Edit", description: "An exploration of clean lines, warm neutrals, and the rhythm of everyday dressing.", image: assets?.lookbook ?? "", href: "/shop?collection=The%20Everyday%20Edit", caption: "A STUDY IN SIMPLICITY" },
-  { id: "atelier", title: "The art of restraint.", subtitle: "Our point of view", description: "We imagine footwear as the finishing gesture: thoughtful proportions, tactile materials, and a silhouette that lets you lead.", image: assets?.atelier ?? "", href: "/shop?collection=Atelier%20Collection", caption: "SOLE ÉLITE / ATELIER NOTES" },
-];
-
-export const sortOptions: { value: CatalogSort; label: string }[] = [
-  { value: "featured", label: "Featured" },
-  { value: "newest", label: "New arrivals" },
-  { value: "price-asc", label: "Price: low to high" },
-  { value: "price-desc", label: "Price: high to low" },
-];
-
-export const shippingRules = {
-  currency, country: "India", freeShippingThreshold: 10000, standardShippingFee: 250,
-  estimatedDelivery: "5–7 business days", returnWindowDays: 14,
-  description: "Demo shipping is ₹250, complimentary on merchandise subtotals of ₹10,000 or more.",
-  returns: "Illustrative policy: unworn footwear in original packaging may be returned within 14 days. No real orders or returns are processed.",
-};
-
-export const customerCare = [
-  { id: "sizing", title: "Finding your fit", content: "Sizes are listed in EU sizing. Availability varies by style; EU 46 is currently unavailable in this sample catalog." },
-  { id: "delivery", title: "Delivery & returns", content: shippingRules?.description ?? "" },
-  { id: "care", title: "Caring for your footwear", content: "Brush away dry dust gently. Use material-appropriate cleaners, avoid soaking, and air-dry away from direct heat." },
-  { id: "checkout", title: "About this boutique", content: mockCheckoutDisclosure },
-  { id: "imagery", title: "Catalog photography", content: imageryDisclosure },
-];
-
-export const footerLinks = [
-  { label: "Shop the collection", href: "/shop" },
-  { label: "Wishlist", href: "/wishlist" },
-  { label: "Shopping bag", href: "/cart" },
-  { label: "Customer care", href: "/#customer-care" },
-];
+export function computeStockKey(size: Size, color: ColorVariant): StockKey {
+  return `${size}-${color}` as StockKey;
+}
 
 export const mockData = {
-  assets, products, categories, collections, editorialStories, navigationLinks, footerLinks,
-  sizeOptions, sizes, sortOptions, customerCare, shippingRules, currency, locale,
-  imageryDisclosure, mockCheckoutDisclosure,
+  products,
+  getProductById,
+  computeStockKey,
 };
 
 export default mockData;

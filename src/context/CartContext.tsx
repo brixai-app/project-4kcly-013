@@ -1,145 +1,303 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import type { CartItem, CheckoutValues, Order, Product, Size } from '@/types';
-import { products, shippingRules } from '@/data/mockData';
+import type {
+  CartItem,
+  CartState,
+  Order,
+  PaymentMethod,
+  Product,
+  ShippingInfo,
+  Size,
+  ColorVariant,
+} from '@/types';
+import { products, getProductById, computeStockKey } from '@/data/mockData';
 
-type SavedState = { cartItems: CartItem[]; wishlist: string[]; newsletterEmail: string; orders: Order[] };
-export interface CartContextValue extends SavedState {
-  cart: CartItem[];
-  cartCount: number;
-  wishlistCount: number;
+export interface CartContextValue {
+  state: CartState;
+  isDrawerOpen: boolean;
+  lastOrder: Order | null;
   subtotal: number;
-  shipping: number;
-  total: number;
-  freeShippingThreshold: number;
-  shippingProgress: number;
-  amountToFreeShipping: number;
-  newsletterSubscribed: boolean;
-  isCartOpen: boolean;
-  setIsCartOpen: (open: boolean) => void;
-  openCart: () => void;
-  closeCart: () => void;
-  previewProduct: Product | null;
-  setPreviewProduct: (product: Product | null) => void;
-  openPreview: (product: Product) => void;
-  closePreview: () => void;
-  addToCart: (product: Product | string, size: Size, quantity?: number) => boolean;
-  updateQuantity: (lineId: string, quantity: number) => void;
-  removeFromCart: (lineId: string) => void;
+  itemCount: number;
+  openDrawer: () => void;
+  closeDrawer: () => void;
+  toggleDrawer: () => void;
   clearCart: () => void;
-  toggleWishlist: (productId: string) => void;
-  isWishlisted: (productId: string) => boolean;
-  subscribeNewsletter: (email: string) => boolean;
-  placeOrder: (customer: CheckoutValues) => Order | null;
+  addItem: (opts: {
+    productId: string;
+    size: Size;
+    color: ColorVariant;
+    quantity?: number;
+  }) => void;
+  updateItemQuantity: (cartItemId: string, quantity: number) => void;
+  removeItem: (cartItemId: string) => void;
+  placeOrder: (info: ShippingInfo, method: PaymentMethod) => Order | null;
 }
-const STORAGE_KEY = 'sole-elite:shopping:v1';
-const emptyState = (): SavedState => ({ cartItems: [], wishlist: [], newsletterEmail: '', orders: [] });
-const emailValid = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-const findProduct = (id: string) => products?.find(product => product?.id === id);
-const record = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' ? value as Record<string, unknown> : {};
-const rules = record(shippingRules);
-const positiveNumber = (value: unknown, fallback: number) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback;
-const freeShippingThreshold = positiveNumber(rules?.freeShippingThreshold, 10000);
-const shippingFee = positiveNumber(rules?.flatRate ?? rules?.shippingFee ?? rules?.standardFee, 499);
-const shippingFor = (subtotal: number) => subtotal > 0 && subtotal < freeShippingThreshold ? shippingFee : 0;
-function validateLines(value: unknown): CartItem[] {
-  if (!Array.isArray(value)) return [];
-  const lines = new Map<string, CartItem>();
-  value.slice(0, 500).forEach(entry => {
-    const raw = record(entry), product = findProduct(String(record(raw?.product)?.id ?? raw?.productId ?? ''));
-    const size = Number(raw?.size) as Size, quantity = Number(raw?.quantity);
-    const stock = Math.floor(product?.stock?.[size] ?? 0);
-    if (!product || !product?.sizes?.includes(size) || !Number.isSafeInteger(quantity) || quantity < 1 || stock < 1) return;
-    const id = `${product?.id ?? ''}:${size}`, previous = lines.get(id)?.quantity ?? 0;
-    lines.set(id, { id, product, size, quantity: Math.min(previous + quantity, stock) });
-  });
-  return [...lines.values()];
-}
-function validateCustomer(value: unknown): CheckoutValues | null {
-  const raw = record(value), fields = ['fullName', 'email', 'address', 'city', 'postalCode', 'country'] as const;
-  if (!fields.every(key => typeof raw?.[key] === 'string' && String(raw?.[key] ?? '').trim().length > 0)) return null;
-  const customer = Object.fromEntries(fields.map(key => [key, String(raw?.[key] ?? '').trim()])) as unknown as CheckoutValues;
-  if (!emailValid(customer?.email ?? '')) return null;
-  if (typeof raw?.phone === 'string') customer.phone = raw?.phone.trim();
-  return customer;
-}
-function hydrate(): SavedState {
+
+const defaultCartState: CartState = {
+  items: [],
+  lastUpdated: null,
+};
+
+const defaultContextValue: CartContextValue = {
+  state: defaultCartState,
+  isDrawerOpen: false,
+  lastOrder: null,
+  subtotal: 0,
+  itemCount: 0,
+  openDrawer: () => undefined,
+  closeDrawer: () => undefined,
+  toggleDrawer: () => undefined,
+  clearCart: () => undefined,
+  addItem: () => undefined,
+  updateItemQuantity: () => undefined,
+  removeItem: () => undefined,
+  placeOrder: () => null,
+};
+
+const RawCartContext = createContext<CartContextValue>(defaultContextValue);
+
+const CART_STORAGE_KEY = 'jootiya_cart_v1';
+const ORDER_STORAGE_KEY = 'jootiya_last_order_v1';
+
+function loadCartFromStorage(): CartState {
   try {
-    if (typeof window === 'undefined') return emptyState();
-    const raw = record(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? '{}'));
-    const wishlist = Array.isArray(raw?.wishlist) ? [...new Set(raw?.wishlist.filter((id): id is string => typeof id === 'string' && !!findProduct(id)))] : [];
-    const orders: Order[] = [];
-    if (Array.isArray(raw?.orders)) raw?.orders.slice(-50).forEach(entry => {
-      const order = record(entry), customer = validateCustomer(order?.customer), items = validateLines(order?.items);
-      const subtotal = positiveNumber(order?.subtotal, -1), shipping = positiveNumber(order?.shipping, -1), total = positiveNumber(order?.total, -1);
-      if (!customer || !items.length || typeof order?.id !== 'string' || typeof order?.createdAt !== 'string' || !Number.isFinite(Date.parse(order?.createdAt)) || subtotal < 0 || shipping < 0 || Math.abs(total - subtotal - shipping) > 0.01 || order?.isMock !== true || order?.currency !== 'INR') return;
-      orders.push({ id: order?.id, customer, items, subtotal, shipping, total, currency: 'INR', createdAt: order?.createdAt, status: order?.status === 'cancelled' ? 'cancelled' : 'confirmed', isMock: true });
-    });
-    const email = typeof raw?.newsletterEmail === 'string' ? raw?.newsletterEmail.trim() : '';
-    return { cartItems: validateLines(raw?.cartItems), wishlist, newsletterEmail: emailValid(email) ? email : '', orders };
-  } catch { return emptyState(); }
+    const raw = window.localStorage?.getItem(CART_STORAGE_KEY) ?? '';
+    if (!raw) return defaultCartState;
+    const parsed = JSON.parse(raw) as CartState;
+    if (!parsed?.items) return defaultCartState;
+    return {
+      items: Array.isArray(parsed.items) ? parsed.items : [],
+      lastUpdated: parsed.lastUpdated ?? null,
+    };
+  } catch {
+    return defaultCartState;
+  }
 }
-export const CartContext = createContext<CartContextValue | undefined>(undefined);
-export function CartProvider({ children = null }: { children?: ReactNode } = {}) {
-  const [state, setState] = useState<SavedState>(hydrate);
-  const current = useRef(state);
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
-  const commit = (next: SavedState) => { current.current = next; setState(next); };
-  useEffect(() => {
-    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* Storage may be unavailable or full. */ }
-  }, [state]);
-  const addToCart = (input: Product | string, size: Size, quantity = 1) => {
-    const product = findProduct(typeof input === 'string' ? input : input?.id ?? '');
-    const id = `${product?.id ?? ''}:${size}`, existing = current.current?.cartItems?.find(line => line?.id === id);
-    if (!product?.sizes?.includes(size) || !Number.isSafeInteger(quantity) || quantity < 1 || (existing?.quantity ?? 0) + quantity > (product?.stock?.[size] ?? 0)) {
-      toast.error('Please select an available size and quantity.'); return false;
+
+function saveCartToStorage(state: CartState) {
+  try {
+    window.localStorage?.setItem(CART_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // ignore
+  }
+}
+
+function loadOrderFromStorage(): Order | null {
+  try {
+    const raw = window.localStorage?.getItem(ORDER_STORAGE_KEY) ?? '';
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Order;
+    return parsed ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function saveOrderToStorage(order: Order | null) {
+  try {
+    if (!order) {
+      window.localStorage?.removeItem(ORDER_STORAGE_KEY);
+      return;
     }
-    const items = existing ? current.current.cartItems.map(line => line?.id === id ? { ...line, quantity: (line?.quantity ?? 0) + quantity } : line) : [...current.current.cartItems, { id, product, size, quantity }];
-    commit({ ...current.current, cartItems: items }); toast.success('Added to your bag.'); return true;
+    window.localStorage?.setItem(ORDER_STORAGE_KEY, JSON.stringify(order));
+  } catch {
+    // ignore
+  }
+}
+
+export interface CartProviderProps {
+  children?: React.ReactNode;
+}
+
+export function CartProvider({ children = null }: CartProviderProps) {
+  const [state, setState] = useState<CartState>(() => loadCartFromStorage());
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [lastOrder, setLastOrder] = useState<Order | null>(() => loadOrderFromStorage());
+
+  useEffect(() => {
+    saveCartToStorage(state);
+  }, [state]);
+
+  useEffect(() => {
+    saveOrderToStorage(lastOrder);
+  }, [lastOrder]);
+
+  const subtotal = useMemo(
+    () =>
+      state.items.reduce((sum, item) => {
+        const lineTotal = item.price * item.quantity;
+        return sum + (Number.isFinite(lineTotal) ? lineTotal : 0);
+      }, 0),
+    [state.items],
+  );
+
+  const itemCount = useMemo(
+    () => state.items.reduce((sum, item) => sum + (item.quantity ?? 0), 0),
+    [state.items],
+  );
+
+  const openDrawer = () => setIsDrawerOpen(true);
+  const closeDrawer = () => setIsDrawerOpen(false);
+  const toggleDrawer = () => setIsDrawerOpen(prev => !prev);
+
+  const refreshMaxAvailable = (product: Product, size: Size, color: ColorVariant): number => {
+    const key = computeStockKey(size, color);
+    const available = product.stockByKey?.[key] ?? 0;
+    const existingQty = state.items
+      .filter(i => i.productId === product.id && i.size === size && i.color === color)
+      .reduce((sum, i) => sum + i.quantity, 0);
+    const remaining = available - existingQty;
+    return remaining > 0 ? remaining : 0;
   };
-  const removeFromCart = (id: string) => commit({ ...current.current, cartItems: current.current.cartItems.filter(line => line?.id !== id) });
-  const updateQuantity = (id: string, quantity: number) => {
-    const line = current.current.cartItems.find(item => item?.id === id);
-    if (!line || !Number.isSafeInteger(quantity) || quantity < 0) return;
-    if (quantity === 0) { removeFromCart(id); return; }
-    if (quantity > (line?.product?.stock?.[line?.size] ?? 0)) { toast.error('This quantity is not available.'); return; }
-    commit({ ...current.current, cartItems: current.current.cartItems.map(item => item?.id === id ? { ...item, quantity } : item) });
+
+  const clearCart = () => {
+    setState({ items: [], lastUpdated: new Date().toISOString() });
   };
-  const toggleWishlist = (id: string) => {
-    if (!findProduct(id)) return;
-    const exists = current.current.wishlist.includes(id);
-    commit({ ...current.current, wishlist: exists ? current.current.wishlist.filter(value => value !== id) : [...current.current.wishlist, id] });
-    toast.success(exists ? 'Removed from your wishlist.' : 'Saved to your wishlist.');
+
+  const addItem: CartContextValue['addItem'] = ({ productId, size, color, quantity = 1 }) => {
+    const product = getProductById(productId);
+    if (!product) {
+      toast.error('Product not found');
+      return;
+    }
+    if (quantity <= 0) {
+      toast.error('Quantity must be at least 1');
+      return;
+    }
+    const maxAvailable = refreshMaxAvailable(product, size, color);
+    if (maxAvailable <= 0) {
+      toast.error('Selected variant is out of stock');
+      return;
+    }
+    const addQty = Math.min(quantity, maxAvailable);
+    if (addQty < quantity) {
+      toast.warning(`Only ${maxAvailable} pairs left in this variant`);
+    }
+    setState(prev => {
+      const existingIndex = prev.items.findIndex(
+        item =>
+          item.productId === productId &&
+          item.size === size &&
+          item.color === color &&
+          item.imageUrl === (product.images?.[0]?.url ?? ''),
+      );
+      const newItems = [...prev.items];
+      if (existingIndex >= 0) {
+        const existing = newItems[existingIndex];
+        const newQty = Math.min(existing.quantity + addQty, existing.maxAvailable);
+        newItems[existingIndex] = { ...existing, quantity: newQty };
+      } else {
+        const imageUrl = product.images?.[0]?.url ?? '';
+        const newItem: CartItem = {
+          id: `${product.id}-${size}-${color}-${Date.now()}`,
+          productId: product.id,
+          name: product.name,
+          price: product.price,
+          currency: product.currency,
+          size,
+          color,
+          quantity: addQty,
+          imageUrl,
+          maxAvailable,
+        };
+        newItems.push(newItem);
+      }
+      toast.success('Added to cart');
+      return { items: newItems, lastUpdated: new Date().toISOString() };
+    });
+    openDrawer();
   };
-  const subscribeNewsletter = (input: string) => {
-    const email = (input ?? '').trim().toLowerCase();
-    if (!emailValid(email)) { toast.error('Please enter a valid email address.'); return false; }
-    commit({ ...current.current, newsletterEmail: email }); toast.success('Subscribed for this demo. No email will be sent.'); return true;
+
+  const updateItemQuantity: CartContextValue['updateItemQuantity'] = (cartItemId, quantity) => {
+    if (quantity <= 0) {
+      setState(prev => ({
+        items: prev.items.filter(item => item.id !== cartItemId),
+        lastUpdated: new Date().toISOString(),
+      }));
+      toast.info('Item removed from cart');
+      return;
+    }
+    setState(prev => {
+      const newItems = prev.items.map(item => {
+        if (item.id !== cartItemId) return item;
+        const nextQty = Math.min(quantity, item.maxAvailable);
+        if (nextQty < quantity) {
+          toast.warning(`Only ${item.maxAvailable} pairs available`);
+        }
+        return { ...item, quantity: nextQty };
+      });
+      return { items: newItems, lastUpdated: new Date().toISOString() };
+    });
   };
-  const placeOrder = (input: CheckoutValues): Order | null => {
-    const customer = validateCustomer(input), items = validateLines(current.current.cartItems);
-    if (!customer || !items.length || JSON.stringify(items) !== JSON.stringify(current.current.cartItems)) { toast.error('Check your delivery details and bag before continuing.'); return null; }
-    const subtotal = items.reduce((sum, line) => sum + (line?.product?.price ?? 0) * (line?.quantity ?? 0), 0), shipping = shippingFor(subtotal);
-    const order: Order = { id: crypto.randomUUID(), items, customer, subtotal, shipping, total: subtotal + shipping, currency: 'INR', createdAt: new Date().toISOString(), status: 'confirmed', isMock: true };
-    commit({ ...current.current, cartItems: [], orders: [...current.current.orders, order].slice(-50) }); setIsCartOpen(false);
-    toast.success('Mock order confirmed. No payment was taken.'); return order;
+
+  const removeItem: CartContextValue['removeItem'] = cartItemId => {
+    setState(prev => ({
+      items: prev.items.filter(item => item.id !== cartItemId),
+      lastUpdated: new Date().toISOString(),
+    }));
+    toast.info('Item removed from cart');
   };
-  const subtotal = state.cartItems.reduce((sum, line) => sum + (line?.product?.price ?? 0) * (line?.quantity ?? 0), 0), shipping = shippingFor(subtotal);
+
+  const placeOrder: CartContextValue['placeOrder'] = (info, method) => {
+    if (!state.items.length) {
+      toast.error('Your cart is empty');
+      return null;
+    }
+    const shippingValid =
+      info.fullName?.trim() &&
+      info.email?.trim() &&
+      info.phone?.trim() &&
+      info.addressLine1?.trim() &&
+      info.city?.trim() &&
+      info.state?.trim() &&
+      info.postalCode?.trim() &&
+      info.country?.trim();
+    if (!shippingValid) {
+      toast.error('Please complete all required shipping fields');
+      return null;
+    }
+    const shippingFee = subtotal >= 5000 ? 0 : 299;
+    const total = subtotal + shippingFee;
+    const order: Order = {
+      id: `ORD-${Date.now()}`,
+      items: state.items,
+      subtotal,
+      shippingFee,
+      total,
+      currency: 'INR',
+      shippingInfo: info,
+      paymentMethod: method,
+      createdAt: new Date().toISOString(),
+    };
+    setLastOrder(order);
+    clearCart();
+    toast.success('Order placed successfully');
+    return order;
+  };
+
   const value: CartContextValue = {
-    ...state, cart: state.cartItems, cartCount: state.cartItems.reduce((sum, line) => sum + (line?.quantity ?? 0), 0), wishlistCount: state.wishlist.length,
-    subtotal, shipping, total: subtotal + shipping, freeShippingThreshold, shippingProgress: freeShippingThreshold === 0 ? 100 : Math.min(100, subtotal / freeShippingThreshold * 100),
-    amountToFreeShipping: Math.max(0, freeShippingThreshold - subtotal), newsletterSubscribed: !!state.newsletterEmail,
-    isCartOpen, setIsCartOpen, openCart: () => setIsCartOpen(true), closeCart: () => setIsCartOpen(false), previewProduct, setPreviewProduct,
-    openPreview: product => setPreviewProduct(findProduct(product?.id ?? '') ?? null), closePreview: () => setPreviewProduct(null),
-    addToCart, updateQuantity, removeFromCart, clearCart: () => commit({ ...current.current, cartItems: [] }), toggleWishlist,
-    isWishlisted: id => state.wishlist.includes(id), subscribeNewsletter, placeOrder,
+    state,
+    isDrawerOpen,
+    lastOrder,
+    subtotal,
+    itemCount,
+    openDrawer,
+    closeDrawer,
+    toggleDrawer,
+    clearCart,
+    addItem,
+    updateItemQuantity,
+    removeItem,
+    placeOrder,
   };
-  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
+
+  return <RawCartContext.Provider value={value}>{children}</RawCartContext.Provider>;
 }
+
 export function useCart(): CartContextValue {
-  const context = useContext(CartContext);
-  if (!context) throw new Error('useCart must be used within CartProvider.');
-  return context;
+  const ctx = useContext(RawCartContext);
+  return ctx ?? defaultContextValue;
 }
-export default CartProvider;
+
+export const CartContext = RawCartContext;
+export default CartContext;
