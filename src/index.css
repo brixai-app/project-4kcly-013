@@ -2,29 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --color-bg: #F9F6F2;
-  --color-bg-rgb: 249, 246, 242;
-  --color-surface: #FFFFFF;
-  --color-surface-rgb: 255, 255, 255;
-  --color-surface-hover: #F4EFE8;
-  --color-surface-hover-rgb: 244, 239, 232;
-  --color-border: #D9D1C7;
-  --color-border-rgb: 217, 209, 199;
-  --color-text-primary: #2E2B28;
-  --color-text-primary-rgb: 46, 43, 40;
-  --color-text-muted: #6F675E;
-  --color-text-muted-rgb: 111, 103, 94;
-  --color-accent: #8B0000;
-  --color-accent-rgb: 139, 0, 0;
-  --color-accent-hover: #6F0000;
-  --color-accent-hover-rgb: 111, 0, 0;
-  --color-accent-text: #ffffff;
-  --radius-theme: 16px;
-  --font-heading: 'Playfair Display', sans-serif;
-  --font-body: 'Inter', sans-serif;
-}
-
 @layer base {
   * {
     margin: 0;
@@ -37,18 +14,12 @@
   }
 
   body {
-    font-family: var(--font-body);
-    background-color: var(--color-bg);
-    background-image: radial-gradient(ellipse 70% 40% at 50% 0%, rgba(var(--color-accent-rgb), 0.06), transparent 60%);
-    background-attachment: fixed;
-    color: var(--color-text-primary);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     line-height: 1.6;
+    background-color: #09090b;
+    color: #fafafa;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100vh;
-  }
-
-  h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-heading);
   }
 }
