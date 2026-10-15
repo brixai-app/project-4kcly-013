@@ -1,158 +1,300 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Eye, ShoppingBag } from 'lucide-react';
+import { ArrowRight, ShoppingBag, Eye } from 'lucide-react';
 import { toast } from 'sonner';
+import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import type { Product, Size, ColorVariant } from '@/types';
-import { computeStockKey } from '@/data/mockData';
+import type { Product } from '@/types';
 import { useCart } from '@/context/CartContext';
 import ProductDetailModal from './ProductDetailModal';
 
 export interface ProductCardProps {
   product?: Product;
+  index?: number;
+  enableHoverLift?: boolean;
+  showCollection?: boolean;
   className?: string;
 }
 
-export function ProductCard({ product, className = '' }: ProductCardProps) {
-  const safeProduct: Product | null = product ?? null;
-  const { addItem, openDrawer } = useCart();
-  const [open, setOpen] = useState(false);
+export function ProductCard({
+  product,
+  index = 0,
+  enableHoverLift = true,
+  showCollection = true,
+  className = '',
+}: ProductCardProps) {
+  const [isHovered, setIsHovered] = useState(false);
+  const [quickViewOpen, setQuickViewOpen] = useState(false);
+  const { addItem } = useCart();
 
-  if (!safeProduct) {
-    return null;
-  }
+  const resolvedProduct: Product | null = product ?? null;
 
-  const primaryImage = safeProduct.images?.[0];
-  const hasSingleSize = safeProduct.sizes?.length === 1;
-  const hasSingleColor = safeProduct.colors?.length === 1;
+  const primaryImage = useMemo(() => {
+    if (!resolvedProduct) return null;
+    const priorityImage = resolvedProduct.images?.find(img => img?.priority);
+    return priorityImage ?? resolvedProduct.images?.[0] ?? null;
+  }, [resolvedProduct]);
 
-  const handleQuickView = () => {
-    setOpen(true);
-  };
+  const fallbackSlug = useMemo(() => {
+    if (resolvedProduct?.slug) return resolvedProduct.slug;
+    const safeName = resolvedProduct?.name ?? 'jootiya-footwear';
+    return safeName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  }, [resolvedProduct]);
+
+  const displayPrice = useMemo(() => {
+    if (!resolvedProduct) return '';
+    const formatter = new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: resolvedProduct.currency ?? 'INR',
+      maximumFractionDigits: 0,
+    });
+    return formatter.format(resolvedProduct.price ?? 0);
+  }, [resolvedProduct]);
+
+  const hasCompareAt = useMemo(() => {
+    if (!resolvedProduct) return false;
+    return (
+      typeof resolvedProduct.compareAtPrice === 'number' &&
+      resolvedProduct.compareAtPrice > (resolvedProduct.price ?? 0)
+    );
+  }, [resolvedProduct]);
+
+  const discountPercent = useMemo(() => {
+    if (!resolvedProduct || !hasCompareAt) return null;
+    const diff = (resolvedProduct.compareAtPrice ?? 0) - (resolvedProduct.price ?? 0);
+    if (diff <= 0) return null;
+    const pct = Math.round((diff / (resolvedProduct.compareAtPrice ?? 1)) * 100);
+    return pct > 0 ? pct : null;
+  }, [resolvedProduct, hasCompareAt]);
+
+  const primaryAvailableSizeId = useMemo(() => {
+    if (!resolvedProduct) return null;
+    const inStock = resolvedProduct.sizes?.filter(s => (s?.stock ?? 0) > 0) ?? [];
+    if (inStock.length === 0) return null;
+    const defaultSize = inStock.find(s => s?.isDefault);
+    return defaultSize?.id ?? inStock[0]?.id ?? null;
+  }, [resolvedProduct]);
+
+  const isSoldOut = useMemo(() => {
+    if (!resolvedProduct) return false;
+    const totalStock =
+      resolvedProduct.sizes?.reduce((acc, s) => acc + (s?.stock ?? 0), 0) ?? 0;
+    return totalStock <= 0;
+  }, [resolvedProduct]);
 
   const handleQuickAdd = () => {
-    if (!hasSingleSize || !hasSingleColor) {
-      toast('Select options in detail view', {
-        description: 'This style has multiple sizes or colors. Open Quick View to choose.',
-      });
-      setOpen(true);
+    if (!resolvedProduct) {
+      toast.error('Unable to add item at the moment.');
       return;
     }
-    const size = safeProduct.sizes[0] as Size;
-    const color = safeProduct.colors[0] as ColorVariant;
-    const stockKey = computeStockKey(size, color);
-    const maxAvailable = safeProduct.stockByKey?.[stockKey] ?? 0;
-
-    if (maxAvailable <= 0) {
-      toast.error('Out of stock', {
-        description: 'This combination is currently unavailable.',
-      });
+    if (!primaryAvailableSizeId) {
+      toast.error('All sizes are currently out of stock.');
       return;
     }
-
-    addItem({
-      productId: safeProduct.id,
-      size,
-      color,
-      quantity: 1,
-    });
-
-    toast.success('Added to bag', {
-      description: `${safeProduct.name} · ${size} · ${color}`,
-      action: {
-        label: 'View cart',
-        onClick: () => openDrawer(),
-      },
+    addItem(resolvedProduct, primaryAvailableSizeId, 1);
+    toast.success('Added to cart', {
+      description: `${resolvedProduct.name} · Size ${
+        resolvedProduct.sizes.find(s => s.id === primaryAvailableSizeId)?.sizeLabel ?? ''
+      }`,
     });
   };
 
-  const priceFormatter = new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: safeProduct.currency ?? 'INR',
-    maximumFractionDigits: 0,
-  });
+  const handleQuickView = () => {
+    if (!resolvedProduct) return;
+    setQuickViewOpen(true);
+  };
+
+  const motionDelay = (index ?? 0) * 0.04;
 
   return (
     <>
       <motion.article
-        layout
-        whileHover={{ y: -4 }}
-        transition={{ type: 'spring', stiffness: 260, damping: 24 }}
+        initial={{ opacity: 0, y: 18 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: [0.22, 0.61, 0.36, 1], delay: motionDelay }}
+        whileHover={enableHoverLift ? { y: -4 } : undefined}
         className={cn(
-          'group cursor-pointer space-y-3 rounded-2xl bg-white',
-          'transition-shadow duration-300 hover:shadow-[0_22px_60px_rgba(15,14,12,0.18)]',
+          'group relative flex flex-col overflow-hidden rounded-2xl border border-[#D9D1C7] bg-white/90 shadow-[0_18px_45px_rgba(15,14,11,0.08)] transition-transform duration-500',
           className
         )}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       >
-        <div className="relative overflow-hidden rounded-2xl border border-[#E6DED3] bg-[#F9F6F2]">
+        <div className="relative overflow-hidden border-b border-[#D9D1C7]/80 bg-[#F9F6F2]">
           <div className="aspect-[3/4] w-full overflow-hidden">
-            {primaryImage ? (
-              <img
-                src={primaryImage.url}
-                alt={primaryImage.alt ?? safeProduct.name}
+            <Link
+              to={`/product/${fallbackSlug}`}
+              className="block h-full w-full overflow-hidden"
+            >
+              <motion.img
                 crossOrigin="anonymous"
-                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                src={
+                  primaryImage?.url ??
+                  'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?auto=format&fit=crop&w=800&q=80'
+                }
+                alt={primaryImage?.alt ?? resolvedProduct?.name ?? 'Jootiya style'}
+                className={cn(
+                  'h-full w-full object-cover transition-transform duration-700 ease-out',
+                  'group-hover:scale-105'
+                )}
+                whileHover={{ scale: 1.05 }}
+                transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
               />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-sm text-[#6F675E]">
-                Visual coming soon
+            </Link>
+          </div>
+
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/18 via-black/0 to-black/30 opacity-75 mix-blend-soft-light" />
+
+          {discountPercent !== null && (
+            <div className="pointer-events-none absolute left-4 top-4 flex flex-col gap-1">
+              <div className="inline-flex items-center border border-white/40 bg-black/55 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur-sm">
+                <span>{discountPercent}% off</span>
               </div>
-            )}
+              {resolvedProduct?.isLimited && (
+                <div className="inline-flex items-center border border-[#8B0000]/60 bg-[#8B0000] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white shadow-sm">
+                  Limited run
+                </div>
+              )}
+            </div>
+          )}
+
+          {isSoldOut && (
+            <div className="pointer-events-none absolute right-4 top-4">
+              <span className="inline-flex items-center border border-white/50 bg-black/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur">
+                Sold out
+              </span>
+            </div>
+          )}
+
+          <motion.div
+            initial={false}
+            animate={{ opacity: isHovered ? 1 : 0, y: isHovered ? 0 : 16 }}
+            transition={{ duration: 0.32, ease: [0.22, 0.61, 0.36, 1] }}
+            className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-3 pb-3"
+          >
+            <div className="pointer-events-auto flex w-full max-w-xs items-center gap-2 rounded-full bg-white/90 px-2 py-1.5 text-[11px] font-medium tracking-[0.16em] text-[#2E2B28] shadow-lg ring-1 ring-black/5 backdrop-blur">
+              <button
+                type="button"
+                onClick={handleQuickView}
+                className="inline-flex flex-1 items-center justify-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#2E2B28] transition-colors hover:bg-[#F9F6F2]"
+              >
+                <Eye className="h-3 w-3" />
+                <span>Quick view</span>
+              </button>
+              <span className="h-5 w-px bg-[#D9D1C7]" />
+              <button
+                type="button"
+                onClick={handleQuickAdd}
+                disabled={isSoldOut}
+                className={cn(
+                  'inline-flex flex-1 items-center justify-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors',
+                  isSoldOut
+                    ? 'cursor-not-allowed bg-[#E5DED3] text-[#A79D93]'
+                    : 'bg-[#8B0000] text-white hover:bg-[#6F0000]'
+                )}
+              >
+                <ShoppingBag className="h-3 w-3" />
+                <span>{isSoldOut ? 'Waitlist' : 'Quick add'}</span>
+              </button>
+            </div>
+          </motion.div>
+        </div>
+
+        <div className="flex flex-1 flex-col bg-white px-4 pb-4 pt-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {showCollection && resolvedProduct?.collection && (
+                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#6F675E]">
+                  {resolvedProduct.collection}
+                </span>
+              )}
+              {resolvedProduct?.category && (
+                <span className="rounded-sm border border-[#D9D1C7] bg-[#F9F6F2] px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.18em] text-[#6F675E]">
+                  {resolvedProduct.category}
+                </span>
+              )}
+            </div>
           </div>
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 px-4 pb-3 pt-10">
-            <div className="h-20 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
-          </div>
-          <div className="pointer-events-none absolute inset-x-3 bottom-3 flex justify-between gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-white">
-            <span className="line-clamp-1">{safeProduct.collection}</span>
-            <span>{safeProduct.category}</span>
-          </div>
-          <div className="pointer-events-none absolute inset-x-4 top-4 flex justify-between text-[10px] font-medium uppercase tracking-[0.22em] text-white/80">
-            <span>Jootiya</span>
-            <span>{safeProduct.featured ? 'Featured' : 'New Drop'}</span>
-          </div>
-          <div className="pointer-events-auto absolute inset-x-3 bottom-3 flex justify-end gap-2">
+
+          <Link to={`/product/${fallbackSlug}`} className="block">
+            <h3 className="line-clamp-2 font-[400] text-[15px] tracking-tight text-[#2E2B28]">
+              {resolvedProduct?.name ?? 'Untitled silhouette'}
+            </h3>
+          </Link>
+
+          {resolvedProduct?.subtitle && (
+            <p className="mt-1 line-clamp-1 text-xs text-[#6F675E]">
+              {resolvedProduct.subtitle}
+            </p>
+          )}
+
+          <div className="mt-3 flex items-end justify-between gap-2">
+            <div className="flex flex-col">
+              <div className="flex items-baseline gap-1.5">
+                <span className="font-semibold text-[15px] text-[#2E2B28]">
+                  {displayPrice || '—'}
+                </span>
+                {hasCompareAt && resolvedProduct?.compareAtPrice && (
+                  <span className="text-xs text-[#A79D93] line-through">
+                    {new Intl.NumberFormat('en-IN', {
+                      style: 'currency',
+                      currency: resolvedProduct?.currency ?? 'INR',
+                      maximumFractionDigits: 0,
+                    }).format(resolvedProduct.compareAtPrice)}
+                  </span>
+                )}
+              </div>
+              {discountPercent !== null && (
+                <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-[#8B0000]">
+                  Save {discountPercent}%
+                </span>
+              )}
+            </div>
+
             <button
               type="button"
               onClick={handleQuickView}
-              className={cn(
-                'flex items-center gap-1 rounded-md bg-white/85 px-3 py-1.5',
-                'text-[11px] font-semibold uppercase tracking-[0.18em] text-[#2E2B28]',
-                'backdrop-blur-sm transition hover:bg-white'
-              )}
+              className="inline-flex items-center gap-1 rounded-full border border-transparent bg-transparent px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#6F675E] transition-colors hover:border-[#D9D1C7] hover:bg-[#F9F6F2] hover:text-[#2E2B28]"
             >
-              <Eye className="h-3.5 w-3.5" />
-              <span>Quick View</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleQuickAdd}
-              className={cn(
-                'hidden items-center gap-1 rounded-md bg-[#BFA06A] px-3 py-1.5 text-[11px] font-semibold',
-                'uppercase tracking-[0.18em] text-black transition hover:bg-[#A88955]',
-                'group-hover:flex'
-              )}
-            >
-              <ShoppingBag className="h-3.5 w-3.5" />
-              <span>Quick Add</span>
+              <span>Details</span>
+              <ArrowRight className="h-3 w-3" />
             </button>
           </div>
-        </div>
-        <div className="space-y-1 px-0.5 pb-2 pt-1">
-          <h3 className="text-[17px] font-light tracking-tight text-[#2E2B28]" style={{ fontFamily: 'Playfair Display, ui-serif' }}>
-            {safeProduct.name}
-          </h3>
-          <p className="text-xs uppercase tracking-[0.2em] text-[#6F675E]" style={{ fontFamily: 'Lora, ui-serif' }}>
-            {safeProduct.collection} · {safeProduct.category}
-          </p>
-          <p className="text-sm font-semibold text-[#2E2B28]" style={{ fontFamily: 'Lora, ui-serif' }}>
-            {priceFormatter.format(safeProduct.price)}
-          </p>
+
+          {resolvedProduct?.colors?.length ? (
+            <div className="mt-3 flex items-center gap-1.5">
+              {resolvedProduct.colors.slice(0, 4).map(colorToken => (
+                <span
+                  key={colorToken}
+                  className={cn(
+                    'h-3 w-3 rounded-full border border-black/5',
+                    colorToken === 'ivory' && 'bg-[#F4EEE3]',
+                    colorToken === 'sand' && 'bg-[#E4D5C2]',
+                    colorToken === 'taupe' && 'bg-[#B8A99A]',
+                    colorToken === 'charcoal' && 'bg-[#2F2A26]',
+                    colorToken === 'black' && 'bg-black',
+                    colorToken === 'white' && 'bg-white',
+                    colorToken === 'crimson' && 'bg-[#8B0000]',
+                    colorToken === 'olive' && 'bg-[#556B2F]',
+                    colorToken === 'navy' && 'bg-[#001F3F]',
+                    colorToken === 'cognac' && 'bg-[#8B4513]'
+                  )}
+                />
+              ))}
+              {resolvedProduct.colors.length > 4 && (
+                <span className="text-[10px] text-[#6F675E]">
+                  +{resolvedProduct.colors.length - 4}
+                </span>
+              )}
+            </div>
+          ) : null}
         </div>
       </motion.article>
+
       <ProductDetailModal
-        open={open}
-        onOpenChange={setOpen}
-        product={safeProduct}
+        productId={resolvedProduct?.id ?? null}
+        open={quickViewOpen}
+        onOpenChange={setQuickViewOpen}
       />
     </>
   );

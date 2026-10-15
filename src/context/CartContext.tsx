@@ -1,108 +1,80 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import type {
+  CartContextValue,
   CartItem,
+  CartPersistedState,
   CartState,
-  Order,
-  PaymentMethod,
+  CartTotals,
   Product,
-  ShippingInfo,
-  Size,
-  ColorVariant,
+  ShippingMethod,
 } from '@/types';
-import { products, getProductById, computeStockKey } from '@/data/mockData';
 
-export interface CartContextValue {
-  state: CartState;
-  isDrawerOpen: boolean;
-  lastOrder: Order | null;
-  subtotal: number;
-  itemCount: number;
-  openDrawer: () => void;
-  closeDrawer: () => void;
-  toggleDrawer: () => void;
-  clearCart: () => void;
-  addItem: (opts: {
-    productId: string;
-    size: Size;
-    color: ColorVariant;
-    quantity?: number;
-  }) => void;
-  updateItemQuantity: (cartItemId: string, quantity: number) => void;
-  removeItem: (cartItemId: string) => void;
-  placeOrder: (info: ShippingInfo, method: PaymentMethod) => Order | null;
-}
+const PERSIST_KEY = 'jootiya-cart-v1';
+const PERSIST_VERSION = 1;
 
-const defaultCartState: CartState = {
+const defaultState: CartState = {
   items: [],
-  lastUpdated: null,
+  status: 'idle',
+  currency: 'INR',
+  lastUpdatedAt: undefined,
 };
 
 const defaultContextValue: CartContextValue = {
-  state: defaultCartState,
-  isDrawerOpen: false,
-  lastOrder: null,
-  subtotal: 0,
-  itemCount: 0,
-  openDrawer: () => undefined,
-  closeDrawer: () => undefined,
-  toggleDrawer: () => undefined,
-  clearCart: () => undefined,
+  state: defaultState,
   addItem: () => undefined,
-  updateItemQuantity: () => undefined,
   removeItem: () => undefined,
-  placeOrder: () => null,
+  updateQuantity: () => undefined,
+  clearCart: () => undefined,
+  getResolvedItems: () => [],
+  getTotals: () => ({
+    subtotal: 0,
+    shipping: 0,
+    tax: 0,
+    discount: 0,
+    grandTotal: 0,
+    currency: 'INR',
+  }),
 };
 
-const RawCartContext = createContext<CartContextValue>(defaultContextValue);
+export const RawCartContext = createContext<CartContextValue>(defaultContextValue);
 
-const CART_STORAGE_KEY = 'jootiya_cart_v1';
-const ORDER_STORAGE_KEY = 'jootiya_last_order_v1';
-
-function loadCartFromStorage(): CartState {
+function readPersistedCart(): CartState {
+  if (typeof window === 'undefined') return defaultState;
   try {
-    const raw = window.localStorage?.getItem(CART_STORAGE_KEY) ?? '';
-    if (!raw) return defaultCartState;
-    const parsed = JSON.parse(raw) as CartState;
-    if (!parsed?.items) return defaultCartState;
+    const raw = window.localStorage.getItem(PERSIST_KEY);
+    if (!raw) return defaultState;
+    const parsed = JSON.parse(raw) as CartPersistedState;
+    if (!parsed || typeof parsed !== 'object') return defaultState;
+    if (parsed.version !== PERSIST_VERSION) return defaultState;
     return {
-      items: Array.isArray(parsed.items) ? parsed.items : [],
-      lastUpdated: parsed.lastUpdated ?? null,
+      items: parsed.items ?? [],
+      status: parsed.status ?? 'idle',
+      currency: parsed.currency ?? 'INR',
+      lastUpdatedAt: parsed.lastUpdatedAt,
     };
   } catch {
-    return defaultCartState;
+    return defaultState;
   }
 }
 
-function saveCartToStorage(state: CartState) {
+function writePersistedCart(state: CartState) {
+  if (typeof window === 'undefined') return;
+  const payload: CartPersistedState = {
+    ...state,
+    version: PERSIST_VERSION,
+  };
   try {
-    window.localStorage?.setItem(CART_STORAGE_KEY, JSON.stringify(state));
+    window.localStorage.setItem(PERSIST_KEY, JSON.stringify(payload));
   } catch {
     // ignore
   }
 }
 
-function loadOrderFromStorage(): Order | null {
-  try {
-    const raw = window.localStorage?.getItem(ORDER_STORAGE_KEY) ?? '';
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Order;
-    return parsed ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function saveOrderToStorage(order: Order | null) {
-  try {
-    if (!order) {
-      window.localStorage?.removeItem(ORDER_STORAGE_KEY);
-      return;
-    }
-    window.localStorage?.setItem(ORDER_STORAGE_KEY, JSON.stringify(order));
-  } catch {
-    // ignore
-  }
+function calculateTax(subtotal: number): number {
+  if (subtotal <= 0) return 0;
+  const rate = 0.12;
+  return Math.round(subtotal * rate);
 }
 
 export interface CartProviderProps {
@@ -110,186 +82,257 @@ export interface CartProviderProps {
 }
 
 export function CartProvider({ children = null }: CartProviderProps) {
-  const [state, setState] = useState<CartState>(() => loadCartFromStorage());
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [lastOrder, setLastOrder] = useState<Order | null>(() => loadOrderFromStorage());
+  const [state, setState] = useState<CartState>(() => readPersistedCart());
 
   useEffect(() => {
-    saveCartToStorage(state);
+    writePersistedCart(state);
   }, [state]);
 
-  useEffect(() => {
-    saveOrderToStorage(lastOrder);
-  }, [lastOrder]);
-
-  const subtotal = useMemo(
-    () =>
-      state.items.reduce((sum, item) => {
-        const lineTotal = item.price * item.quantity;
-        return sum + (Number.isFinite(lineTotal) ? lineTotal : 0);
-      }, 0),
-    [state.items],
-  );
-
-  const itemCount = useMemo(
-    () => state.items.reduce((sum, item) => sum + (item.quantity ?? 0), 0),
-    [state.items],
-  );
-
-  const openDrawer = () => setIsDrawerOpen(true);
-  const closeDrawer = () => setIsDrawerOpen(false);
-  const toggleDrawer = () => setIsDrawerOpen(prev => !prev);
-
-  const refreshMaxAvailable = (product: Product, size: Size, color: ColorVariant): number => {
-    const key = computeStockKey(size, color);
-    const available = product.stockByKey?.[key] ?? 0;
-    const existingQty = state.items
-      .filter(i => i.productId === product.id && i.size === size && i.color === color)
-      .reduce((sum, i) => sum + i.quantity, 0);
-    const remaining = available - existingQty;
-    return remaining > 0 ? remaining : 0;
-  };
-
-  const clearCart = () => {
-    setState({ items: [], lastUpdated: new Date().toISOString() });
-  };
-
-  const addItem: CartContextValue['addItem'] = ({ productId, size, color, quantity = 1 }) => {
-    const product = getProductById(productId);
-    if (!product) {
-      toast.error('Product not found');
-      return;
-    }
-    if (quantity <= 0) {
-      toast.error('Quantity must be at least 1');
-      return;
-    }
-    const maxAvailable = refreshMaxAvailable(product, size, color);
-    if (maxAvailable <= 0) {
-      toast.error('Selected variant is out of stock');
-      return;
-    }
-    const addQty = Math.min(quantity, maxAvailable);
-    if (addQty < quantity) {
-      toast.warning(`Only ${maxAvailable} pairs left in this variant`);
-    }
-    setState(prev => {
-      const existingIndex = prev.items.findIndex(
-        item =>
-          item.productId === productId &&
-          item.size === size &&
-          item.color === color &&
-          item.imageUrl === (product.images?.[0]?.url ?? ''),
-      );
-      const newItems = [...prev.items];
-      if (existingIndex >= 0) {
-        const existing = newItems[existingIndex];
-        const newQty = Math.min(existing.quantity + addQty, existing.maxAvailable);
-        newItems[existingIndex] = { ...existing, quantity: newQty };
-      } else {
-        const imageUrl = product.images?.[0]?.url ?? '';
-        const newItem: CartItem = {
-          id: `${product.id}-${size}-${color}-${Date.now()}`,
-          productId: product.id,
-          name: product.name,
-          price: product.price,
-          currency: product.currency,
-          size,
-          color,
-          quantity: addQty,
-          imageUrl,
-          maxAvailable,
-        };
-        newItems.push(newItem);
-      }
-      toast.success('Added to cart');
-      return { items: newItems, lastUpdated: new Date().toISOString() };
-    });
-    openDrawer();
-  };
-
-  const updateItemQuantity: CartContextValue['updateItemQuantity'] = (cartItemId, quantity) => {
-    if (quantity <= 0) {
-      setState(prev => ({
-        items: prev.items.filter(item => item.id !== cartItemId),
-        lastUpdated: new Date().toISOString(),
-      }));
-      toast.info('Item removed from cart');
-      return;
-    }
-    setState(prev => {
-      const newItems = prev.items.map(item => {
-        if (item.id !== cartItemId) return item;
-        const nextQty = Math.min(quantity, item.maxAvailable);
-        if (nextQty < quantity) {
-          toast.warning(`Only ${item.maxAvailable} pairs available`);
-        }
-        return { ...item, quantity: nextQty };
-      });
-      return { items: newItems, lastUpdated: new Date().toISOString() };
-    });
-  };
-
-  const removeItem: CartContextValue['removeItem'] = cartItemId => {
+  const setStatus = useCallback((status: CartState['status']) => {
     setState(prev => ({
-      items: prev.items.filter(item => item.id !== cartItemId),
-      lastUpdated: new Date().toISOString(),
+      ...prev,
+      status,
+      lastUpdatedAt: new Date().toISOString(),
     }));
-    toast.info('Item removed from cart');
-  };
+  }, []);
 
-  const placeOrder: CartContextValue['placeOrder'] = (info, method) => {
-    if (!state.items.length) {
-      toast.error('Your cart is empty');
-      return null;
-    }
-    const shippingValid =
-      info.fullName?.trim() &&
-      info.email?.trim() &&
-      info.phone?.trim() &&
-      info.addressLine1?.trim() &&
-      info.city?.trim() &&
-      info.state?.trim() &&
-      info.postalCode?.trim() &&
-      info.country?.trim();
-    if (!shippingValid) {
-      toast.error('Please complete all required shipping fields');
-      return null;
-    }
-    const shippingFee = subtotal >= 5000 ? 0 : 299;
-    const total = subtotal + shippingFee;
-    const order: Order = {
-      id: `ORD-${Date.now()}`,
-      items: state.items,
-      subtotal,
-      shippingFee,
-      total,
-      currency: 'INR',
-      shippingInfo: info,
-      paymentMethod: method,
-      createdAt: new Date().toISOString(),
-    };
-    setLastOrder(order);
-    clearCart();
-    toast.success('Order placed successfully');
-    return order;
-  };
+  const addItem = useCallback(
+    (product: Product, sizeId: string, quantity: number = 1) => {
+      if (!product?.id || !sizeId) return;
+      if (quantity <= 0) {
+        toast.error('Quantity must be at least 1.');
+        return;
+      }
 
-  const value: CartContextValue = {
-    state,
-    isDrawerOpen,
-    lastOrder,
-    subtotal,
-    itemCount,
-    openDrawer,
-    closeDrawer,
-    toggleDrawer,
-    clearCart,
-    addItem,
-    updateItemQuantity,
-    removeItem,
-    placeOrder,
-  };
+      const size = product.sizes.find(s => s.id === sizeId);
+      if (!size) {
+        toast.error('Selected size is unavailable.');
+        return;
+      }
+
+      const stock = size.stock ?? 0;
+      if (stock <= 0) {
+        toast.error('This size is currently sold out.');
+        return;
+      }
+
+      setStatus('updating');
+
+      setState(prev => {
+        const existingIndex = prev.items.findIndex(
+          item => item.productId === product.id && item.sizeId === sizeId
+        );
+        const now = new Date().toISOString();
+        let nextItems: CartItem[];
+
+        if (existingIndex !== -1) {
+          const existing = prev.items[existingIndex];
+          const newQty = Math.min(existing.quantity + quantity, stock);
+          if (newQty === existing.quantity) {
+            toast.error('Maximum stock selected for this size.');
+            return {
+              ...prev,
+              status: 'idle',
+              lastUpdatedAt: now,
+            };
+          }
+          const updated: CartItem = {
+            ...existing,
+            quantity: newQty,
+            addedAt: now,
+          };
+          nextItems = [...prev.items];
+          nextItems[existingIndex] = updated;
+        } else {
+          const newItem: CartItem = {
+            id: `cart-${product.id}-${sizeId}-${Math.random().toString(36).slice(2)}`,
+            productId: product.id,
+            sizeId,
+            quantity: Math.min(quantity, stock),
+            unitPrice: product.price,
+            currency: product.currency ?? prev.currency ?? 'INR',
+            addedAt: now,
+          };
+          nextItems = [...prev.items, newItem];
+        }
+
+        toast.success('Added to bag', {
+          description: `${product.name} • ${size.sizeLabel}`,
+        });
+
+        return {
+          ...prev,
+          items: nextItems,
+          status: 'idle',
+          currency: product.currency ?? prev.currency ?? 'INR',
+          lastUpdatedAt: now,
+        };
+      });
+    },
+    [setStatus]
+  );
+
+  const removeItem = useCallback((cartItemId: string) => {
+    if (!cartItemId) return;
+    setStatus('updating');
+    setState(prev => {
+      const existing = prev.items.find(item => item.id === cartItemId);
+      const filtered = prev.items.filter(item => item.id !== cartItemId);
+      if (existing) {
+        toast('Removed from bag', {
+          description: `Item was removed from your cart.`,
+        });
+      }
+      return {
+        ...prev,
+        items: filtered,
+        status: 'idle',
+        lastUpdatedAt: new Date().toISOString(),
+      };
+    });
+  }, [setStatus]);
+
+  const updateQuantity = useCallback(
+    (cartItemId: string, quantity: number) => {
+      if (!cartItemId) return;
+      if (quantity <= 0) {
+        removeItem(cartItemId);
+        return;
+      }
+
+      setStatus('updating');
+      setState(prev => {
+        const index = prev.items.findIndex(item => item.id === cartItemId);
+        if (index === -1) {
+          return {
+            ...prev,
+            status: 'idle',
+            lastUpdatedAt: new Date().toISOString(),
+          };
+        }
+        const item = prev.items[index];
+        const now = new Date().toISOString();
+
+        // optimistic update; stock validation happens at resolve time
+        const updated: CartItem = {
+          ...item,
+          quantity,
+          addedAt: now,
+        };
+        const nextItems = [...prev.items];
+        nextItems[index] = updated;
+        return {
+          ...prev,
+          items: nextItems,
+          status: 'idle',
+          lastUpdatedAt: now,
+        };
+      });
+    },
+    [removeItem, setStatus]
+  );
+
+  const clearCart = useCallback(() => {
+    if (!state.items.length) return;
+    setStatus('updating');
+    setState(prev => ({
+      ...prev,
+      items: [],
+      status: 'idle',
+      lastUpdatedAt: new Date().toISOString(),
+    }));
+    toast('Bag cleared', {
+      description: 'Your cart has been emptied.',
+    });
+  }, [setStatus, state.items.length]);
+
+  const getResolvedItems = useCallback(
+    (products: Product[]) => {
+      if (!Array.isArray(products) || !products.length) return [];
+      return state.items
+        .map<CartTotals | null>(() => null)
+        .length; // purely to keep types happy, not used
+
+      // eslint-disable-next-line no-unreachable
+      return state.items
+        .map(item => {
+          const product = products.find(p => p.id === item.productId);
+          if (!product) return null;
+          const size = product.sizes.find(s => s.id === item.sizeId);
+          if (!size) return null;
+
+          const maxQty = size.stock ?? item.quantity;
+          const safeQty = Math.min(item.quantity, maxQty);
+
+          return {
+            ...item,
+            product,
+            size,
+            quantity: safeQty,
+            lineTotal: safeQty * item.unitPrice,
+          };
+        })
+        .filter((x): x is any => Boolean(x));
+    },
+    [state.items]
+  );
+
+  const memoizedGetResolvedItems = useCallback(
+    (products: Product[]) => {
+      if (!Array.isArray(products) || !products.length) return [];
+      return state.items
+        .map(item => {
+          const product = products.find(p => p.id === item.productId);
+          if (!product) return null;
+          const size = product.sizes.find(s => s.id === item.sizeId);
+          if (!size) return null;
+          const maxQty = size.stock ?? item.quantity;
+          const safeQty = Math.min(item.quantity, maxQty);
+          return {
+            ...item,
+            product,
+            size,
+            quantity: safeQty,
+            lineTotal: safeQty * item.unitPrice,
+          };
+        })
+        .filter((x): x is any => Boolean(x));
+    },
+    [state.items]
+  );
+
+  const getTotals = useCallback(
+    (products: Product[], shippingMethod?: ShippingMethod): CartTotals => {
+      const resolved = memoizedGetResolvedItems(products);
+      const subtotal = resolved.reduce((sum, item) => sum + item.lineTotal, 0);
+      const shipping = shippingMethod?.amount ?? (subtotal > 15000 ? 0 : subtotal > 0 ? 499 : 0);
+      const tax = calculateTax(subtotal);
+      const discount = 0;
+      const grandTotal = subtotal + shipping + tax - discount;
+      return {
+        subtotal,
+        shipping,
+        tax,
+        discount,
+        grandTotal,
+        currency: state.currency ?? 'INR',
+      };
+    },
+    [memoizedGetResolvedItems, state.currency]
+  );
+
+  const value: CartContextValue = useMemo(
+    () => ({
+      state,
+      addItem,
+      removeItem,
+      updateQuantity,
+      clearCart,
+      getResolvedItems: memoizedGetResolvedItems,
+      getTotals,
+    }),
+    [state, addItem, removeItem, updateQuantity, clearCart, memoizedGetResolvedItems, getTotals]
+  );
 
   return <RawCartContext.Provider value={value}>{children}</RawCartContext.Provider>;
 }
@@ -299,5 +342,11 @@ export function useCart(): CartContextValue {
   return ctx ?? defaultContextValue;
 }
 
-export const CartContext = RawCartContext;
+const CartContext = {
+  CartProvider,
+  useCart,
+  RawCartContext,
+};
+
+export { CartContext };
 export default CartContext;

@@ -1,124 +1,359 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ShoppingBag, Search } from 'lucide-react';
-import { useCart } from '@/context/CartContext';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { Menu, X, Search, ShoppingBag } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useCart } from '@/context/CartContext';
+import { CartDrawer } from '@/components/CartDrawer';
 
 export interface HeaderProps {
-  className?: string;
+  transparentOnTop?: boolean;
 }
 
-const categories: { label: string; value: string }[] = [
-  { label: 'Heels', value: 'Heels' },
-  { label: 'Loafers', value: 'Loafers' },
-  { label: 'Sneakers', value: 'Sneakers' },
-  { label: 'Sandals', value: 'Sandals' },
-  { label: 'Boots', value: 'Boots' },
-  { label: 'Mules', value: 'Mules' },
-  { label: 'Slides', value: 'Slides' },
+interface NavItem {
+  label: string;
+  href: string;
+}
+
+const navItems: NavItem[] = [
+  { label: 'Home', href: '/' },
+  { label: 'Shop', href: '/shop' },
+  { label: 'About', href: '/about' },
+  { label: 'Contact', href: '/contact' },
 ];
 
-export function Header({ className = '' }: HeaderProps) {
+function useQueryParam(key: string): [string, (value: string, options?: { replace?: boolean }) => void] {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const { itemCount, openDrawer } = useCart();
-  const initialQuery = searchParams.get('q') ?? '';
-  const [searchValue, setSearchValue] = useState(initialQuery);
+  const location = useLocation();
+  const [value, setValue] = useState<string>('');
 
   useEffect(() => {
-    setSearchValue(searchParams.get('q') ?? '');
-  }, [searchParams]);
+    const params = new URLSearchParams(location.search);
+    const current = params.get(key) ?? '';
+    setValue(current);
+  }, [location.search, key]);
+
+  const update = (next: string, options?: { replace?: boolean }) => {
+    const params = new URLSearchParams(location.search);
+    if (next.trim()) {
+      params.set(key, next);
+    } else {
+      params.delete(key);
+    }
+    const search = params.toString();
+    navigate(
+      {
+        pathname: location.pathname,
+        search: search ? `?${search}` : '',
+      },
+      { replace: options?.replace ?? false }
+    );
+  };
+
+  return [value, update];
+}
+
+export function Header({ transparentOnTop = false }: HeaderProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { state } = useCart();
+  const [searchValue, setSearchValue] = useQueryParam('q');
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
+
+  const cartCount = state.items?.reduce((acc, item) => acc + (item?.quantity ?? 0), 0) ?? 0;
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const y = window.scrollY || window.pageYOffset || 0;
+      setIsScrolled(y > 24);
+    };
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const params = new URLSearchParams(window.location.hash.split('?')[1] ?? '');
-    if (searchValue.trim()) {
-      params.set('q', searchValue.trim());
-    } else {
-      params.delete('q');
+    const trimmed = searchValue.trim();
+    if (!trimmed) {
+      navigate('/shop');
+      return;
     }
-    navigate(`/shop?${params.toString()}`);
+    if (location.pathname !== '/shop') {
+      navigate(`/shop?q=${encodeURIComponent(trimmed)}`);
+    } else {
+      setSearchValue(trimmed, { replace: true });
+    }
   };
 
-  const handleCategoryClick = (value: string) => {
-    const params = new URLSearchParams(window.location.hash.split('?')[1] ?? '');
-    params.set('category', value);
-    navigate(`/shop?${params.toString()}`);
-  };
+  const isHeroTransparent = transparentOnTop && !isScrolled && location.pathname === '/';
 
   return (
-    <header
-      className={cn(
-        'sticky top-0 z-40 border-b border-[#E6DED3] bg-[#F9F6F2]/90 backdrop-blur-sm',
-        className
-      )}
-    >
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-4 py-4">
-        <div className="flex items-center gap-8">
-          <Link to="/" className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full border border-[#E6DED3] bg-white flex items-center justify-center">
-              <span className="text-xs font-semibold tracking-[0.2em] text-[#2E2B28]">
-                JY
-              </span>
-            </div>
-            <span className="text-xl font-light tracking-[0.3em] text-[#2E2B28] uppercase">
-              Jootiya
-            </span>
-          </Link>
-          <nav className="hidden items-center gap-5 text-xs font-semibold uppercase tracking-[0.25em] text-[#6F675E] md:flex">
-            <Link to="/" className="hover:text-[#2E2B28] transition-colors">
-              Editorial
-            </Link>
+    <>
+      <header
+        className={cn(
+          'fixed top-0 inset-x-0 z-40 transition-all duration-300',
+          'backdrop-blur-md',
+          isHeroTransparent
+            ? 'bg-transparent text-[#F9F6F2]'
+            : 'bg-[#F9F6F2]/95 border-b border-[#D9D1C7] text-[#2E2B28]'
+        )}
+      >
+        <div className="w-full max-w-7xl mx-auto px-6 lg:px-12">
+          <div className="flex items-center justify-between gap-6 py-4 lg:py-5">
             <button
               type="button"
-              onClick={() => navigate('/shop')}
-              className="hover:text-[#2E2B28] transition-colors"
+              onClick={() => navigate('/')}
+              className="flex items-center gap-3 group"
             >
-              Shop
-            </button>
-            {categories.slice(0, 4).map(cat => (
-              <button
-                key={cat.value}
-                type="button"
-                onClick={() => handleCategoryClick(cat.value)}
-                className="hover:text-[#2E2B28] transition-colors"
+              <div
+                className={cn(
+                  'h-9 w-9 rounded-full border flex items-center justify-center',
+                  isHeroTransparent ? 'border-[#F9F6F2]/40' : 'border-[#D9D1C7]',
+                  'bg-white/5'
+                )}
               >
-                {cat.label}
+                <span className="text-xs tracking-[0.25em] uppercase font-semibold">
+                  J
+                </span>
+              </div>
+              <div className="flex flex-col leading-tight">
+                <span
+                  className={cn(
+                    'text-lg sm:text-xl tracking-[0.3em] uppercase',
+                    'font-semibold',
+                    'font-[Playfair_Display]'
+                  )}
+                >
+                  Jootiya
+                </span>
+                <span
+                  className={cn(
+                    'text-[10px] sm:text-xs tracking-[0.28em] uppercase',
+                    isHeroTransparent ? 'text-[#F9F6F2]/70' : 'text-[#6F675E]'
+                  )}
+                >
+                  Footwear Studio
+                </span>
+              </div>
+            </button>
+
+            <nav className="hidden lg:flex items-center gap-8 xl:gap-10">
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.href}
+                  to={item.href}
+                  className={({ isActive }) =>
+                    cn(
+                      'text-xs tracking-[0.25em] uppercase transition-colors',
+                      'border-b border-transparent pb-0.5',
+                      isActive
+                        ? isHeroTransparent
+                          ? 'text-[#F9F6F2] border-[#F9F6F2]'
+                          : 'text-[#2E2B28] border-[#2E2B28]'
+                        : isHeroTransparent
+                        ? 'text-[#F9F6F2]/70 hover:text-[#F9F6F2]'
+                        : 'text-[#6F675E] hover:text-[#2E2B28]'
+                    )
+                  }
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+
+            <div className="hidden md:flex items-center gap-4 lg:gap-6 flex-1 justify-end">
+              <form
+                onSubmit={handleSearchSubmit}
+                className={cn(
+                  'relative flex-1 max-w-xs lg:max-w-sm',
+                  'group'
+                )}
+              >
+                <div
+                  className={cn(
+                    'flex items-center gap-2 rounded-full border px-3 py-1.5',
+                    'bg-white/80 backdrop-blur-md',
+                    'transition-colors',
+                    isHeroTransparent
+                      ? 'border-white/30 focus-within:border-white/70'
+                      : 'border-[#D9D1C7] focus-within:border-[#8B0000]'
+                  )}
+                >
+                  <Search
+                    className={cn(
+                      'w-4 h-4 flex-none',
+                      isHeroTransparent ? 'text-[#F9F6F2]/80' : 'text-[#6F675E]'
+                    )}
+                  />
+                  <input
+                    type="text"
+                    value={searchValue}
+                    onChange={(e) => setSearchValue(e.target.value)}
+                    placeholder="Search sneakers, boots, loafers..."
+                    className={cn(
+                      'w-full bg-transparent border-none outline-none text-xs',
+                      'placeholder:text-[11px]',
+                      isHeroTransparent
+                        ? 'text-[#F9F6F2] placeholder:text-[#F9F6F2]/60'
+                        : 'text-[#2E2B28] placeholder:text-[#6F675E]'
+                    )}
+                  />
+                  <button
+                    type="submit"
+                    className={cn(
+                      'text-[10px] tracking-[0.2em] uppercase font-semibold',
+                      'px-2 py-0.5 rounded-full border transition-colors',
+                      isHeroTransparent
+                        ? 'border-[#F9F6F2]/50 text-[#F9F6F2]/80 hover:bg-[#F9F6F2] hover:text-[#2E2B28]'
+                        : 'border-[#D9D1C7] text-[#6F675E] hover:bg-[#2E2B28] hover:text-[#F9F6F2]'
+                    )}
+                  >
+                    Find
+                  </button>
+                </div>
+              </form>
+
+              <button
+                type="button"
+                onClick={() => setCartOpen(true)}
+                className={cn(
+                  'relative flex items-center justify-center rounded-full border',
+                  'h-10 w-10 transition-colors',
+                  isHeroTransparent
+                    ? 'border-[#F9F6F2]/60 hover:bg-[#F9F6F2] hover:text-[#2E2B28]'
+                    : 'border-[#D9D1C7] hover:bg-[#2E2B28] hover:text-[#F9F6F2]'
+                )}
+              >
+                <ShoppingBag className="w-4 h-4" />
+                {cartCount > 0 && (
+                  <span
+                    className={cn(
+                      'absolute -top-1 -right-1 min-w-[18px] h-[18px]',
+                      'rounded-full bg-[#8B0000] text-[10px] text-white',
+                      'flex items-center justify-center px-1'
+                    )}
+                  >
+                    {cartCount > 9 ? '9+' : cartCount}
+                  </span>
+                )}
               </button>
-            ))}
-          </nav>
-        </div>
+            </div>
 
-        <div className="flex flex-1 items-center justify-end gap-4">
-          <form
-            onSubmit={handleSearchSubmit}
-            className="hidden max-w-xs flex-1 items-center rounded-full border border-[#E6DED3] bg-white/80 px-3 py-1.5 text-xs md:flex"
-          >
-            <Search className="mr-2 h-3.5 w-3.5 text-[#BFA06A]" />
-            <input
-              type="text"
-              value={searchValue}
-              onChange={e => setSearchValue(e.target.value)}
-              placeholder="Search silhouettes, leather, color..."
-              className="h-6 flex-1 bg-transparent font-serif text-xs text-[#2E2B28] placeholder:text-[#B1A89D] focus:outline-none"
-            />
-          </form>
+            <div className="flex md:hidden items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setCartOpen(true)}
+                className={cn(
+                  'relative flex items-center justify-center rounded-full border',
+                  'h-9 w-9 transition-colors',
+                  isHeroTransparent
+                    ? 'border-[#F9F6F2]/60 hover:bg-[#F9F6F2] hover:text-[#2E2B28]'
+                    : 'border-[#D9D1C7] hover:bg-[#2E2B28] hover:text-[#F9F6F2]'
+                )}
+              >
+                <ShoppingBag className="w-4 h-4" />
+                {cartCount > 0 && (
+                  <span
+                    className={cn(
+                      'absolute -top-1 -right-1 min-w-[16px] h-[16px]',
+                      'rounded-full bg-[#8B0000] text-[9px] text-white',
+                      'flex items-center justify-center px-1'
+                    )}
+                  >
+                    {cartCount > 9 ? '9+' : cartCount}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileOpen((prev) => !prev)}
+                className={cn(
+                  'flex items-center justify-center rounded-full border',
+                  'h-9 w-9 transition-colors',
+                  isHeroTransparent
+                    ? 'border-[#F9F6F2]/60 hover:bg-[#F9F6F2] hover:text-[#2E2B28]'
+                    : 'border-[#D9D1C7] hover:bg-[#2E2B28] hover:text-[#F9F6F2]'
+                )}
+              >
+                {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
 
-          <button
-            type="button"
-            onClick={openDrawer}
-            className="relative flex h-9 w-9 items-center justify-center rounded-full border border-[#E6DED3] bg-white transition-colors hover:border-[#BFA06A]"
-          >
-            <ShoppingBag className="h-4 w-4 text-[#2E2B28]" />
-            {itemCount > 0 && (
-              <span className="absolute -right-1 -top-1 min-w-[1.2rem] rounded-full bg-[#BFA06A] px-1 text-center text-[0.6rem] font-semibold leading-4 text-black">
-                {itemCount}
-              </span>
+          <div
+            className={cn(
+              'md:hidden overflow-hidden transition-[max-height,opacity] duration-300',
+              mobileOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
             )}
-          </button>
+          >
+            <div className="pb-4 border-t border-[#D9D1C7]/70 pt-3 space-y-3">
+              <form onSubmit={handleSearchSubmit} className="relative">
+                <div
+                  className={cn(
+                    'flex items-center gap-2 rounded-full border px-3 py-1.5',
+                    'bg-white/80 backdrop-blur-md border-[#D9D1C7]',
+                    'transition-colors focus-within:border-[#8B0000]'
+                  )}
+                >
+                  <Search className="w-4 h-4 text-[#6F675E]" />
+                  <input
+                    type="text"
+                    value={searchValue}
+                    onChange={(e) => setSearchValue(e.target.value)}
+                    placeholder="Search collection..."
+                    className={cn(
+                      'w-full bg-transparent border-none outline-none text-xs',
+                      'placeholder:text-[11px] text-[#2E2B28] placeholder:text-[#6F675E]'
+                    )}
+                  />
+                  <button
+                    type="submit"
+                    className={cn(
+                      'text-[10px] tracking-[0.2em] uppercase font-semibold',
+                      'px-2 py-0.5 rounded-full border transition-colors',
+                      'border-[#D9D1C7] text-[#6F675E] hover:bg-[#2E2B28] hover:text-[#F9F6F2]'
+                    )}
+                  >
+                    Go
+                  </button>
+                </div>
+              </form>
+
+              <nav className="flex flex-col gap-2">
+                {navItems.map((item) => (
+                  <NavLink
+                    key={item.href}
+                    to={item.href}
+                    className={({ isActive }) =>
+                      cn(
+                        'flex items-center justify-between px-1 py-2',
+                        'text-xs tracking-[0.24em] uppercase',
+                        'border-b border-[#D9D1C7]/60',
+                        isActive ? 'text-[#2E2B28] font-semibold' : 'text-[#6F675E]'
+                      )
+                    }
+                  >
+                    <span>{item.label}</span>
+                    <span className="h-px w-10 bg-[#D9D1C7]" />
+                  </NavLink>
+                ))}
+              </nav>
+            </div>
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      <CartDrawer open={cartOpen} onOpenChange={setCartOpen} />
+      <div className="h-16 md:h-20" />
+    </>
   );
 }
 
