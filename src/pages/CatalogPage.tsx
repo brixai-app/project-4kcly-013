@@ -1,873 +1,779 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Eye, Filter, X } from "lucide-react";
+import { ChevronDown, Filter, X, ShoppingBag } from "lucide-react";
 import {
   Button,
   Card,
-  CardContent,
   CardHeader,
   CardTitle,
+  CardDescription,
+  CardContent,
   Badge,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  Input,
+  Tabs,
+  TabsList,
+  TabsTrigger,
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  Slider,
+  Sheet,
+  SheetContent,
+  Separator,
 } from "@/components/ui/shadcn";
-import { toast } from "sonner";
-import {
-  Product,
-  CatalogFilters,
-  CatalogSortOption,
-  applyCatalogFilters,
-  getAllBrands,
-  getAllCategories,
-  getAllSizes,
-  getProducts,
-  paginateProducts,
-  sortCatalog,
-  addToCart,
-  formatPrice,
-} from "@/mock";
+import { Product, ProductVariantKey, formatMoney } from "@/mock";
+import { cn } from "@/lib/utils";
 
-// NOTE: This page uses fully mocked client-side data and cart helpers from src/mock.ts.
-// There is NO backend; cart updates are persisted to localStorage via the mock layer.
-
-const PAGE_SIZE = 6;
-
-const sortOptions: { value: CatalogSortOption; label: string }[] = [
-  { value: "featured", label: "Featured" },
-  { value: "price-asc", label: "Price: Low to High" },
-  { value: "price-desc", label: "Price: High to Low" },
-  { value: "rating-desc", label: "Rating" },
-];
-
-interface QuickViewState {
-  open: boolean;
-  product: Product | null;
+export interface CatalogPageProps {
+  products: Product[];
+  searchValue: string;
+  onAddToCart: (productId: string, variant: ProductVariantKey, qty: number) => void;
+  onToast: (message: string, type?: "success" | "error" | "info") => void;
+  // Optional filter helpers passed from App or derived locally later
+  availableBrands?: string[];
+  availableSizes?: string[];
+  availableColors?: string[];
 }
 
-const CatalogPage: React.FC = () => {
-  const allProducts = useMemo(() => getProducts(), []);
-  const brands = useMemo(() => getAllBrands(), []);
-  const categories = useMemo(() => getAllCategories(), []);
-  const sizes = useMemo(() => getAllSizes(), []);
+type SortOptionKey = "newest" | "price_asc" | "price_desc";
 
-  const [filters, setFilters] = useState<CatalogFilters>({});
-  const [sort, setSort] = useState<CatalogSortOption>("featured");
-  const [page, setPage] = useState(1);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+const sortOptions: { key: SortOptionKey; label: string }[] = [
+  { key: "newest", label: "Newest" },
+  { key: "price_asc", label: "Price: Low–High" },
+  { key: "price_desc", label: "Price: High–Low" },
+];
 
-  const [quickView, setQuickView] = useState<QuickViewState>({
-    open: false,
-    product: null,
-  });
-  const [quickViewSize, setQuickViewSize] = useState<string | undefined>(
-    undefined
-  );
-  const [quickViewQty, setQuickViewQty] = useState<number>(1);
+const colorSwatchMap: Record<string, string> = {
+  Bone: "bg-stone-200",
+  Onyx: "bg-neutral-900",
+  Cacao: "bg-amber-900",
+  Sand: "bg-stone-300",
+  Eclipse: "bg-slate-900",
+  Ivory: "bg-stone-100",
+  Sable: "bg-neutral-800",
+  Crema: "bg-amber-100",
+  "Smoked Taupe": "bg-stone-500",
+  Smoke: "bg-slate-500",
+  Stone: "bg-zinc-400",
+  Espresso: "bg-amber-950",
+  "Espresso Ombre": "bg-gradient-to-br from-amber-900 to-amber-600",
+  Ink: "bg-zinc-900",
+  Cloud: "bg-slate-100",
+  Obsidian: "bg-black",
+  Noir: "bg-neutral-950",
+};
 
-  const [priceRange, setPriceRange] = useState<[number, number]>(() => {
-    const prices = allProducts.map((p) => p.price);
-    const min = Math.min(...prices);
-    const max = Math.max(...prices);
-    return [min, max];
-  });
+const cardMotionProps = {
+  initial: { opacity: 0, y: 16 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: 16 },
+  transition: { duration: 0.25, ease: "easeOut" },
+};
 
-  // Derived filtered + sorted
-  const filteredSorted = useMemo(() => {
-    const base: CatalogFilters = {
-      ...filters,
-      minPrice: priceRange[0],
-      maxPrice: priceRange[1],
+const filterBarMotion = {
+  initial: { opacity: 0, y: -8 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.25, ease: "easeOut" },
+};
+
+const sheetMotion = {
+  initial: { opacity: 0, x: 40 },
+  animate: { opacity: 1, x: 0 },
+  exit: { opacity: 0, x: 40 },
+  transition: { duration: 0.25, ease: "easeOut" },
+};
+
+export const CatalogPage: React.FC<CatalogPageProps> = ({
+  products,
+  searchValue,
+  onAddToCart,
+  onToast,
+  availableBrands,
+  availableSizes,
+  availableColors,
+}) => {
+  const brands = useMemo(() => {
+    if (availableBrands && availableBrands.length) return ["All", ...availableBrands];
+    const set = new Set<string>();
+    products.forEach((p) => set.add(p.brand));
+    return ["All", ...Array.from(set).sort()];
+  }, [products, availableBrands]);
+
+  const allSizes = useMemo(() => {
+    if (availableSizes && availableSizes.length) return availableSizes;
+    const set = new Set<string>();
+    products.forEach((p) => p.sizes.forEach((s) => set.add(s)));
+    return Array.from(set).sort((a, b) => {
+      const na = parseFloat(a.replace(/[^0-9.]/g, ""));
+      const nb = parseFloat(b.replace(/[^0-9.]/g, ""));
+      if (isNaN(na) || isNaN(nb)) return a.localeCompare(b);
+      return na - nb;
+    });
+  }, [products, availableSizes]);
+
+  const allColors = useMemo(() => {
+    if (availableColors && availableColors.length) return availableColors;
+    const set = new Set<string>();
+    products.forEach((p) => p.colors.forEach((c) => set.add(c)));
+    return Array.from(set).sort();
+  }, [products, availableColors]);
+
+  const [brandFilter, setBrandFilter] = useState<string>("All");
+  const [sizeFilter, setSizeFilter] = useState<string[]>([]);
+  const [colorFilter, setColorFilter] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState<SortOptionKey>("newest");
+
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedVariant, setSelectedVariant] = useState<ProductVariantKey | null>(null);
+  const [qty, setQty] = useState<number>(1);
+
+  const handleToggleSize = (size: string) => {
+    setSizeFilter((prev) =>
+      prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]
+    );
+  };
+
+  const handleToggleColor = (color: string) => {
+    setColorFilter((prev) =>
+      prev.includes(color) ? prev.filter((c) => c !== color) : [...prev, color]
+    );
+  };
+
+  const filteredProducts = useMemo(() => {
+    const term = searchValue.trim().toLowerCase();
+    let list = products.slice();
+
+    if (brandFilter !== "All") {
+      list = list.filter((p) => p.brand === brandFilter);
+    }
+
+    if (sizeFilter.length) {
+      list = list.filter((p) => p.sizes.some((s) => sizeFilter.includes(s)));
+    }
+
+    if (colorFilter.length) {
+      list = list.filter((p) => p.colors.some((c) => colorFilter.includes(c)));
+    }
+
+    if (term) {
+      list = list.filter((p) => {
+        const haystack = `${p.name} ${p.brand} ${p.tags.join(" ")}`.toLowerCase();
+        return haystack.includes(term);
+      });
+    }
+
+    list.sort((a, b) => {
+      if (sortBy === "newest") {
+        return (
+          new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime()
+        );
+      }
+      if (sortBy === "price_asc") return a.price - b.price;
+      if (sortBy === "price_desc") return b.price - a.price;
+      return 0;
+    });
+
+    return list;
+  }, [products, brandFilter, sizeFilter, colorFilter, searchValue, sortBy]);
+
+  const openSheetForProduct = (product: Product) => {
+    setSelectedProduct(product);
+    const defaultVariant: ProductVariantKey = {
+      size: product.sizes[0],
+      color: product.colors[0],
     };
-    const f = applyCatalogFilters(allProducts, base);
-    return sortCatalog(f, sort);
-  }, [allProducts, filters, sort, priceRange]);
-
-  const visibleProducts = useMemo(
-    () => paginateProducts(filteredSorted, 1, page * PAGE_SIZE),
-    [filteredSorted, page]
-  );
-
-  useEffect(() => {
-    setPage(1);
-  }, [filters, sort, priceRange]);
-
-  useEffect(() => {
-    setHasMore(visibleProducts.length < filteredSorted.length);
-  }, [visibleProducts.length, filteredSorted.length]);
-
-  useEffect(() => {
-    if (!hasMore) return;
-    const target = loadMoreRef.current;
-    if (!target) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const [entry] = entries;
-        if (entry.isIntersecting && !isLoadingMore) {
-          setIsLoadingMore(true);
-          setTimeout(() => {
-            setPage((prev) => prev + 1);
-            setIsLoadingMore(false);
-          }, 350);
-        }
-      },
-      { threshold: 0.4 }
-    );
-
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [hasMore, isLoadingMore]);
-
-  const handleFilterChange = (key: keyof CatalogFilters, value: any) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
+    setSelectedVariant(defaultVariant);
+    setQty(1);
   };
 
-  const openQuickView = (product: Product) => {
-    setQuickView({ open: true, product });
-    setQuickViewSize(undefined);
-    setQuickViewQty(1);
+  const closeSheet = () => {
+    setSelectedProduct(null);
+    setSelectedVariant(null);
+    setQty(1);
   };
 
-  const closeQuickView = () => {
-    setQuickView({ open: false, product: null });
-  };
-
-  const handleQuickAdd = () => {
-    if (!quickView.product) return;
-    const { success, error } = addToCart(
-      quickView.product.id,
-      quickViewSize,
-      quickViewQty
-    );
-    if (!success && error) {
-      toast.error(error);
+  const handleAddToCart = () => {
+    if (!selectedProduct || !selectedVariant) {
+      onToast("Please select a size and color.", "error");
       return;
     }
-    toast.success("Added to cart", {
-      description: `${quickView.product.name} • Size ${quickViewSize}`,
-    });
-    closeQuickView();
+    if (qty < 1) {
+      onToast("Quantity must be at least 1.", "error");
+      return;
+    }
+    onAddToCart(selectedProduct.id, selectedVariant, qty);
+    onToast("Added to cart", "success");
   };
 
-  const minPriceGlobal = useMemo(
-    () => Math.min(...allProducts.map((p) => p.price)),
-    [allProducts]
-  );
-  const maxPriceGlobal = useMemo(
-    () => Math.max(...allProducts.map((p) => p.price)),
-    [allProducts]
-  );
+  const handleVariantSizeSelect = (size: string) => {
+    if (!selectedProduct) return;
+    const color = selectedVariant?.color ?? selectedProduct.colors[0];
+    setSelectedVariant({ size, color });
+  };
+
+  const handleVariantColorSelect = (color: string) => {
+    if (!selectedProduct) return;
+    const size = selectedVariant?.size ?? selectedProduct.sizes[0];
+    setSelectedVariant({ size, color });
+  };
+
+  const activeSortLabel = sortOptions.find((o) => o.key === sortBy)?.label;
 
   return (
-    <div className="min-h-screen bg-[#F5F1EB] text-[#2B2B2B]">
-      <main className="mx-auto max-w-7xl px-4 pb-16 pt-10 sm:px-6 lg:px-8">
-        <section className="mb-8 flex flex-col gap-6 border-b border-[#D9CFC0] pb-6 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.25em] text-[#A89F91]">
-              The Catalog
-            </p>
-            <h1 className="mt-2 font-['Playfair_Display'] text-3xl font-semibold tracking-tight text-[#2B2B2B] sm:text-4xl">
-              Curated luxury for the city wanderer
+    <div className="min-h-screen bg-gradient-to-b from-neutral-50 to-stone-100 dark:from-neutral-900 dark:to-neutral-950">
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 pb-16 pt-8 sm:px-6 lg:px-8">
+        {/* Page heading */}
+        <header className="flex flex-col gap-2 border-b border-neutral-200 pb-4 dark:border-neutral-800">
+          <p className="text-xs uppercase tracking-[0.2em] text-neutral-500 dark:text-neutral-400">
+            The Catalog
+          </p>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <h1 className="text-3xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-50 sm:text-4xl md:text-[2.6rem]">
+              Footnotes from the Atelier
             </h1>
-            <p className="mt-3 max-w-xl font-['Lato'] text-sm text-neutral-700">
-              Browse a tightly edited selection of sneakers, boots, loafers and
-              sandals – each pair photographed in natural light, crafted in
-              limited runs, and designed to move effortlessly from daylight to
-              after dark.
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              {filteredProducts.length} styles curated for you
             </p>
           </div>
-          <div className="flex flex-col gap-3 md:flex-row md:items-center">
-            <div className="flex items-center gap-2 text-xs font-semibold tracking-[0.18em] text-[#A89F91]">
-              <span className="h-px w-5 bg-[#A89F91]" />
-              <span>
-                {filteredSorted.length.toString().padStart(2, "0")} styles
-                refined
-              </span>
+        </header>
+
+        {/* Filter + sort bar */}
+        <motion.section
+          {...filterBarMotion}
+          className="flex flex-col gap-3 rounded-2xl border border-neutral-200/80 bg-white/80 p-3 shadow-sm shadow-neutral-200/50 backdrop-blur-sm dark:border-neutral-800/80 dark:bg-neutral-900/80 dark:shadow-black/40 sm:p-4"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-neutral-500 dark:text-neutral-400">
+              <Filter className="h-3 w-3" />
+              <span>Refine</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="font-['Lato'] text-xs uppercase tracking-[0.16em] text-neutral-600">
-                Sort by
-              </span>
+            {(sizeFilter.length > 0 || colorFilter.length > 0 || brandFilter !== "All") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setBrandFilter("All");
+                  setSizeFilter([]);
+                  setColorFilter([]);
+                }}
+                className="inline-flex items-center gap-1 text-xs text-neutral-600 underline-offset-4 hover:text-neutral-900 hover:underline dark:text-neutral-300 dark:hover:text-neutral-50"
+              >
+                <X className="h-3 w-3" />
+                Clear all
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            {/* Brand tabs */}
+            <Tabs
+              value={brandFilter}
+              onValueChange={setBrandFilter}
+              className="w-full md:w-auto"
+            >
+              <TabsList className="flex w-full justify-start gap-1 overflow-x-auto rounded-full bg-neutral-100/70 p-1 dark:bg-neutral-800/70">
+                {brands.map((brand) => (
+                  <TabsTrigger
+                    key={brand}
+                    value={brand}
+                    className="whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium text-neutral-700 ring-offset-neutral-100 data-[state=active]:bg-neutral-900 data-[state=active]:text-neutral-50 data-[state=active]:shadow-sm dark:text-neutral-200 dark:ring-offset-neutral-900 dark:data-[state=active]:bg-neutral-50 dark:data-[state=active]:text-neutral-950"
+                  >
+                    {brand === "All" ? "All Houses" : brand}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+
+            {/* Right-side controls */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Size filter */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-[#D9CFC0] bg-[#F5F1EB]/80 px-3 py-1 text-xs font-['Lato'] tracking-[0.12em] text-neutral-800 hover:bg-white/90"
+                    className="inline-flex items-center gap-2 rounded-full border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:hover:bg-neutral-800"
                   >
-                    {sortOptions.find((s) => s.value === sort)?.label ??
-                      "Featured"}
+                    <span>Size</span>
+                    {sizeFilter.length > 0 && (
+                      <Badge className="rounded-full bg-neutral-900 px-1.5 py-0 text-[0.6rem] font-semibold text-neutral-50 dark:bg-neutral-100 dark:text-neutral-900">
+                        {sizeFilter.length}
+                      </Badge>
+                    )}
+                    <ChevronDown className="h-3 w-3 opacity-70" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-48 border-[#D9CFC0] bg-[#FDF9F2] font-['Lato'] text-xs">
-                  {sortOptions.map((option) => (
+                <DropdownMenuContent className="w-52 rounded-2xl border-neutral-200 bg-white/95 p-2 shadow-lg shadow-neutral-200/70 backdrop-blur-sm dark:border-neutral-700 dark:bg-neutral-900/95 dark:shadow-black/60">
+                  {allSizes.map((size) => {
+                    const active = sizeFilter.includes(size);
+                    return (
+                      <DropdownMenuItem
+                        key={size}
+                        onClick={() => handleToggleSize(size)}
+                        className={cn(
+                          "flex cursor-pointer items-center justify-between rounded-xl px-2 py-1.5 text-xs text-neutral-800 focus:bg-neutral-100 dark:text-neutral-100 dark:focus:bg-neutral-800",
+                          active &&
+                            "bg-neutral-900 text-neutral-50 dark:bg-neutral-100 dark:text-neutral-900"
+                        )}
+                      >
+                        <span>{size}</span>
+                        {active && (
+                          <span className="text-[0.65rem] uppercase tracking-[0.18em]">
+                            Selected
+                          </span>
+                        )}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Color filter */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="inline-flex items-center gap-2 rounded-full border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:hover:bg-neutral-800"
+                  >
+                    <span>Color</span>
+                    {colorFilter.length > 0 && (
+                      <Badge className="rounded-full bg-neutral-900 px-1.5 py-0 text-[0.6rem] font-semibold text-neutral-50 dark:bg-neutral-100 dark:text-neutral-900">
+                        {colorFilter.length}
+                      </Badge>
+                    )}
+                    <ChevronDown className="h-3 w-3 opacity-70" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-60 rounded-2xl border-neutral-200 bg-white/95 p-2 shadow-lg shadow-neutral-200/70 backdrop-blur-sm dark:border-neutral-700 dark:bg-neutral-900/95 dark:shadow-black/60">
+                  <div className="grid grid-cols-2 gap-1">
+                    {allColors.map((color) => {
+                      const active = colorFilter.includes(color);
+                      const swatchClass = colorSwatchMap[color] ?? "bg-neutral-500";
+                      return (
+                        <DropdownMenuItem
+                          key={color}
+                          onClick={() => handleToggleColor(color)}
+                          className={cn(
+                            "flex cursor-pointer items-center gap-2 rounded-xl px-2 py-1.5 text-xs text-neutral-800 focus:bg-neutral-100 dark:text-neutral-100 dark:focus:bg-neutral-800",
+                            active &&
+                              "bg-neutral-900 text-neutral-50 dark:bg-neutral-100 dark:text-neutral-900"
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "h-4 w-4 rounded-full border border-black/10 shadow-sm shadow-black/10 dark:border-white/10 dark:shadow-black/40",
+                              swatchClass
+                            )}
+                          />
+                          <span className="truncate">{color}</span>
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Sort */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="inline-flex items-center gap-2 rounded-full border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:hover:bg-neutral-800"
+                  >
+                    <span>{activeSortLabel}</span>
+                    <ChevronDown className="h-3 w-3 opacity-70" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-44 rounded-2xl border-neutral-200 bg-white/95 p-1 shadow-lg shadow-neutral-200/70 backdrop-blur-sm dark:border-neutral-700 dark:bg-neutral-900/95 dark:shadow-black/60">
+                  {sortOptions.map((opt) => (
                     <DropdownMenuItem
-                      key={option.value}
-                      className="cursor-pointer text-[11px] uppercase tracking-[0.16em] text-neutral-700 hover:bg-[#F5F1EB]"
-                      onClick={() => setSort(option.value)}
+                      key={opt.key}
+                      onClick={() => setSortBy(opt.key)}
+                      className={cn(
+                        "flex cursor-pointer items-center justify-between rounded-xl px-2 py-1.5 text-xs text-neutral-800 focus:bg-neutral-100 dark:text-neutral-100 dark:focus:bg-neutral-800",
+                        sortBy === opt.key &&
+                          "bg-neutral-900 text-neutral-50 dark:bg-neutral-100 dark:text-neutral-900"
+                      )}
                     >
-                      {option.label}
+                      <span>{opt.label}</span>
+                      {sortBy === opt.key && (
+                        <span className="text-[0.65rem] uppercase tracking-[0.18em]">
+                          Active
+                        </span>
+                      )}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
           </div>
-        </section>
+        </motion.section>
 
-        <section className="mb-10 grid gap-6 lg:grid-cols-[minmax(0,260px)_1fr]">
-          <FiltersPanel
-            brands={brands}
-            categories={categories}
-            sizes={sizes}
-            filters={filters}
-            onFilterChange={handleFilterChange}
-            priceRange={priceRange}
-            setPriceRange={setPriceRange}
-            globalPriceRange={[minPriceGlobal, maxPriceGlobal]}
-          />
-
-          <div className="flex flex-col">
-            {visibleProducts.length === 0 ? (
-              <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-[#D9CFC0] bg-white/40 text-center">
-                <p className="font-['Playfair_Display'] text-lg text-neutral-800">
-                  No styles match these filters.
-                </p>
-                <p className="mt-2 max-w-sm font-['Lato'] text-xs text-neutral-600">
-                  Refine less, discover more – try adjusting your size or price
-                  range to reveal pairs waiting just outside your search.
-                </p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="mt-4 border border-transparent bg-white px-4 py-1 font-['Lato'] text-xs uppercase tracking-[0.16em] text-neutral-800 shadow-sm hover:border-[#BFA06F]/60 hover:bg-[#FDF8EE]"
-                  onClick={() => {
-                    setFilters({});
-                    setPriceRange([minPriceGlobal, maxPriceGlobal]);
-                  }}
-                >
-                  Reset filters
-                </Button>
-              </div>
-            ) : (
-              <>
-                <MasonryGrid
-                  products={visibleProducts}
-                  onQuickView={openQuickView}
-                />
-
-                <div ref={loadMoreRef} className="mt-10 flex justify-center">
-                  {hasMore ? (
-                    <div className="flex items-center gap-3 text-xs text-neutral-600">
-                      <span className="h-px w-8 bg-[#D9CFC0]" />
-                      <span className="font-['Lato'] uppercase tracking-[0.16em]">
-                        {isLoadingMore
-                          ? "Curating additional pairs…"
-                          : "Scroll to reveal more"}
-                      </span>
-                      <span className="h-px w-8 bg-[#D9CFC0]" />
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-3 text-xs text-neutral-600">
-                      <span className="h-px w-8 bg-[#D9CFC0]" />
-                      <span className="font-['Lato'] uppercase tracking-[0.16em]">
-                        You have reached the end
-                      </span>
-                      <span className="h-px w-8 bg-[#D9CFC0]" />
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </section>
-      </main>
-
-      <QuickViewDialog
-        state={quickView}
-        onOpenChange={(open) => {
-          if (!open) closeQuickView();
-        }}
-        selectedSize={quickViewSize}
-        onSizeChange={setQuickViewSize}
-        quantity={quickViewQty}
-        onQuantityChange={setQuickViewQty}
-        onAdd={handleQuickAdd}
-      />
-    </div>
-  );
-};
-
-interface FiltersPanelProps {
-  brands: string[];
-  categories: string[];
-  sizes: string[];
-  filters: CatalogFilters;
-  onFilterChange: (key: keyof CatalogFilters, value: any) => void;
-  priceRange: [number, number];
-  setPriceRange: (range: [number, number]) => void;
-  globalPriceRange: [number, number];
-}
-
-const FiltersPanel: React.FC<FiltersPanelProps> = ({
-  brands,
-  categories,
-  sizes,
-  filters,
-  onFilterChange,
-  priceRange,
-  setPriceRange,
-  globalPriceRange,
-}) => {
-  const [minInput, setMinInput] = useState<string>(
-    Math.round(priceRange[0]).toString()
-  );
-  const [maxInput, setMaxInput] = useState<string>(
-    Math.round(priceRange[1]).toString()
-  );
-  const [mobileOpen, setMobileOpen] = useState(false);
-
-  useEffect(() => {
-    setMinInput(Math.round(priceRange[0]).toString());
-    setMaxInput(Math.round(priceRange[1]).toString());
-  }, [priceRange]);
-
-  const applyPriceInputs = () => {
-    const minNum = Number(minInput) || globalPriceRange[0];
-    const maxNum = Number(maxInput) || globalPriceRange[1];
-    const clampedMin = Math.max(globalPriceRange[0], Math.min(minNum, maxNum));
-    const clampedMax = Math.min(globalPriceRange[1], Math.max(maxNum, clampedMin));
-    setPriceRange([clampedMin, clampedMax]);
-  };
-
-  const body = (
-    <Card className="border-[#D9CFC0] bg-[#FDF9F2]/90 shadow-sm backdrop-blur-sm">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-        <div>
-          <CardTitle className="font-['Playfair_Display'] text-sm font-semibold uppercase tracking-[0.18em] text-neutral-800">
-            Filter
-          </CardTitle>
-          <p className="mt-1 font-['Lato'] text-[11px] text-neutral-600">
-            Tailor the grid to your ritual – by silhouette, house, or size.
-          </p>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 rounded-full border border-transparent text-neutral-500 hover:border-[#D9CFC0] hover:bg-white"
-          onClick={() => {
-            onFilterChange("category", undefined);
-            onFilterChange("brand", undefined);
-            onFilterChange("size", undefined);
-            setPriceRange(globalPriceRange);
-          }}
-          aria-label="Reset filters"
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="space-y-2">
-          <p className="font-['Lato'] text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-700">
-            Category
-          </p>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-between border-[#D9CFC0] bg-white/90 font-['Lato'] text-xs text-neutral-800 hover:bg-white"
-              >
-                <span>
-                  {filters.category && filters.category !== "All"
-                    ? filters.category
-                    : "All categories"}
-                </span>
-                <Filter className="ml-2 h-3.5 w-3.5 text-neutral-500" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-48 border-[#D9CFC0] bg-[#FDF9F2] font-['Lato'] text-xs">
-              <DropdownMenuItem
-                onClick={() => onFilterChange("category", "All")}
-                className="cursor-pointer text-[11px] uppercase tracking-[0.16em] text-neutral-700 hover:bg-[#F5F1EB]"
-              >
-                All categories
-              </DropdownMenuItem>
-              {categories.map((category) => (
-                <DropdownMenuItem
-                  key={category}
-                  onClick={() => onFilterChange("category", category)}
-                  className="cursor-pointer text-[11px] uppercase tracking-[0.16em] text-neutral-700 hover:bg-[#F5F1EB]"
-                >
-                  {category}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        <div className="space-y-2">
-          <p className="font-['Lato'] text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-700">
-            House
-          </p>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-between border-[#D9CFC0] bg-white/90 font-['Lato'] text-xs text-neutral-800 hover:bg-white"
-              >
-                <span>
-                  {filters.brand && filters.brand !== "All"
-                    ? filters.brand
-                    : "All houses"}
-                </span>
-                <Filter className="ml-2 h-3.5 w-3.5 text-neutral-500" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56 border-[#D9CFC0] bg-[#FDF9F2] font-['Lato'] text-xs">
-              <DropdownMenuItem
-                onClick={() => onFilterChange("brand", "All")}
-                className="cursor-pointer text-[11px] uppercase tracking-[0.16em] text-neutral-700 hover:bg-[#F5F1EB]"
-              >
-                All houses
-              </DropdownMenuItem>
-              {brands.map((brand) => (
-                <DropdownMenuItem
-                  key={brand}
-                  onClick={() => onFilterChange("brand", brand)}
-                  className="cursor-pointer text-[11px] uppercase tracking-[0.16em] text-neutral-700 hover:bg-[#F5F1EB]"
-                >
-                  {brand}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        <div className="space-y-2">
-          <p className="font-['Lato'] text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-700">
-            Size
-          </p>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-between border-[#D9CFC0] bg-white/90 font-['Lato'] text-xs text-neutral-800 hover:bg-white"
-              >
-                <span>
-                  {filters.size && filters.size !== "All"
-                    ? `EU ${filters.size}`
-                    : "All sizes"}
-                </span>
-                <Filter className="ml-2 h-3.5 w-3.5 text-neutral-500" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-40 border-[#D9CFC0] bg-[#FDF9F2] font-['Lato'] text-xs">
-              <DropdownMenuItem
-                onClick={() => onFilterChange("size", "All")}
-                className="cursor-pointer text-[11px] uppercase tracking-[0.16em] text-neutral-700 hover:bg-[#F5F1EB]"
-              >
-                All sizes
-              </DropdownMenuItem>
-              {sizes.map((size) => (
-                <DropdownMenuItem
-                  key={size}
-                  onClick={() => onFilterChange("size", size)}
-                  className="cursor-pointer text-[11px] uppercase tracking-[0.16em] text-neutral-700 hover:bg-[#F5F1EB]"
-                >
-                  EU {size}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        <div className="space-y-3">
-          <p className="font-['Lato'] text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-700">
-            Price
-          </p>
-          <div className="px-1">
-            <Slider
-              value={priceRange}
-              min={globalPriceRange[0]}
-              max={globalPriceRange[1]}
-              step={10}
-              onValueChange={(val) => {
-                if (Array.isArray(val) && val.length === 2) {
-                  setPriceRange([val[0], val[1]]);
-                }
-              }}
-              className="text-[#BFA06F]"
-            />
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex-1">
-              <p className="font-['Lato'] text-[10px] uppercase tracking-[0.16em] text-neutral-500">
-                Min
-              </p>
-              <Input
-                type="number"
-                value={minInput}
-                onChange={(e) => setMinInput(e.target.value)}
-                onBlur={applyPriceInputs}
-                className="mt-1 h-8 border-[#D9CFC0] bg:white/90 font-['Lato'] text-xs text-neutral-800 focus-visible:border-[#BFA06F] focus-visible:ring-[#BFA06F]/30"
-              />
-            </div>
-            <span className="mt-5 text-[11px] text-neutral-500">to</span>
-            <div className="flex-1">
-              <p className="font-['Lato'] text-[10px] uppercase tracking-[0.16em] text-neutral-500">
-                Max
-              </p>
-              <Input
-                type="number"
-                value={maxInput}
-                onChange={(e) => setMaxInput(e.target.value)}
-                onBlur={applyPriceInputs}
-                className="mt-1 h-8 border-[#D9CFC0] bg:white/90 font-['Lato'] text-xs text-neutral-800 focus-visible:border-[#BFA06F] focus-visible:ring-[#BFA06F]/30"
-              />
-            </div>
-          </div>
-          <p className="font-['Lato'] text-[11px] text-neutral-500">
-            {formatPrice(priceRange[0])} — {formatPrice(priceRange[1])}
-          </p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-
-  return (
-    <>
-      <div className="mb-4 flex items-center justify-between lg:hidden">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setMobileOpen((v) => !v)}
-          className="border-[#D9CFC0] bg-white/90 font-['Lato'] text-xs uppercase tracking-[0.16em] text-neutral-700 hover:bg:white"
-        >
-          <Filter className="mr-2 h-3.5 w-3.5" /> Filters
-        </Button>
-      </div>
-      <div className="hidden lg:block">{body}</div>
-      <AnimatePresence>
-        {mobileOpen && (
-          <motion.div
-            className="fixed inset-0 z-30 bg-black/25 lg:hidden"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setMobileOpen(false)}
-          >
-            <motion.div
-              className="absolute inset-x-0 bottom-0 max-h-[80vh] overflow-y-auto rounded-t-3xl border border-[#D9CFC0] bg-[#FDF9F2] p-4 shadow-2xl"
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", stiffness: 260, damping: 26 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="mb-3 flex items-center justify-between">
-                <p className="font-['Playfair_Display'] text-sm uppercase tracking-[0.18em] text-neutral-800">
-                  Filter
-                </p>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-full border border-transparent text-neutral-500 hover:border-[#D9CFC0] hover:bg:white"
-                  onClick={() => setMobileOpen(false)}
-                  aria-label="Close filters"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              {body}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </>
-  );
-};
-
-interface MasonryGridProps {
-  products: Product[];
-  onQuickView: (product: Product) => void;
-}
-
-const MasonryGrid: React.FC<MasonryGridProps> = ({ products, onQuickView }) => {
-  return (
-    <div className="columns-1 gap-6 md:columns-2 xl:columns-3">
-      <AnimatePresence>
-        {products.map((product, index) => (
-          <motion.div
-            key={product.id}
-            layout
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{
-              duration: 0.4,
-              delay: index * 0.04,
-              ease: [0.19, 1, 0.22, 1],
-            }}
-            className="mb-6 break-inside-avoid"
-          >
-            <ProductCard product={product} onQuickView={() => onQuickView(product)} />
-          </motion.div>
-        ))}
-      </AnimatePresence>
-    </div>
-  );
-};
-
-interface ProductCardProps {
-  product: Product;
-  onQuickView: () => void;
-}
-
-const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView }) => {
-  const isTall = product.category === "Boots" || product.category === "Sneakers";
-
-  return (
-    <article className="group relative overflow-hidden rounded-3xl border border-[#D9CFC0] bg-white/90 shadow-[0_22px_45px_rgba(15,14,10,0.09)]">
-      <div
-        className={`relative overflow-hidden ${
-          isTall ? "h-80 sm:h-[22rem]" : "h-64 sm:h-[19rem]"
-        }`}
-      >
-        <motion.img
-          src={product.images[0]}
-          alt={product.name}
-          className="h-full w-full object-cover object-center"
-          whileHover={{ scale: 1.05 }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-        />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent opacity-80" />
-        <div className="absolute left-5 right-5 top-4 flex items-center justify-between">
-          <Badge className="bg-black/65 px-3 py-1 font-['Lato'] text-[11px] uppercase tracking-[0.18em] text-[#F5F1EB] shadow-lg">
-            {product.brand}
-          </Badge>
-          <div className="flex items:center gap-1 rounded-full bg-black/55 px-2 py-1 text-[11px] text-[#F5F1EB] shadow-lg">
-            <span className="font-['Lato'] uppercase tracking-[0.16em]">
-              {product.rating.toFixed(1)}
-            </span>
-            <span className="text-[10px]">★</span>
-          </div>
-        </div>
-        <div className="absolute inset-x-4 bottom-4 flex items-end justify-between">
-          <div>
-            <h3 className="font-['Bodoni_Moda'] text-base font-semibold tracking-wide text-[#F5F1EB]">
-              {product.name}
-            </h3>
-            <p className="mt-1 font-['Lato'] text-xs text-[#F5F1EB]/80">
-              {product.category} • from {formatPrice(product.price)}
+        {/* Masonry grid */}
+        {filteredProducts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-4 rounded-3xl border border-dashed border-neutral-300 bg-white/60 p-10 text-center dark:border-neutral-700 dark:bg-neutral-900/60">
+            <p className="text-sm uppercase tracking-[0.2em] text-neutral-500 dark:text-neutral-400">
+              Nothing found
             </p>
-          </div>
-          <Button
-            size="icon"
-            variant="secondary"
-            onClick={onQuickView}
-            className="h-9 w-9 rounded-full border border-[#F5F1EB]/40 bg-[#F5F1EB]/90 text-neutral-900 shadow-md transition-colors hover:bg-[#BFA06F] hover:text-[#2B2B2B]"
-            aria-label="Quick view"
-          >
-            <Eye className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-      <div className="flex items-center justify-between px-4 py-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {product.tags?.slice(0, 3).map((tag) => (
-            <span
-              key={tag}
-              className="rounded-full bg-[#F5F1EB] px-2 py-0.5 font-['Lato'] text-[10px] uppercase tracking-[0.18em] text-neutral-600"
+            <p className="max-w-md text-sm text-neutral-700 dark:text-neutral-200">
+              We couldn&apos;t locate a pair that matches this composition. Loosen a filter or
+              clear the search to rediscover the full collection.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setBrandFilter("All");
+                setSizeFilter([]);
+                setColorFilter([]);
+              }}
+              className="rounded-full border-neutral-800 px-5 text-xs font-semibold tracking-wide text-neutral-900 hover:bg-neutral-900 hover:text-neutral-50 dark:border-neutral-200 dark:text-neutral-50 dark:hover:bg-neutral-100 dark:hover:text-neutral-900"
             >
-              {tag}
-            </span>
-          ))}
-        </div>
-        <p className="font-['Lato'] text-xs text-neutral-700">
-          From {formatPrice(product.price)}
-        </p>
-      </div>
-    </article>
-  );
-};
-
-interface QuickViewDialogProps {
-  state: QuickViewState;
-  onOpenChange: (open: boolean) => void;
-  selectedSize: string | undefined;
-  onSizeChange: (size: string | undefined) => void;
-  quantity: number;
-  onQuantityChange: (qty: number) => void;
-  onAdd: () => void;
-}
-
-const QuickViewDialog: React.FC<QuickViewDialogProps> = ({
-  state,
-  onOpenChange,
-  selectedSize,
-  onSizeChange,
-  quantity,
-  onQuantityChange,
-  onAdd,
-}) => {
-  const product = state.product;
-
-  return (
-    <Dialog open={state.open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl gap-0 border-[#D9CFC0] bg-[#FDF9F2] p-0 text-[#2B2B2B]">
-        {product && (
-          <div className="grid gap-0 md:grid-cols:[minmax(0,1.2fr)_minmax(0,1fr)] md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-            <div className="relative overflow-hidden rounded-l-xl bg-black/5">
-              <motion.img
-                src={product.images[0]}
-                alt={product.name}
-                className="h-full w-full object-cover object-center"
-                initial={{ scale: 1.02, opacity: 0.9 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 0.6, ease: [0.19, 1, 0.22, 1] }}
-              />
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-black/5" />
-              <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between">
-                <div>
-                  <p className="font-['Lato'] text-[11px] uppercase tracking-[0.2em] text-[#F5F1EB]/90">
-                    {product.brand}
-                  </p>
-                  <h2 className="mt-1 font-['Bodoni_Moda'] text-lg font-semibold tracking-[0.08em] text-[#F5F1EB]">
-                    {product.name}
-                  </h2>
-                </div>
-                <div className="rounded-full bg-black/55 px-3 py-1 text-right text-[11px] text-[#F5F1EB]">
-                  <p className="font-['Lato'] uppercase tracking-[0.16em]">
-                    {formatPrice(product.price)}
-                  </p>
-                  <p className="mt-0.5 font-['Lato'] text-[10px] text-[#F5F1EB]/80">
-                    {product.category}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col p-6">
-              <DialogHeader>
-                <DialogTitle className="font-['Playfair_Display'] text-base tracking-[0.16em] text-neutral-800">
-                  Briefing
-                </DialogTitle>
-                <DialogDescription className="mt-2 font-['Lato'] text-xs leading-relaxed text-neutral-700">
-                  {product.description.slice(0, 210)}{" "}
-                  {product.description.length > 210 ? "…" : ""}
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-neutral-600">
-                <span className="rounded-full bg-[#F5F1EB] px-2 py-0.5 font-['Lato'] uppercase tracking-[0.18em]">
-                  Rating {product.rating.toFixed(1)} ★
-                </span>
-                <span className="rounded-full bg-[#F5F1EB] px-2 py-0.5 font-['Lato'] uppercase tracking-[0.18em]">
-                  {product.category}
-                </span>
-                {product.tags?.slice(0, 2).map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full bg-[#F5F1EB] px-2 py-0.5 font-['Lato'] uppercase tracking-[0.18em]"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-
-              <div className="mt-6 space-y-4">
-                <div>
-                  <p className="font-['Lato'] text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-700">
-                    Size
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {product.sizes?.map((size) => {
-                      const value = String(size);
-                      const isSelected = selectedSize === value;
-                      return (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => onSizeChange(value)}
-                          className={`min-w-[3rem] rounded-full border px-3 py-1 text-xs font-['Lato'] uppercase tracking-[0.16em] transition-colors ${
-                            isSelected
-                              ? "border-[#2B2B2B] bg-[#2B2B2B] text-[#FDF9F2]"
-                              : "border-[#D9CFC0] bg-white text-neutral-800 hover:border-[#BFA06F]"
-                          }`}
-                        >
-                          EU {value}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="font-['Lato'] text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-700">
-                    Quantity
-                  </p>
-                  <div className="mt-2 inline-flex items-center rounded-full border border-[#D9CFC0] bg-white px-2 py-1 text-xs font-['Lato'] text-neutral-800">
-                    <button
-                      type="button"
-                      onClick={() => onQuantityChange(Math.max(1, quantity - 1))}
-                      className="h-7 w-7 rounded-full text-center text-sm hover:bg-[#F5F1EB]"
-                      aria-label="Decrease quantity"
-                    >
-                      −
-                    </button>
-                    <span className="mx-3 w-4 text-center text-xs tracking-[0.16em]">
-                      {quantity}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => onQuantityChange(quantity + 1)}
-                      className="h-7 w-7 rounded-full text-center text-sm hover:bg-[#F5F1EB]"
-                      aria-label="Increase quantity"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <DialogFooter className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-sm font-['Lato'] text-neutral-800">
-                  <p className="text-[11px] uppercase tracking-[0.2em] text-neutral-500">
-                    Investment
-                  </p>
-                  <p className="mt-1 text-base font-semibold">
-                    {formatPrice(product.price * Math.max(1, quantity))}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  disabled={!selectedSize}
-                  onClick={onAdd}
-                  className="w-full justify-center border-[#2B2B2B] bg-[#2B2B2B] px-6 py-2 font-['Lato'] text-[11px] uppercase tracking-[0.24em] text-[#FDF9F2] shadow-md hover:bg-black sm:w-auto"
-                >
-                  {selectedSize ? `Add to cart – EU ${selectedSize}` : "Select a size"}
-                </Button>
-              </DialogFooter>
-            </div>
+              Reset composition
+            </Button>
           </div>
+        ) : (
+          <section className="mt-2">
+            {/* Asymmetric columns: 3 on lg, 2 on md, 1 on small */}
+            <div className="columns-1 gap-4 sm:columns-2 lg:columns-3">
+              <AnimatePresence>
+                {filteredProducts.map((product, index) => {
+                  const primaryImage = product.images.find((img) => img.isPrimary) ??
+                    product.images[0];
+                  const tall =
+                    product.category === "boot" || product.category === "high-top";
+
+                  return (
+                    <motion.div
+                      key={product.id}
+                      {...cardMotionProps}
+                      transition={{ ...cardMotionProps.transition, delay: index * 0.03 }}
+                      className={cn(
+                        "mb-4 break-inside-avoid",
+                        tall ? "sm:pb-6" : "sm:pb-3"
+                      )}
+                    >
+                      <Card
+                        className="group relative flex h-full cursor-pointer flex-col overflow-hidden rounded-3xl border border-neutral-200/80 bg-white/90 shadow-sm shadow-neutral-200/60 ring-0 transition-[background-color,box-shadow,border-color] hover:border-neutral-900/70 hover:shadow-lg hover:shadow-neutral-300/80 dark:border-neutral-800/80 dark:bg-neutral-950/90 dark:shadow-black/50 dark:hover:border-neutral-50/80"
+                        onClick={() => openSheetForProduct(product)}
+                      >
+                        <CardHeader className="relative overflow-hidden p-0">
+                          <div className="relative aspect-[4/5] w-full overflow-hidden">
+                            <motion.img
+                              src={primaryImage?.url}
+                              alt={primaryImage?.alt}
+                              className="h-full w-full object-cover transition-[filter,transform,opacity] duration-500 ease-out group-hover:scale-[1.03] group-hover:brightness-105 dark:group-hover:brightness-110"
+                              whileHover={{ scale: 1.03 }}
+                            />
+                            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-neutral-950/70 via-neutral-950/0 to-neutral-950/10 opacity-70 mix-blend-multiply" />
+                            <div className="absolute left-4 top-4 flex flex-col gap-1">
+                              {product.badges.slice(0, 2).map((badge) => (
+                                <Badge
+                                  key={badge}
+                                  className="w-fit rounded-full border border-amber-200/60 bg-amber-50/80 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-amber-900 shadow-sm shadow-amber-100/80 backdrop-blur-sm dark:border-amber-500/50 dark:bg-amber-500/15 dark:text-amber-100 dark:shadow-black/50"
+                                >
+                                  {badge}
+                                </Badge>
+                              ))}
+                            </div>
+                            <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between">
+                              <div className="max-w-[70%]">
+                                <p className="text-[0.7rem] uppercase tracking-[0.22em] text-neutral-200/90">
+                                  {product.brand}
+                                </p>
+                                <CardTitle className="mt-1 text-base font-semibold text-neutral-50">
+                                  {product.name}
+                                </CardTitle>
+                              </div>
+                              <div className="rounded-full bg-neutral-950/80 px-3 py-1 text-[0.7rem] font-medium text-neutral-50 shadow-sm shadow-black/40 backdrop-blur-sm dark:bg-black/80">
+                                {formatMoney(product.price, product.currency)}
+                              </div>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="flex flex-1 flex-col gap-3 p-4">
+                          <CardDescription className="line-clamp-3 text-xs leading-relaxed text-neutral-600 dark:text-neutral-300">
+                            {product.description}
+                          </CardDescription>
+                          <div className="mt-auto flex items-center justify-between gap-3 pt-2">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {product.colors.slice(0, 3).map((c) => (
+                                <span
+                                  key={c}
+                                  className={cn(
+                                    "h-4 w-4 rounded-full border border-black/10 shadow-sm shadow-black/10 dark:border-white/10 dark:shadow-black/40",
+                                    colorSwatchMap[c] ?? "bg-neutral-500"
+                                  )}
+                                  title={c}
+                                />
+                              ))}
+                              {product.colors.length > 3 && (
+                                <span className="text-[0.65rem] text-neutral-500 dark:text-neutral-400">
+                                  +{product.colors.length - 3}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[0.68rem] uppercase tracking-[0.2em] text-neutral-500 dark:text-neutral-400">
+                                {product.category}
+                              </span>
+                              <Separator className="h-4 w-px bg-neutral-200 dark:bg-neutral-700" />
+                              <span className="text-[0.68rem] text-neutral-500 dark:text-neutral-400">
+                                EU {product.sizes[0]}–{product.sizes[product.sizes.length - 1]}
+                              </span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+            </div>
+          </section>
         )}
-      </DialogContent>
-    </Dialog>
+
+        {/* Product detail slide-over sheet */}
+        <Sheet open={!!selectedProduct} onOpenChange={(open) => !open && closeSheet()}>
+          <SheetContent
+            side="right"
+            className="w-full max-w-md border-l border-neutral-200 bg-neutral-50/95 p-0 shadow-2xl shadow-neutral-400/70 backdrop-blur-xl dark:border-neutral-800 dark:bg-neutral-950/95 dark:shadow-black/80 sm:max-w-lg"
+          >
+            <AnimatePresence mode="wait">
+              {selectedProduct && (
+                <motion.div
+                  key={selectedProduct.id}
+                  {...sheetMotion}
+                  className="flex h-full flex-col overflow-hidden"
+                >
+                  <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-3 dark:border-neutral-800">
+                    <div className="flex flex-col">
+                      <p className="text-[0.68rem] uppercase tracking-[0.2em] text-neutral-500 dark:text-neutral-400">
+                        {selectedProduct.brand}
+                      </p>
+                      <h2 className="text-lg font-semibold tracking-tight text-neutral-900 dark:text-neutral-50">
+                        {selectedProduct.name}
+                      </h2>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={closeSheet}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-700 shadow-sm transition-colors hover:border-neutral-900 hover:bg-neutral-900 hover:text-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:border-neutral-50 dark:hover:bg-neutral-50 dark:hover:text-neutral-950"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto px-5 pb-5 pt-3">
+                    {/* Gallery */}
+                    <div className="flex flex-col gap-3">
+                      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+                        <img
+                          src={
+                            selectedProduct.images.find((img) => img.isPrimary)?.url ??
+                            selectedProduct.images[0]?.url
+                          }
+                          alt={
+                            selectedProduct.images.find((img) => img.isPrimary)?.alt ??
+                            selectedProduct.images[0]?.alt
+                          }
+                          className="h-full w-full object-cover"
+                        />
+                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 via-black/0 to-black/10 mix-blend-multiply" />
+                        <div className="absolute bottom-3 left-3 rounded-full bg-neutral-950/80 px-3 py-1 text-[0.7rem] font-medium text-neutral-50 shadow-sm shadow-black/50 backdrop-blur-sm dark:bg-black/80">
+                          {formatMoney(
+                            selectedProduct.price,
+                            selectedProduct.currency
+                          )}
+                        </div>
+                      </div>
+
+                      {selectedProduct.images.length > 1 && (
+                        <div className="flex gap-2 overflow-x-auto pb-1">
+                          {selectedProduct.images.map((img) => (
+                            <button
+                              key={img.url}
+                              type="button"
+                              onClick={() => {
+                                const nextImages = [
+                                  img,
+                                  ...selectedProduct.images.filter((i) => i.url !== img.url),
+                                ];
+                                selectedProduct.images.splice(0, nextImages.length, ...nextImages);
+                              }}
+                              className="group relative aspect-video h-20 flex-shrink-0 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100 shadow-sm transition-colors hover:border-neutral-900 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-50"
+                            >
+                              <img
+                                src={img.url}
+                                alt={img.alt}
+                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Editorial copy */}
+                    <div className="mt-4 space-y-3">
+                      <p className="text-xs uppercase tracking-[0.2em] text-neutral-500 dark:text-neutral-400">
+                        Notes from the studio
+                      </p>
+                      <p className="text-sm leading-relaxed text-neutral-800 dark:text-neutral-200">
+                        {selectedProduct.editorialCopy}
+                      </p>
+
+                      <div className="grid gap-3 rounded-2xl border border-neutral-200 bg-white/80 p-3 text-xs shadow-sm shadow-neutral-200/60 dark:border-neutral-800 dark:bg-neutral-950/80 dark:shadow-black/60">
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="text-neutral-500 dark:text-neutral-400">
+                            Materials
+                          </span>
+                          <span className="max-w-[60%] text-right text-neutral-800 dark:text-neutral-200">
+                            {selectedProduct.materials.join(", ")}
+                          </span>
+                        </div>
+                        <Separator className="bg-neutral-200 dark:bg-neutral-800" />
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-neutral-500 dark:text-neutral-400">
+                            Origin
+                          </span>
+                          <span className="text-neutral-800 dark:text-neutral-200">
+                            {selectedProduct.origin}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-neutral-500 dark:text-neutral-400">
+                            Release
+                          </span>
+                          <span className="text-neutral-800 dark:text-neutral-200">
+                            {new Date(
+                              selectedProduct.releaseDate
+                            ).toLocaleDateString("en-US", {
+                              year: "numeric",
+                              month: "short",
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Variant selection */}
+                    <div className="mt-5 space-y-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs uppercase tracking-[0.2em] text-neutral-500 dark:text-neutral-400">
+                            Size
+                          </p>
+                          <p className="text-[0.7rem] text-neutral-500 dark:text-neutral-400">
+                            EU {selectedProduct.sizes[0]}–{
+                              selectedProduct.sizes[selectedProduct.sizes.length - 1]
+                            }
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {selectedProduct.sizes.map((size) => {
+                            const active = selectedVariant?.size === size;
+                            return (
+                              <button
+                                key={size}
+                                type="button"
+                                onClick={() => handleVariantSizeSelect(size)}
+                                className={cn(
+                                  "min-w-[2.4rem] rounded-full border px-2 py-1 text-[0.72rem] font-medium uppercase tracking-[0.14em] text-neutral-800 transition-colors hover:border-neutral-900 hover:bg-neutral-900 hover:text-neutral-50 dark:text-neutral-100 dark:hover:border-neutral-50 dark:hover:bg-neutral-50 dark:hover:text-neutral-900",
+                                  active
+                                    ? "border-neutral-900 bg-neutral-900 text-neutral-50 dark:border-neutral-50 dark:bg-neutral-50 dark:text-neutral-900"
+                                    : "border-neutral-200 bg-white/80 dark:border-neutral-700 dark:bg-neutral-900/70"
+                                )}
+                              >
+                                {size}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <p className="text-xs uppercase tracking-[0.2em] text-neutral-500 dark:text-neutral-400">
+                          Color
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedProduct.colors.map((color) => {
+                            const active = selectedVariant?.color === color;
+                            const swatchClass = colorSwatchMap[color] ?? "bg-neutral-500";
+                            return (
+                              <button
+                                key={color}
+                                type="button"
+                                onClick={() => handleVariantColorSelect(color)}
+                                className={cn(
+                                  "inline-flex items-center gap-2 rounded-full border px-2 py-1 pr-3 text-[0.72rem] font-medium text-neutral-800 transition-colors hover:border-neutral-900 hover:bg-neutral-900 hover:text-neutral-50 dark:text-neutral-100 dark:hover:border-neutral-50 dark:hover:bg-neutral-50 dark:hover:text-neutral-900",
+                                  active
+                                    ? "border-neutral-900 bg-neutral-900 text-neutral-50 dark:border-neutral-50 dark:bg-neutral-50 dark:text-neutral-900"
+                                    : "border-neutral-200 bg-white/80 dark:border-neutral-700 dark:bg-neutral-900/70"
+                                )}
+                              >
+                                <span
+                                  className={cn(
+                                    "h-4 w-4 rounded-full border border-black/10 shadow-sm shadow-black/10 dark:border-white/10 dark:shadow-black/40",
+                                    swatchClass
+                                  )}
+                                />
+                                <span>{color}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 pt-1">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setQty((q) => Math.max(1, q - 1))}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-neutral-200 bg-white text-sm font-medium text-neutral-800 hover:border-neutral-900 hover:bg-neutral-900 hover:text-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:hover:border-neutral-50 dark:hover:bg-neutral-50 dark:hover:text-neutral-900"
+                          >
+                            -
+                          </button>
+                          <span className="min-w-[2ch] text-center text-sm font-medium text-neutral-900 dark:text-neutral-50">
+                            {qty}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setQty((q) => q + 1)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-neutral-200 bg-white text-sm font-medium text-neutral-800 hover:border-neutral-900 hover:bg-neutral-900 hover:text-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:hover:border-neutral-50 dark:hover:bg-neutral-50 dark:hover:text-neutral-900"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <div className="text-right text-sm font-semibold text-neutral-900 dark:text-neutral-50">
+                          {selectedProduct
+                            ? formatMoney(
+                                selectedProduct.price * qty,
+                                selectedProduct.currency
+                              )
+                            : null}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-neutral-200 bg-white/90 px-5 py-3 shadow-[0_-8px_20px_rgba(0,0,0,0.04)] backdrop-blur-sm dark:border-neutral-800 dark:bg-neutral-950/90 dark:shadow-black/60">
+                    <Button
+                      type="button"
+                      onClick={handleAddToCart}
+                      className="flex w-full items-center justify-center gap-2 rounded-full bg-neutral-900 px-4 py-2 text-sm font-semibold text-neutral-50 shadow-sm shadow-neutral-900/40 hover:bg-neutral-800 dark:bg-neutral-50 dark:text-neutral-950 dark:shadow-black/60 dark:hover:bg-neutral-200"
+                    >
+                      <ShoppingBag className="h-4 w-4" />
+                      Add to bag
+                    </Button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </SheetContent>
+        </Sheet>
+      </div>
+    </div>
   );
 };
 

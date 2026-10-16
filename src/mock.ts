@@ -1,888 +1,864 @@
 // src/mock.ts
-// Single source of truth for all client-side mock data, types, and state helpers.
-// NOTE: This is a fully client-side mock implementation – there is NO backend.
-// Cart and orders are persisted in localStorage via the safeStorage helper below.
+// Central mock data store and localStorage-backed client state for Jootiya
+// NOTE: This is a 100% frontend-only mock implementation; there is **no backend**.
 
-// No React imports here: this module is framework-agnostic and purely data/logic.
+import { safeStorage } from "@/lib/utils";
 
-// -----------------------------
-// Types & Enums
-// -----------------------------
+// ----------------------
+// Types
+// ----------------------
 
-export type Category = "Sneakers" | "Boots" | "Loafers" | "Sandals";
+export type CurrencyCode = "USD" | "EUR" | "GBP" | "INR";
 
-export interface Review {
-  id: string;
-  author: string;
-  rating: number; // 1-5
-  comment: string;
-  date: string; // ISO string
+export type ProductCategory =
+  | "sneaker"
+  | "loafer"
+  | "boot"
+  | "high-top"
+  | "sandal";
+
+export type ProductBadge =
+  | "New Drop"
+  | "Exclusive"
+  | "Limited"
+  | "Handcrafted"
+  | "Sustainable"
+  | "Bestseller";
+
+export interface ProductImage {
+  url: string;
+  alt: string;
+  isPrimary?: boolean;
+  aspectRatio?: "portrait" | "landscape" | "square";
+}
+
+export interface ProductVariantKey {
+  size: string; // displayed size, e.g. "40", "US 9", "EU 42"
+  color: string; // e.g. "Bone", "Onyx"
+}
+
+export interface StockByVariant extends ProductVariantKey {
+  stock: number; // units available in mock
+  sku: string;
 }
 
 export interface Product {
   id: string;
   name: string;
   brand: string;
+  category: ProductCategory;
+  price: number;
+  currency: CurrencyCode;
   description: string;
-  price: number; // USD
-  images: string[];
-  sizes: string[]; // e.g. "7", "8.5"
-  category: Category;
-  rating: number; // 0-5 float
-  reviews: Review[];
-  isFeatured?: boolean;
-  tags?: string[];
+  editorialCopy: string;
+  images: ProductImage[];
+  sizes: string[];
+  colors: string[];
+  materials: string[];
+  origin: string;
+  releaseDate: string; // ISO string
+  badges: ProductBadge[];
+  tags: string[];
+  stockByVariant: StockByVariant[];
+  featured?: boolean;
 }
+
+export interface CartItemVariant extends ProductVariantKey {}
 
 export interface CartItem {
+  id: string; // cart line id
   productId: string;
-  size: string;
-  quantity: number; // int
+  variant: CartItemVariant;
+  unitPrice: number;
+  currency: CurrencyCode;
+  quantity: number;
+  addedAt: string; // ISO
 }
 
-export interface ShippingInfo {
+export interface CartTotals {
+  subtotal: number;
+  estimatedTax: number;
+  shipping: number;
+  total: number;
+  currency: CurrencyCode;
+}
+
+export interface Cart {
+  id: string;
+  items: CartItem[];
+  currency: CurrencyCode;
+  updatedAt: string;
+}
+
+export interface Address {
+  fullName: string;
+  line1: string;
+  line2?: string;
+  city: string;
+  region: string;
+  postalCode: string;
+  country: string;
+}
+
+export interface UserSession {
+  id: string;
   name: string;
-  address: string;
   email: string;
-  phone: string;
+  avatarColor: string;
+  defaultCurrency: CurrencyCode;
+  shippingAddress?: Address;
+  createdAt: string;
 }
 
-export interface PaymentInfo {
-  cardNumber: string;
-  expiry: string; // MM/YY
-  cvv: string;
+export interface OrderLine {
+  id: string;
+  productId: string;
+  productName: string;
+  brand: string;
+  variant: CartItemVariant;
+  unitPrice: number;
+  quantity: number;
+  lineTotal: number;
 }
+
+export type OrderStatus = "confirmed" | "processing" | "shipped" | "delivered";
 
 export interface Order {
   id: string;
-  items: CartItem[];
-  shippingInfo: ShippingInfo;
-  paymentInfo: PaymentInfo;
-  totalPrice: number;
-  orderDate: string; // ISO
-  estimatedDelivery: string; // ISO
+  orderNumber: string;
+  userId?: string; // guest checkout possible
+  createdAt: string;
+  status: OrderStatus;
+  currency: CurrencyCode;
+  subtotal: number;
+  estimatedTax: number;
+  shipping: number;
+  total: number;
+  lines: OrderLine[];
+  shippingAddress?: Address;
 }
 
-// For hydrated cart display
-export interface HydratedCartItem extends CartItem {
-  product: Product | undefined;
+// ----------------------
+// Internal constants & helpers
+// ----------------------
+
+const STORAGE_KEYS = {
+  cart: "jootiya_cart_v1",
+  user: "jootiya_user_v1",
+  orders: "jootiya_orders_v1",
+} as const;
+
+const DEFAULT_CURRENCY: CurrencyCode = "USD";
+
+const TAX_RATE = 0.08; // 8% mock tax
+const SHIPPING_FLAT = 25; // flat luxury shipping
+
+// Small, deterministic-ish ID helper (client-only)
+function createId(prefix: string): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `${prefix}_${crypto.randomUUID()}`;
+  }
+  return `${prefix}_${Math.random().toString(36).substring(2, 11)}`;
 }
 
-// Filter & sort helpers
-export type CatalogSortOption =
-  | "featured"
-  | "price-asc"
-  | "price-desc"
-  | "rating-desc";
-
-export interface CatalogFilters {
-  category?: Category | "All";
-  brand?: string | "All";
-  size?: string | "All";
-  minPrice?: number;
-  maxPrice?: number;
+// Safe JSON parse with fallback
+function safeJsonParse<T>(raw: string | null, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
 }
 
-// -----------------------------
-// Safe Storage Helper (localStorage wrapper)
-// -----------------------------
+// ----------------------
+// Mock Products (static in-memory)
+// ----------------------
 
-const isBrowser = typeof window !== "undefined";
+// For imagery, we use neutral unsplash-like placeholders that evoke luxury leather / sneakers.
 
-const safeStorage = {
-  getItem(key: string): string | null {
-    if (!isBrowser) return null;
-    try {
-      return window.localStorage.getItem(key);
-    } catch {
-      return null;
-    }
+const baseProducts: Product[] = [
+  {
+    id: "p_aurum_low_001",
+    name: "Aurum Low Lunar",
+    brand: "Maison Jootiya",
+    category: "sneaker",
+    price: 620,
+    currency: "USD",
+    description:
+      "A low-profile court sneaker crafted from Italian calfskin in a muted lunar bone, finished with hand-painted edges and a featherweight cup sole.",
+    editorialCopy:
+      "Conceived for the quietest rooms and the loudest arrivals, Aurum Low Lunar pairs whisper-soft leather with architectural minimalism. Each panel is hand-burnished for a soft gradient that only deepens with wear.",
+    images: [
+      {
+        url: "https://images.unsplash.com/photo-1549298916-b41d501d3772?auto=format&fit=crop&w=1200&q=80",
+        alt: "A minimal white luxury sneaker on a sculptural plinth",
+        isPrimary: true,
+        aspectRatio: "landscape",
+      },
+      {
+        url: "https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?auto=format&fit=crop&w=900&q=80",
+        alt: "Detail of leather and stitching on luxury sneaker",
+        aspectRatio: "portrait",
+      },
+    ],
+    sizes: ["39", "40", "41", "42", "43", "44"],
+    colors: ["Bone", "Onyx"],
+    materials: [
+      "Italian calfskin",
+      "Margom rubber",
+      "Cotton laces",
+      "Leather lining",
+    ],
+    origin: "Made in Italy",
+    releaseDate: "2024-04-18T00:00:00.000Z",
+    badges: ["Bestseller", "Handcrafted"],
+    tags: ["minimal", "court", "everyday", "white sneaker"],
+    stockByVariant: [],
+    featured: true,
   },
-  setItem(key: string, value: string): void {
-    if (!isBrowser) return;
-    try {
-      window.localStorage.setItem(key, value);
-    } catch {
-      // ignore quota/access errors
-    }
+  {
+    id: "p_onyx_chelsea_002",
+    name: "Onyx Chelsea Crest",
+    brand: "Atelier Noir",
+    category: "boot",
+    price: 890,
+    currency: "USD",
+    description:
+      "A sculpted Chelsea boot in deep onyx suede with an elongated toe and hand-carved leather sole, designed for evening silhouettes.",
+    editorialCopy:
+      "The Onyx Chelsea Crest was sketched at midnight in Paris and finished at dawn in Florence. Its line is almost liquid: a single gesture from elastic gusset to heel tab.",
+    images: [
+      {
+        url: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1200&q=80",
+        alt: "Black suede Chelsea boots on a warm neutral background",
+        isPrimary: true,
+        aspectRatio: "landscape",
+      },
+      {
+        url: "https://images.unsplash.com/photo-1514996937319-344454492b37?auto=format&fit=crop&w=900&q=80",
+        alt: "Close-up of suede texture on luxury boots",
+        aspectRatio: "portrait",
+      },
+    ],
+    sizes: ["40", "41", "42", "43", "44", "45"],
+    colors: ["Onyx"],
+    materials: ["Italian suede", "Leather sole", "Cotton pull tab"],
+    origin: "Made in Portugal",
+    releaseDate: "2024-02-10T00:00:00.000Z",
+    badges: ["Exclusive"],
+    tags: ["evening", "boot", "black"],
+    stockByVariant: [],
+    featured: true,
   },
-  removeItem(key: string): void {
-    if (!isBrowser) return;
-    try {
-      window.localStorage.removeItem(key);
-    } catch {
-      // ignore
-    }
+  {
+    id: "p_muse_loaf_003",
+    name: "Muse Penny Loafer",
+    brand: "Casa Venturo",
+    category: "loafer",
+    price: 740,
+    currency: "USD",
+    description:
+      "A sculpted penny loafer in brushed cacao leather with a softly squared toe and hand-stitched apron.",
+    editorialCopy:
+      "Muse was imagined as a loafer you notice in silence. The toe is softened to echo gallery plinths, the saddle thinned to a single, precise line.",
+    images: [
+      {
+        url: "https://images.unsplash.com/photo-1600185365483-26d7a4cc7519?auto=format&fit=crop&w=1200&q=80",
+        alt: "Brown leather loafers on a neutral backdrop",
+        isPrimary: true,
+        aspectRatio: "landscape",
+      },
+      {
+        url: "https://images.unsplash.com/photo-1614252235316-8c857af1b228?auto=format&fit=crop&w=900&q=80",
+        alt: "Close-up of loafer stitching",
+        aspectRatio: "portrait",
+      },
+    ],
+    sizes: ["38", "39", "40", "41", "42", "43"],
+    colors: ["Cacao", "Sand"],
+    materials: [
+      "Vegetable-tanned leather",
+      "Leather sole",
+      "Goodyear welt",
+    ],
+    origin: "Made in Spain",
+    releaseDate: "2023-11-05T00:00:00.000Z",
+    badges: ["Handcrafted", "Sustainable"],
+    tags: ["loafer", "penny", "brown"],
+    stockByVariant: [],
+    featured: true,
   },
-};
+  {
+    id: "p_verve_high_004",
+    name: "Verve High Eclipse",
+    brand: "Maison Jootiya",
+    category: "high-top",
+    price: 680,
+    currency: "USD",
+    description:
+      "A high-top sneaker in off-black nubuck with a sculptural collar and concealed eyelets.",
+    editorialCopy:
+      "Verve Eclipse is cut for night flights and gallery openings. The padded collar traces the line of the ankle like ink on paper.",
+    images: [
+      {
+        url: "https://images.unsplash.com/photo-1539185441755-769473a23570?auto=format&fit=crop&w=1200&q=80",
+        alt: "Dark high-top sneaker on a plinth",
+        isPrimary: true,
+        aspectRatio: "landscape",
+      },
+      {
+        url: "https://images.unsplash.com/photo-1543508282-6319a3e2621f?auto=format&fit=crop&w=900&q=80",
+        alt: "High-top sneaker side view",
+        aspectRatio: "portrait",
+      },
+    ],
+    sizes: ["39", "40", "41", "42", "43", "44"],
+    colors: ["Eclipse", "Ivory"],
+    materials: ["Nubuck", "Rubber sole", "Memory foam insole"],
+    origin: "Made in Italy",
+    releaseDate: "2024-06-01T00:00:00.000Z",
+    badges: ["New Drop"],
+    tags: ["high-top", "black", "street"],
+    stockByVariant: [],
+    featured: true,
+  },
+  {
+    id: "p_sable_slide_005",
+    name: "Sable Gallery Slide",
+    brand: "Linea Oro",
+    category: "sandal",
+    price: 420,
+    currency: "USD",
+    description:
+      "A minimal slide with padded strap in sable leather and an ultra-thin profile sole.",
+    editorialCopy:
+      "Designed for marble corridors and slow mornings, Sable Gallery Slide hugs the foot like a line of ink across soft paper.",
+    images: [
+      {
+        url: "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=1200&q=80",
+        alt: "Minimal black slide sandals",
+        isPrimary: true,
+        aspectRatio: "landscape",
+      },
+    ],
+    sizes: ["37", "38", "39", "40", "41", "42"],
+    colors: ["Sable", "Crema"],
+    materials: ["Nappa leather", "Leather footbed"],
+    origin: "Made in Italy",
+    releaseDate: "2023-05-15T00:00:00.000Z",
+    badges: ["Bestseller"],
+    tags: ["slide", "sandal", "summer"],
+    stockByVariant: [],
+    featured: false,
+  },
+  {
+    id: "p_terra_boot_006",
+    name: "Terra Ridge Boot",
+    brand: "Atelier Noir",
+    category: "boot",
+    price: 960,
+    currency: "USD",
+    description:
+      "A lug-soled boot in smoked taupe leather, built on a sculpted last with exaggerated welt.",
+    editorialCopy:
+      "Terra Ridge walks the line between alpine and avenue. Each welt is inked by hand in a deep umber tone, catching light at every step.",
+    images: [
+      {
+        url: "https://images.unsplash.com/photo-1590874103328-eac38a683ce7?auto=format&fit=crop&w=1200&q=80",
+        alt: "Taupe leather boots with rugged sole",
+        isPrimary: true,
+        aspectRatio: "landscape",
+      },
+    ],
+    sizes: ["40", "41", "42", "43", "44", "45"],
+    colors: ["Smoked Taupe"],
+    materials: ["Pebbled leather", "Rubber lug sole", "Waxed laces"],
+    origin: "Made in Romania",
+    releaseDate: "2023-12-22T00:00:00.000Z",
+    badges: ["Limited"],
+    tags: ["boot", "lug sole", "taupe"],
+    stockByVariant: [],
+    featured: false,
+  },
+  {
+    id: "p_lumen_low_007",
+    name: "Lumen Low Chalk",
+    brand: "Maison Jootiya",
+    category: "sneaker",
+    price: 650,
+    currency: "USD",
+    description:
+      "A monochrome low-top in chalk leather with tonal stitching and blind debossed branding.",
+    editorialCopy:
+      "Lumen Low is the whisper in a white room. The outsole has been tinted to the slightest warm ivory to mirror gallery walls at dusk.",
+    images: [
+      {
+        url: "https://images.unsplash.com/photo-1519744792095-2f2205e87b6f?auto=format&fit=crop&w=1200&q=80",
+        alt: "White minimal low-top sneaker",
+        isPrimary: true,
+        aspectRatio: "landscape",
+      },
+    ],
+    sizes: ["38", "39", "40", "41", "42", "43", "44"],
+    colors: ["Chalk"],
+    materials: ["Full-grain leather", "Rubber cup sole"],
+    origin: "Made in Italy",
+    releaseDate: "2024-01-15T00:00:00.000Z",
+    badges: ["New Drop", "Bestseller"],
+    tags: ["sneaker", "white", "minimal"],
+    stockByVariant: [],
+    featured: true,
+  },
+  {
+    id: "p_ombre_loaf_008",
+    name: "Ombre Tassel Loafer",
+    brand: "Casa Venturo",
+    category: "loafer",
+    price: 780,
+    currency: "USD",
+    description:
+      "A tassel loafer with ombre hand-dyed patina fading from espresso to crema.",
+    editorialCopy:
+      "Each Ombre Tassel Loafer passes through eight layers of dye and wax, building a soft gradient that feels almost cinematic.",
+    images: [
+      {
+        url: "https://images.unsplash.com/photo-1583497381213-9c19cc28521c?auto=format&fit=crop&w=1200&q=80",
+        alt: "Brown ombre loafers on a light background",
+        isPrimary: true,
+        aspectRatio: "landscape",
+      },
+    ],
+    sizes: ["39", "40", "41", "42", "43"],
+    colors: ["Espresso Ombre"],
+    materials: [
+      "Hand-dyed leather",
+      "Leather sole",
+      "Cotton tassels",
+    ],
+    origin: "Made in Spain",
+    releaseDate: "2022-09-10T00:00:00.000Z",
+    badges: ["Handcrafted"],
+    tags: ["loafer", "tassel", "patina"],
+    stockByVariant: [],
+    featured: false,
+  },
+  {
+    id: "p_arc_runner_009",
+    name: "Arc Runner Smoke",
+    brand: "Linea Oro",
+    category: "sneaker",
+    price: 580,
+    currency: "USD",
+    description:
+      "A sculpted runner with smoked mesh, suede overlays and a softly exaggerated sole.",
+    editorialCopy:
+      "Arc Runner traces a single stroke from toe to heel. The sole flares just enough to cast a shadow, never to shout.",
+    images: [
+      {
+        url: "https://images.unsplash.com/photo-1528701800489-20be3c30c1d5?auto=format&fit=crop&w=1200&q=80",
+        alt: "Luxury running-style sneakers in neutral tones",
+        isPrimary: true,
+        aspectRatio: "landscape",
+      },
+    ],
+    sizes: ["39", "40", "41", "42", "43", "44"],
+    colors: ["Smoke", "Stone"],
+    materials: ["Mesh", "Suede", "EVA sole"],
+    origin: "Made in Portugal",
+    releaseDate: "2023-08-01T00:00:00.000Z",
+    badges: ["Sustainable"],
+    tags: ["runner", "sneaker", "neutral"],
+    stockByVariant: [],
+    featured: false,
+  },
+  {
+    id: "p_courtyard_010",
+    name: "Courtyard Derby",
+    brand: "Atelier Noir",
+    category: "boot",
+    price: 820,
+    currency: "USD",
+    description:
+      "An open-laced derby on a sleek last with a bevelled waist and blind eyelets.",
+    editorialCopy:
+      "Courtyard walks like a dress shoe and photographs like sculpture. The vamp is cut from a single piece of leather for uninterrupted shine.",
+    images: [
+      {
+        url: "https://images.unsplash.com/photo-1595385409880-f2e1c5cde1be?auto=format&fit=crop&w=1200&q=80",
+        alt: "Black leather derby shoes on stone floor",
+        isPrimary: true,
+        aspectRatio: "landscape",
+      },
+    ],
+    sizes: ["40", "41", "42", "43", "44"],
+    colors: ["Ink"],
+    materials: ["Calfskin", "Leather sole"],
+    origin: "Made in Italy",
+    releaseDate: "2022-03-18T00:00:00.000Z",
+    badges: ["Exclusive"],
+    tags: ["derby", "formal", "black"],
+    stockByVariant: [],
+    featured: false,
+  },
+  {
+    id: "p_arcade_high_011",
+    name: "Arcade High Ivory",
+    brand: "Maison Jootiya",
+    category: "high-top",
+    price: 710,
+    currency: "USD",
+    description:
+      "A paneled high-top in ivory leather with subtle perforations and contrast foxing.",
+    editorialCopy:
+      "Arcade is an ode to late-night lights on wet pavement. Its lines borrow from vintage sport, sharpened for the present.",
+    images: [
+      {
+        url: "https://images.unsplash.com/photo-1584735175015-7aaad614c366?auto=format&fit=crop&w=1200&q=80",
+        alt: "Ivory high-top sneaker on neutral background",
+        isPrimary: true,
+        aspectRatio: "landscape",
+      },
+    ],
+    sizes: ["38", "39", "40", "41", "42", "43", "44"],
+    colors: ["Ivory", "Ink"],
+    materials: ["Leather", "Rubber sole", "Cotton laces"],
+    origin: "Made in Italy",
+    releaseDate: "2024-03-02T00:00:00.000Z",
+    badges: ["New Drop", "Limited"],
+    tags: ["high-top", "ivory"],
+    stockByVariant: [],
+    featured: true,
+  },
+  {
+    id: "p_silent_mule_012",
+    name: "Silent Studio Mule",
+    brand: "Linea Oro",
+    category: "sandal",
+    price: 460,
+    currency: "USD",
+    description:
+      "A backless mule with sculpted topline in soft pebble leather.",
+    editorialCopy:
+      "Silent Studio Mule slips on like a brushstroke. The heel is tuned to studio floors and gallery tiles alike.",
+    images: [
+      {
+        url: "https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?auto=format&fit=crop&w=1200&q=80",
+        alt: "Neutral leather mules on fabric backdrop",
+        isPrimary: true,
+        aspectRatio: "landscape",
+      },
+    ],
+    sizes: ["36", "37", "38", "39", "40", "41"],
+    colors: ["Cloud", "Ink"],
+    materials: ["Pebble leather", "Leather sole"],
+    origin: "Made in Spain",
+    releaseDate: "2023-04-01T00:00:00.000Z",
+    badges: ["Handcrafted"],
+    tags: ["mule", "studio"],
+    stockByVariant: [],
+    featured: false,
+  },
+  {
+    id: "p_night_runner_013",
+    name: "Night Runner Obsidian",
+    brand: "Casa Venturo",
+    category: "sneaker",
+    price: 590,
+    currency: "USD",
+    description:
+      "A low-profile runner in obsidian mesh with tonal leather overlays and reflective piping.",
+    editorialCopy:
+      "Night Runner was built for hidden cities and late flights. Its reflective line catches light for a second, then disappears.",
+    images: [
+      {
+        url: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80",
+        alt: "Black running sneakers on a concrete block",
+        isPrimary: true,
+        aspectRatio: "landscape",
+      },
+    ],
+    sizes: ["39", "40", "41", "42", "43", "44"],
+    colors: ["Obsidian"],
+    materials: ["Mesh", "Leather", "Rubber sole"],
+    origin: "Made in Vietnam",
+    releaseDate: "2023-10-10T00:00:00.000Z",
+    badges: ["Sustainable"],
+    tags: ["runner", "black"],
+    stockByVariant: [],
+    featured: false,
+  },
+  {
+    id: "p_gallery_oxford_014",
+    name: "Gallery Oxford",
+    brand: "Atelier Noir",
+    category: "boot",
+    price: 910,
+    currency: "USD",
+    description:
+      "A closed-laced oxford with an elongated last, mirror gloss toe, and subtle gold foil signature.",
+    editorialCopy:
+      "Gallery Oxford is for opening nights and quiet awards. Built on our sharpest last, it catches every reflection without a single shout.",
+    images: [
+      {
+        url: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1200&q=80",
+        alt: "Polished black oxford shoes",
+        isPrimary: true,
+        aspectRatio: "landscape",
+      },
+    ],
+    sizes: ["40", "41", "42", "43", "44", "45"],
+    colors: ["Noir"],
+    materials: ["Patent leather", "Leather sole"],
+    origin: "Made in Italy",
+    releaseDate: "2021-11-11T00:00:00.000Z",
+    badges: ["Exclusive"],
+    tags: ["oxford", "formal"],
+    stockByVariant: [],
+    featured: false,
+  },
+];
 
-// -----------------------------
-// Mock Data (Luxury Footwear Catalog)
-// -----------------------------
-// This is entirely mocked client-side data; images use curated Unsplash-style URLs.
-
-const loremLuxury =
-  "Hand-finished in limited batches, each pair is crafted to move seamlessly from gallery openings to midnight rooftops. Premium leathers, sculpted profiles, and obsessively tuned comfort deliver a quiet yet undeniable statement.";
-
-const now = new Date();
-
-const makeReview = (
-  author: string,
-  rating: number,
-  comment: string,
-  daysAgo: number
-): Review => ({
-  id: crypto.randomUUID(),
-  author,
-  rating,
-  comment,
-  date: new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000).toISOString(),
+// Generate deterministic mock stockByVariant from sizes & colors if empty
+export const products: Product[] = baseProducts.map((p) => {
+  if (p.stockByVariant.length === 0) {
+    const variants: StockByVariant[] = [];
+    p.sizes.forEach((size) => {
+      p.colors.forEach((color) => {
+        const sku = `${p.id}-${size.replace(/\s+/g, "").toUpperCase()}-${color
+          .replace(/\s+/g, "")
+          .toUpperCase()}`;
+        const stock = 3 + Math.floor(Math.random() * 7); // 3–9 pairs
+        variants.push({ size, color, stock, sku });
+      });
+    });
+    return { ...p, stockByVariant: variants } as Product;
+  }
+  return p;
 });
 
-const products: Product[] = [
-  {
-    id: crypto.randomUUID(),
-    name: "Noir Atelier High-Top",
-    brand: "Maison Varenne",
-    description:
-      "A sculptural high-top in brushed Italian calfskin with a tapering silhouette and waxed cotton laces. Designed for the city at twilight.",
-    price: 820,
-    images: [
-      "https://images.unsplash.com/photo-1514986888952-8cd320577b68?auto=format&fit=crop&w=1600&q=80",
-      "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1600&q=80",
-      "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1600&q=80",
-    ],
-    sizes: ["7", "8", "8.5", "9", "9.5", "10", "11"],
-    category: "Sneakers",
-    rating: 4.8,
-    reviews: [
-      makeReview(
-        "Amelia R.",
-        5,
-        "The leather feels impossibly soft yet structured. Subtle gold eyelets catch the light beautifully.",
-        6
-      ),
-      makeReview(
-        "Jonas K.",
-        4,
-        "Understated but unmistakably premium. Runs half a size large for narrow feet.",
-        18
-      ),
-    ],
-    isFeatured: true,
-    tags: ["Monochrome", "City", "Evening"],
-  },
-  {
-    id: crypto.randomUUID(),
-    name: "Aurora Glide Runner",
-    brand: "Studio Aurelius",
-    description:
-      "Featherlight knit sneaker with sculpted sole and brushed gold heel clip. Built for airport concourses and late checkouts.",
-    price: 590,
-    images: [
-      "https://images.unsplash.com/photo-1608231387042-66d1773070a5?auto=format&fit=crop&w=1600&q=80",
-      "https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1600&q=80",
-    ],
-    sizes: ["6", "7", "8", "9", "10", "11", "12"],
-    category: "Sneakers",
-    rating: 4.6,
-    reviews: [
-      makeReview(
-        "Dylan C.",
-        5,
-        "Feels like walking on memory foam cloud, yet the profile is razor sharp.",
-        3
-      ),
-      makeReview(
-        "Priya M.",
-        4,
-        "Perfect airport shoe – slips on and off effortlessly while still feeling polished.",
-        27
-      ),
-    ],
-    isFeatured: true,
-    tags: ["Travel", "Lightweight"],
-  },
-  {
-    id: crypto.randomUUID(),
-    name: "Cortado Penny Loafer",
-    brand: "Linea Castell",
-    description:
-      "An ultra-soft penny loafer in hand-burnished espresso leather with an articulated sole. Designed for quiet confidence.",
-    price: 740,
-    images: [
-      "https://images.unsplash.com/photo-1549298916-b41d501d3772?auto=format&fit=crop&w=1600&q=80",
-      "https://images.unsplash.com/photo-1514311548101-ff09bff63c02?auto=format&fit=crop&w=1600&q=80",
-    ],
-    sizes: ["7", "7.5", "8", "8.5", "9", "10"],
-    category: "Loafers",
-    rating: 4.9,
-    reviews: [
-      makeReview(
-        "Marco D.",
-        5,
-        "The leather patina is already rich out of the box and only gets better.",
-        11
-      ),
-      makeReview(
-        "Isabelle T.",
-        5,
-        "Wore them straight to a gallery opening – zero break-in, endless compliments.",
-        19
-      ),
-    ],
-    isFeatured: true,
-    tags: ["Office", "Evening"],
-  },
-  {
-    id: crypto.randomUUID(),
-    name: "Sable Desert Boot",
-    brand: "Atelier Nord",
-    description:
-      "Minimal desert boot in matte sable suede, set on a tonal crepe sole. Effortlessly bridges denim and tailoring.",
-    price: 660,
-    images: [
-      "https://images.unsplash.com/photo-1533867617858-e7b97e060509?auto=format&fit=crop&w=1600&q=80",
-      "https://images.unsplash.com/photo-1525078429-2083899b4c18?auto=format&fit=crop&w=1600&q=80",
-    ],
-    sizes: ["7", "8", "9", "10", "11"],
-    category: "Boots",
-    rating: 4.4,
-    reviews: [
-      makeReview(
-        "Khalid S.",
-        4,
-        "Perfect height on the ankle. Suede has a lovely dry, powdery texture.",
-        35
-      ),
-    ],
-    tags: ["Weekend", "Casual"],
-  },
-  {
-    id: crypto.randomUUID(),
-    name: "Marais Strapped Sandal",
-    brand: "Rue & Rive",
-    description:
-      "Low-profile leather sandal with slim asymmetric straps and a softly cushioned footbed. Made for summer rooftops and cobblestone alleys.",
-    price: 430,
-    images: [
-      "https://images.unsplash.com/photo-1514315384763-ba401779410f?auto=format&fit=crop&w=1600&q=80",
-      "https://images.unsplash.com/photo-1475180098004-ca77a66827be?auto=format&fit=crop&w=1600&q=80",
-    ],
-    sizes: ["5.5", "6", "7", "8", "9"],
-    category: "Sandals",
-    rating: 4.5,
-    reviews: [
-      makeReview(
-        "Sara L.",
-        5,
-        "Straps are delicate but secure. The insole feels like a discreet cushion.",
-        8
-      ),
-    ],
-    tags: ["Summer", "Resort"],
-  },
-  {
-    id: crypto.randomUUID(),
-    name: "Obsidian City Runner",
-    brand: "Maison Varenne",
-    description:
-      "A monochrome runner with layered nubuck and mesh, anchored by a sculpted outsole and subtle reflective flourishes.",
-    price: 710,
-    images: [
-      "https://images.unsplash.com/photo-1597045566677-8cf032ed6634?auto=format&fit=crop&w=1600&q=80",
-      "https://images.unsplash.com/photo-1543508282-6319a3e2621f?auto=format&fit=crop&w=1600&q=80",
-    ],
-    sizes: ["7", "8", "8.5", "9", "10", "11", "12"],
-    category: "Sneakers",
-    rating: 4.7,
-    reviews: [
-      makeReview(
-        "Thabo N.",
-        5,
-        "The kind of sneaker that dresses up and down without ever trying too hard.",
-        4
-      ),
-      makeReview(
-        "Emily P.",
-        4,
-        "Slightly heavier than expected, but the presence is worth it.",
-        44
-      ),
-    ],
-    tags: ["Monochrome", "Night"],
-  },
-  {
-    id: crypto.randomUUID(),
-    name: "Celestial Slip-On Mule",
-    brand: "Studio Aurelius",
-    description:
-      "Backless mule in pearlescent leather with a micro heel and suede-lined interior. Effortless, sculpted, and quietly radiant.",
-    price: 520,
-    images: [
-      "https://images.unsplash.com/photo-1590874103328-eac38a683ce7?auto=format&fit=crop&w=1600&q=80",
-      "https://images.unsplash.com/photo-1535043934128-cf0b28d52f95?auto=format&fit=crop&w=1600&q=80",
-    ],
-    sizes: ["5", "6", "7", "8", "9"],
-    category: "Loafers",
-    rating: 4.3,
-    reviews: [
-      makeReview(
-        "Harper G.",
-        4,
-        "Slides on like silk and somehow stays put even on marble floors.",
-        15
-      ),
-    ],
-    tags: ["Evening", "Minimal"],
-  },
-  {
-    id: crypto.randomUUID(),
-    name: "Ridgeway Alpine Boot",
-    brand: "Atelier Nord",
-    description:
-      "Performance-inspired alpine boot wrapped in city-ready leather with tonal hardware and a contoured lug sole.",
-    price: 980,
-    images: [
-      "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1600&q=80",
-      "https://images.unsplash.com/photo-1520256862855-398228c41684?auto=format&fit=crop&w=1600&q=80",
-    ],
-    sizes: ["8", "9", "9.5", "10", "11", "12"],
-    category: "Boots",
-    rating: 4.9,
-    reviews: [
-      makeReview(
-        "Noah V.",
-        5,
-        "Handles mountain paths and marble hotel lobbies with the same composure.",
-        21
-      ),
-      makeReview(
-        "Ana S.",
-        5,
-        "The lining is unexpectedly plush – like a cashmere sweater for your feet.",
-        39
-      ),
-    ],
-    isFeatured: true,
-    tags: ["Winter", "Performance"],
-  },
-  {
-    id: crypto.randomUUID(),
-    name: "Linea Gallery Low",
-    brand: "Linea Castell",
-    description:
-      "Low-profile gallery sneaker in brushed taupe leather with a razor-thin sole and stitched rand.",
-    price: 640,
-    images: [
-      "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1600&q=80",
-      "https://images.unsplash.com/photo-1608231387042-66d1773070a5?auto=format&fit=crop&w=1600&q=80",
-    ],
-    sizes: ["6", "7", "8", "9", "10"],
-    category: "Sneakers",
-    rating: 4.2,
-    reviews: [
-      makeReview(
-        "Victor L.",
-        4,
-        "Pairs with tailoring better than most dress shoes I own.",
-        29
-      ),
-    ],
-    tags: ["Gallery", "Minimal"],
-  },
-  {
-    id: crypto.randomUUID(),
-    name: "Evenfall Strappy Heel Sandal",
-    brand: "Rue & Rive",
-    description:
-      "Slender-heeled sandal with finely set straps and a soft square toe, finished in smoked bronze leather.",
-    price: 760,
-    images: [
-      "https://images.unsplash.com/photo-1543168256-418811576931?auto=format&fit=crop&w=1600&q=80",
-      "https://images.unsplash.com/photo-1537289150563-b7f10f3d91d3?auto=format&fit=crop&w=1600&q=80",
-    ],
-    sizes: ["5", "6", "7", "8", "9", "10"],
-    category: "Sandals",
-    rating: 4.7,
-    reviews: [
-      makeReview(
-        "Lucia F.",
-        5,
-        "The bronze sheen reads as jewelry for the feet – incredibly flattering.",
-        13
-      ),
-    ],
-    tags: ["Evening", "Event"],
-  },
-].map((p) => ({
-  ...p,
-  description: `${p.description} ${loremLuxury}`,
-}));
+// ----------------------
+// Formatting & derived helpers
+// ----------------------
 
-// -----------------------------
-// Public Accessors for Products
-// -----------------------------
+export function formatMoney(
+  amount: number,
+  currency: CurrencyCode = DEFAULT_CURRENCY
+): string {
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    return `$${amount.toFixed(0)}`;
+  }
+}
+
+export function computeCartTotals(
+  cart: Cart,
+  options?: { taxRate?: number; shippingFlat?: number }
+): CartTotals {
+  const taxRate = options?.taxRate ?? TAX_RATE;
+  const shippingFlat = options?.shippingFlat ?? SHIPPING_FLAT;
+
+  const subtotal = cart.items.reduce(
+    (sum, line) => sum + line.unitPrice * line.quantity,
+    0
+  );
+  const estimatedTax = Math.round(subtotal * taxRate);
+  const shipping = cart.items.length === 0 ? 0 : shippingFlat;
+  const total = subtotal + estimatedTax + shipping;
+
+  return {
+    subtotal,
+    estimatedTax,
+    shipping,
+    total,
+    currency: cart.currency,
+  };
+}
+
+// ----------------------
+// Local persistence: cart, user, orders
+// ----------------------
+
+function loadCartInternal(): Cart {
+  const raw = safeStorage.getItem(STORAGE_KEYS.cart);
+  const fallback: Cart = {
+    id: "cart_default",
+    items: [],
+    currency: DEFAULT_CURRENCY,
+    updatedAt: new Date().toISOString(),
+  };
+  return safeJsonParse<Cart>(raw, fallback);
+}
+
+function saveCartInternal(cart: Cart): void {
+  const serialised = JSON.stringify(cart);
+  safeStorage.setItem(STORAGE_KEYS.cart, serialised);
+}
+
+function loadUserInternal(): UserSession | undefined {
+  const raw = safeStorage.getItem(STORAGE_KEYS.user);
+  return safeJsonParse<UserSession | undefined>(raw, undefined);
+}
+
+function saveUserInternal(user: UserSession | undefined): void {
+  if (!user) {
+    safeStorage.removeItem(STORAGE_KEYS.user);
+    return;
+  }
+  safeStorage.setItem(STORAGE_KEYS.user, JSON.stringify(user));
+}
+
+function loadOrdersInternal(): Order[] {
+  const raw = safeStorage.getItem(STORAGE_KEYS.orders);
+  return safeJsonParse<Order[]>(raw, []);
+}
+
+function saveOrdersInternal(orders: Order[]): void {
+  safeStorage.setItem(STORAGE_KEYS.orders, JSON.stringify(orders));
+}
+
+// ----------------------
+// Public getters: products & filters
+// ----------------------
 
 export function getProducts(): Product[] {
-  return products;
+  return [...products];
 }
 
-export function getProductById(id: string): Product | undefined {
-  return products.find((p) => p.id === id);
+export function getBrands(): string[] {
+  const brands = new Set<string>();
+  products.forEach((p) => brands.add(p.brand));
+  return Array.from(brands).sort();
 }
 
-// Derived catalogs
-
-export function getAllBrands(): string[] {
-  const set = new Set<string>();
-  products.forEach((p) => set.add(p.brand));
-  return Array.from(set).sort();
-}
-
-export function getAllCategories(): Category[] {
-  const set = new Set<Category>();
-  products.forEach((p) => set.add(p.category));
-  return Array.from(set).sort();
-}
-
-export function getAllSizes(): string[] {
-  const set = new Set<string>();
-  products.forEach((p) => p.sizes.forEach((s) => set.add(s)));
-  return Array.from(set).sort((a, b) => parseFloat(a) - parseFloat(b));
-}
-
-// -----------------------------
-// Catalog Filter & Sort Utilities
-// -----------------------------
-
-export function applyCatalogFilters(
-  items: Product[],
-  filters: CatalogFilters
-): Product[] {
-  const { category, brand, size, minPrice, maxPrice } = filters;
-
-  return items.filter((p) => {
-    if (category && category !== "All" && p.category !== category) return false;
-    if (brand && brand !== "All" && p.brand !== brand) return false;
-    if (size && size !== "All" && !p.sizes.includes(size)) return false;
-    if (typeof minPrice === "number" && p.price < minPrice) return false;
-    if (typeof maxPrice === "number" && p.price > maxPrice) return false;
-    return true;
+export function getAvailableSizes(): string[] {
+  const sizes = new Set<string>();
+  products.forEach((p) => p.sizes.forEach((s) => sizes.add(s)));
+  return Array.from(sizes).sort((a, b) => {
+    const na = parseFloat(a.replace(/[^0-9.]/g, ""));
+    const nb = parseFloat(b.replace(/[^0-9.]/g, ""));
+    if (isNaN(na) || isNaN(nb)) return a.localeCompare(b);
+    return na - nb;
   });
 }
 
-export function sortCatalog(
-  items: Product[],
-  sort: CatalogSortOption
-): Product[] {
-  const cloned = [...items];
-  switch (sort) {
-    case "price-asc":
-      return cloned.sort((a, b) => a.price - b.price);
-    case "price-desc":
-      return cloned.sort((a, b) => b.price - a.price);
-    case "rating-desc":
-      return cloned.sort((a, b) => b.rating - a.rating);
-    case "featured":
-    default:
-      return cloned.sort((a, b) => {
-        const aScore = (a.isFeatured ? 1 : 0) + a.rating / 10;
-        const bScore = (b.isFeatured ? 1 : 0) + b.rating / 10;
-        return bScore - aScore;
-      });
-  }
+export function getAvailableColors(): string[] {
+  const colors = new Set<string>();
+  products.forEach((p) => p.colors.forEach((c) => colors.add(c)));
+  return Array.from(colors).sort();
 }
 
-// For infinite scroll / pagination
-export function paginateProducts(
-  items: Product[],
-  page: number,
-  pageSize: number
-): Product[] {
-  const start = (page - 1) * pageSize;
-  return items.slice(start, start + pageSize);
-}
+// ----------------------
+// Cart helpers
+// ----------------------
 
-// -----------------------------
-// Cart Persistence & Helpers
-// -----------------------------
-
-const CART_KEY = "jootiya_cart_v1";
-const ORDERS_KEY = "jootiya_orders_v1";
-
-function readCartFromStorage(): CartItem[] {
-  const raw = safeStorage.getItem(CART_KEY);
-  if (!raw) return [];
-  try {
-    const data = JSON.parse(raw) as CartItem[];
-    if (!Array.isArray(data)) return [];
-    return data
-      .map((item) => ({
-        productId: String(item.productId),
-        size: String(item.size),
-        quantity: Math.min(5, Math.max(1, Number(item.quantity) || 1)),
-      }))
-      .filter((item) => !!item.productId && !!item.size);
-  } catch {
-    return [];
-  }
-}
-
-function writeCartToStorage(cart: CartItem[]): void {
-  safeStorage.setItem(CART_KEY, JSON.stringify(cart));
-}
-
-export function getCart(): CartItem[] {
-  return readCartFromStorage();
-}
-
-export function setCart(cart: CartItem[]): void {
-  writeCartToStorage(cart);
-}
-
-export function clearCart(): void {
-  writeCartToStorage([]);
+export function getCart(): Cart {
+  return loadCartInternal();
 }
 
 export function addToCart(
   productId: string,
-  size: string | undefined,
-  quantity: number = 1
-): { success: boolean; error?: string; cart: CartItem[] } {
-  if (!size) {
-    return { success: false, error: "Please select a size before adding to cart.", cart: getCart() };
-  }
-
-  const product = getProductById(productId);
+  variant: CartItemVariant,
+  qty: number
+): Cart {
+  const normalizedQty = Math.max(1, Math.floor(qty || 1));
+  const cart = loadCartInternal();
+  const product = products.find((p) => p.id === productId);
   if (!product) {
-    return { success: false, error: "Product not found.", cart: getCart() };
+    return cart;
   }
 
-  if (!product.sizes.includes(size)) {
-    return { success: false, error: "Selected size is unavailable for this product.", cart: getCart() };
-  }
-
-  const safeQty = Math.min(5, Math.max(1, Math.round(quantity) || 1));
-
-  const cart = getCart();
-  const existingIndex = cart.findIndex(
-    (item) => item.productId === productId && item.size === size
+  // See if same product + variant already exists; if so, increment
+  const existing = cart.items.find(
+    (line) =>
+      line.productId === productId &&
+      line.variant.size === variant.size &&
+      line.variant.color === variant.color
   );
 
-  if (existingIndex >= 0) {
-    const existing = cart[existingIndex];
-    const newQty = Math.min(5, existing.quantity + safeQty);
-    cart[existingIndex] = { ...existing, quantity: newQty };
+  if (existing) {
+    existing.quantity += normalizedQty;
   } else {
-    cart.push({ productId, size, quantity: safeQty });
+    cart.items.push({
+      id: createId("line"),
+      productId,
+      variant: { ...variant },
+      unitPrice: product.price,
+      currency: product.currency,
+      quantity: normalizedQty,
+      addedAt: new Date().toISOString(),
+    });
   }
 
-  writeCartToStorage(cart);
-  return { success: true, cart };
-}
-
-export function updateCartItemQty(
-  productId: string,
-  size: string,
-  quantity: number
-): CartItem[] {
-  const safeQty = Math.min(5, Math.max(1, Math.round(quantity) || 1));
-  const cart = getCart();
-  const idx = cart.findIndex((item) => item.productId === productId && item.size === size);
-  if (idx === -1) return cart;
-  cart[idx] = { ...cart[idx], quantity: safeQty };
-  writeCartToStorage(cart);
+  cart.currency = product.currency;
+  cart.updatedAt = new Date().toISOString();
+  saveCartInternal(cart);
   return cart;
 }
 
-export function removeCartItem(productId: string, size: string): CartItem[] {
-  const cart = getCart().filter(
-    (item) => !(item.productId === productId && item.size === size)
-  );
-  writeCartToStorage(cart);
+export function updateCartQty(lineId: string, qty: number): Cart {
+  const cart = loadCartInternal();
+  const line = cart.items.find((l) => l.id === lineId);
+  if (!line) return cart;
+
+  const normalizedQty = Math.max(0, Math.floor(qty || 0));
+  if (normalizedQty <= 0) {
+    cart.items = cart.items.filter((l) => l.id !== lineId);
+  } else {
+    line.quantity = normalizedQty;
+  }
+
+  cart.updatedAt = new Date().toISOString();
+  saveCartInternal(cart);
   return cart;
 }
 
-export function getCartCount(): number {
-  return getCart().reduce((sum, item) => sum + item.quantity, 0);
+export function removeFromCart(lineId: string): Cart {
+  const cart = loadCartInternal();
+  cart.items = cart.items.filter((l) => l.id !== lineId);
+  cart.updatedAt = new Date().toISOString();
+  saveCartInternal(cart);
+  return cart;
 }
 
-export function getCartSubtotal(): number {
-  const cart = getCart();
-  return cart.reduce((sum, item) => {
-    const product = getProductById(item.productId);
-    if (!product) return sum;
-    return sum + product.price * item.quantity;
-  }, 0);
-}
-
-export function hydrateCartWithProducts(cart: CartItem[]): HydratedCartItem[] {
-  return cart.map((item) => ({
-    ...item,
-    product: getProductById(item.productId),
-  }));
-}
-
-// -----------------------------
-// Validation Helpers (Checkout)
-// -----------------------------
-
-export interface ValidationResult {
-  valid: boolean;
-  error?: string;
-}
-
-export function validateEmail(email: string): ValidationResult {
-  const value = email.trim();
-  if (!value) return { valid: false, error: "Email is required." };
-  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!re.test(value)) return { valid: false, error: "Enter a valid email address." };
-  return { valid: true };
-}
-
-export function validatePhone(phone: string): ValidationResult {
-  const digits = phone.replace(/[^0-9]/g, "");
-  if (!digits) return { valid: false, error: "Phone number is required." };
-  if (digits.length < 7 || digits.length > 15) {
-    return { valid: false, error: "Enter a valid phone number (7-15 digits)." };
-  }
-  return { valid: true };
-}
-
-export function validateCardNumber(cardNumber: string): ValidationResult {
-  const digits = cardNumber.replace(/[^0-9]/g, "");
-  if (!digits) return { valid: false, error: "Card number is required." };
-  if (digits.length !== 16) {
-    return { valid: false, error: "Card number must be 16 digits." };
-  }
-  // Luhn check (basic)
-  let sum = 0;
-  let shouldDouble = false;
-  for (let i = digits.length - 1; i >= 0; i--) {
-    let d = parseInt(digits.charAt(i), 10);
-    if (shouldDouble) {
-      d *= 2;
-      if (d > 9) d -= 9;
-    }
-    sum += d;
-    shouldDouble = !shouldDouble;
-  }
-  if (sum % 10 !== 0) {
-    // For mock we can still allow but warn; choose to mark invalid for UX clarity
-    return { valid: false, error: "Enter a valid card number." };
-  }
-  return { valid: true };
-}
-
-export function validateExpiry(expiry: string): ValidationResult {
-  const value = expiry.trim();
-  if (!value) return { valid: false, error: "Expiry date is required." };
-  const match = /^(0[1-9]|1[0-2])\/(\d{2})$/.exec(value);
-  if (!match) return { valid: false, error: "Use MM/YY format." };
-  const month = parseInt(match[1], 10);
-  const yearTwo = parseInt(match[2], 10);
-  const currentYearFull = new Date().getFullYear();
-  const currentYearTwo = currentYearFull % 100;
-  const century = Math.floor(currentYearFull / 100) * 100;
-  const fullYear = century + yearTwo + (yearTwo < currentYearTwo - 20 ? 100 : 0); // handle century roll
-
-  // Card is valid through the end of the month
-  const expiryDate = new Date(fullYear, month, 0, 23, 59, 59, 999);
-  const nowDate = new Date();
-  if (expiryDate < nowDate) {
-    return { valid: false, error: "Card has expired." };
-  }
-  return { valid: true };
-}
-
-export function validateCVV(cvv: string): ValidationResult {
-  const digits = cvv.replace(/[^0-9]/g, "");
-  if (!digits) return { valid: false, error: "CVV is required." };
-  if (digits.length !== 3) {
-    return { valid: false, error: "CVV must be 3 digits." };
-  }
-  return { valid: true };
-}
-
-export interface ShippingValidationResult {
-  valid: boolean;
-  errors: Partial<Record<keyof ShippingInfo, string>>;
-}
-
-export function validateShippingInfo(info: ShippingInfo): ShippingValidationResult {
-  const errors: Partial<Record<keyof ShippingInfo, string>> = {};
-
-  if (!info.name.trim()) errors.name = "Name is required.";
-  if (!info.address.trim()) errors.address = "Address is required.";
-
-  const emailResult = validateEmail(info.email);
-  if (!emailResult.valid) errors.email = emailResult.error;
-
-  const phoneResult = validatePhone(info.phone);
-  if (!phoneResult.valid) errors.phone = phoneResult.error;
-
-  return {
-    valid: Object.keys(errors).length === 0,
-    errors,
+export function clearCart(): Cart {
+  const empty: Cart = {
+    id: "cart_default",
+    items: [],
+    currency: DEFAULT_CURRENCY,
+    updatedAt: new Date().toISOString(),
   };
+  saveCartInternal(empty);
+  return empty;
 }
 
-export interface PaymentValidationResult {
-  valid: boolean;
-  errors: Partial<Record<keyof PaymentInfo, string>>;
+// ----------------------
+// User session helpers
+// ----------------------
+
+export function getUser(): UserSession | undefined {
+  return loadUserInternal();
 }
 
-export function validatePaymentInfo(info: PaymentInfo): PaymentValidationResult {
-  const errors: Partial<Record<keyof PaymentInfo, string>> = {};
-
-  const cardResult = validateCardNumber(info.cardNumber);
-  if (!cardResult.valid) errors.cardNumber = cardResult.error;
-
-  const expiryResult = validateExpiry(info.expiry);
-  if (!expiryResult.valid) errors.expiry = expiryResult.error;
-
-  const cvvResult = validateCVV(info.cvv);
-  if (!cvvResult.valid) errors.cvv = cvvResult.error;
-
-  return {
-    valid: Object.keys(errors).length === 0,
-    errors,
-  };
+export function setUser(user: UserSession | undefined): void {
+  saveUserInternal(user);
 }
 
-// Convenience checker for checkout button
-export function canPlaceOrder(
-  cart: CartItem[],
-  shipping: ShippingInfo,
-  payment: PaymentInfo
-): boolean {
-  if (!cart.length) return false;
-  const ship = validateShippingInfo(shipping);
-  const pay = validatePaymentInfo(payment);
-  return ship.valid && pay.valid;
-}
-
-// -----------------------------
-// Orders Persistence & Helpers
-// -----------------------------
-
-function readOrdersFromStorage(): Order[] {
-  const raw = safeStorage.getItem(ORDERS_KEY);
-  if (!raw) return [];
-  try {
-    const data = JSON.parse(raw) as Order[];
-    if (!Array.isArray(data)) return [];
-    return data;
-  } catch {
-    return [];
-  }
-}
-
-function writeOrdersToStorage(orders: Order[]): void {
-  safeStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
-}
+// ----------------------
+// Orders helpers (mock)
+// ----------------------
 
 export function getOrders(): Order[] {
-  return readOrdersFromStorage();
+  return loadOrdersInternal();
 }
 
-export function getLastOrder(): Order | undefined {
-  const orders = getOrders();
-  if (!orders.length) return undefined;
-  return orders[orders.length - 1];
-}
-
-export function placeOrder(
-  cart: CartItem[],
-  shippingInfo: ShippingInfo,
-  paymentInfo: PaymentInfo
-): { success: boolean; error?: string; order?: Order } {
-  if (!cart.length) {
-    return { success: false, error: "Your cart is empty." };
-  }
-
-  const shipValidation = validateShippingInfo(shippingInfo);
-  if (!shipValidation.valid) {
-    return { success: false, error: "Shipping information is incomplete or invalid." };
-  }
-
-  const payValidation = validatePaymentInfo(paymentInfo);
-  if (!payValidation.valid) {
-    return { success: false, error: "Payment details are incomplete or invalid." };
-  }
-
-  const totalPrice = cart.reduce((sum, item) => {
-    const product = getProductById(item.productId);
-    if (!product) return sum;
-    return sum + product.price * item.quantity;
-  }, 0);
-
-  if (totalPrice <= 0) {
-    return { success: false, error: "Unable to calculate order total." };
-  }
-
-  const orderDate = new Date();
-  const estimatedDeliveryDate = new Date(
-    orderDate.getTime() + 5 * 24 * 60 * 60 * 1000
-  );
-
-  const order: Order = {
-    id: crypto.randomUUID(),
-    items: cart.map((c) => ({ ...c })),
-    shippingInfo: { ...shippingInfo },
-    paymentInfo: { ...paymentInfo },
-    totalPrice,
-    orderDate: orderDate.toISOString(),
-    estimatedDelivery: estimatedDeliveryDate.toISOString(),
-  };
-
-  const orders = getOrders();
+export function saveOrder(order: Order): void {
+  const orders = loadOrdersInternal();
   orders.push(order);
-  writeOrdersToStorage(orders);
-  clearCart();
-
-  return { success: true, order };
+  saveOrdersInternal(orders);
 }
-
-// -----------------------------
-// Utility: Short Product Copy for Editorial Sections
-// -----------------------------
-
-export function getFeaturedProducts(limit: number = 6): Product[] {
-  const featured = products.filter((p) => p.isFeatured);
-  const rest = products.filter((p) => !p.isFeatured);
-  return [...featured, ...rest].slice(0, limit);
-}
-
-export function getLookbookSlides(): { id: string; image: string; headline: string; subcopy: string }[] {
-  const featured = getFeaturedProducts(5);
-  if (!featured.length) return [];
-  return featured.map((p) => ({
-    id: p.id,
-    image: p.images[0] ?? "",
-    headline: p.name,
-    subcopy: `${p.brand} • $${p.price.toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
-  }));
-}
-
-// -----------------------------
-// Generic Text Helpers
-// -----------------------------
-
-export function formatPrice(value: number): string {
-  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
-}
-
-export function formatDate(dateIso: string): string {
-  const d = new Date(dateIso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-// This entire module is mock-driven and client-only; it can be safely
-// imported throughout the app as the single source of truth for data and state.
