@@ -1,118 +1,137 @@
 import React from "react";
-import { ShoppingBag, Filter, Shoe, Palette } from "lucide-react";
-import { ROUTES } from "../mock";
+import { Link, NavLink, useLocation } from "react-router-dom";
+import { ShoppingBag, Menu, X } from "lucide-react";
+import { Button } from "@/components/ui/shadcn";
 
 interface HeaderProps {
   cartCount: number;
-  currentRoute: string;
-  onNavigate: (path: string) => void;
-  onOpenCart: () => void;
-  onOpenFilters: () => void;
-  onCategoryFilter: (category: string | null) => void;
+  onCartClick: () => void;
+}
+
+// Utility to join Tailwind classes
+function classNames(...classes: (string | false | null | undefined)[]) {
+  return classes.filter(Boolean).join(" ");
 }
 
 const navItems = [
-  { label: "Home", path: ROUTES.HOME, category: null },
-  { label: "Sneakers", path: ROUTES.HOME, category: "Sneakers" },
-  { label: "Formal", path: ROUTES.HOME, category: "Formal" },
-  { label: "Casual", path: ROUTES.HOME, category: "Casual" },
+  { label: "Home", to: "/" },
+  { label: "Catalog", to: "/catalog" },
 ];
 
-const Header: React.FC<HeaderProps> = ({
-  cartCount,
-  currentRoute,
-  onNavigate,
-  onOpenCart,
-  onOpenFilters,
-  onCategoryFilter,
-}) => {
-  const handleNavClick = (item: (typeof navItems)[number]) => {
-    onNavigate(item.path);
-    onCategoryFilter(item.category);
-  };
+/**
+ * Luxury editorial top navigation for Jootiya.
+ * - Uses Playfair Display for the brand wordmark via Tailwind font utilities.
+ * - Sticky, high-contrast header with subtle shadow.
+ * - Responsive mobile navigation with disclosure panel.
+ * - Cart button exposes cart count via props and triggers parent drawer.
+ *
+ * NOTE: Cart data and all stateful mocks are managed centrally in src/mock.ts
+ * and wired in App.tsx. This component is purely presentational + UI state.
+ */
+export const Header: React.FC<HeaderProps> = ({ cartCount, onCartClick }) => {
+  const location = useLocation();
+  const [mobileOpen, setMobileOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    // Close mobile nav when route changes
+    setMobileOpen(false);
+  }, [location.pathname]);
 
   return (
-    <header className="border-b border-[rgba(43,43,43,0.12)] bg-[#F5F1EB]/90 backdrop-blur-md sticky top-0 z-40">
-      <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between">
-        <button
-          onClick={() => onNavigate(ROUTES.HOME)}
-          className="group flex items-baseline gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#BFA06F]"
-        >
-          <span className="font-['Playfair_Display'] text-2xl tracking-[0.12em] text-[#2B2B2B] uppercase">
-            Jootiya
-          </span>
-          <span className="font-['Bodoni_Moda'] text-xs tracking-[0.2em] text-[#7E6B5A] uppercase hidden sm:inline">
-            Atelier Footwear
-          </span>
-        </button>
+    <header className="sticky top-0 z-40 border-b border-[rgba(0,0,0,0.06)] bg-[#F5F1EB]/90 backdrop-blur-md dark:border-[rgba(255,255,255,0.08)] dark:bg-[#111111]/80">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+        {/* Left: Brand + Desktop Nav */}
+        <div className="flex flex-1 items-center gap-8">
+          <Link
+            to="/"
+            className="flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#BFA06F] focus-visible:ring-offset-[#F5F1EB] dark:focus-visible:ring-offset-[#111111]"
+            aria-label="Jootiya home"
+          >
+            <span className="text-xl tracking-[0.2em] text-[#2B2B2B] dark:text-[#F5F1EB] font-semibold font-['Playfair_Display'] uppercase">
+              Jootiya
+            </span>
+          </Link>
 
-        <nav className="hidden md:flex items-center gap-8 text-sm">
-          {navItems.map((item) => {
-            const active =
-              item.category && currentRoute === ROUTES.HOME
-                ? true
-                : item.path === currentRoute && !item.category;
-            return (
-              <button
-                key={item.label}
-                onClick={() => handleNavClick(item)}
-                className={`relative pb-1 font-['Inter'] tracking-[0.16em] uppercase text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#BFA06F] ${
-                  active ? "text-[#2B2B2B]" : "text-[#7E6B5A] hover:text-[#2B2B2B]"
-                }`}
+          {/* Desktop navigation */}
+          <nav className="hidden items-center gap-6 md:flex" aria-label="Main">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) =>
+                  classNames(
+                    "text-sm tracking-[0.18em] uppercase transition-colors duration-200 font-medium",
+                    "text-[#5A5145] hover:text-[#2B2B2B] dark:text-[#D1C7B8] dark:hover:text-[#F5F1EB]",
+                    isActive && "text-[#2B2B2B] dark:text-[#F5F1EB]"
+                  )
+                }
               >
                 {item.label}
-                {active && (
-                  <span className="absolute left-0 bottom-0 h-[2px] w-6 bg-[#BFA06F]" />
-                )}
-              </button>
-            );
-          })}
-        </nav>
+              </NavLink>
+            ))}
+          </nav>
+        </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onOpenFilters}
-            className="hidden sm:inline-flex items-center gap-1 rounded-full border border-[rgba(126,107,90,0.4)] bg-white/80 px-3 py-1 text-xs font-['Inter'] uppercase tracking-[0.16em] text-[#7E6B5A] shadow-sm hover:bg-[#F5F1EB] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#BFA06F]"
+        {/* Right: Cart + Mobile Menu Toggle */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Cart button */}
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onCartClick}
+            className="relative flex items-center gap-2 rounded-full border border-transparent bg-[#2B2B2B] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[#F5F1EB] shadow-sm transition-colors duration-200 hover:bg-[#3A3A3A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#BFA06F] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F5F1EB] dark:bg-[#F5F1EB] dark:text-[#111111] dark:hover:bg-[#E4DBCE] dark:focus-visible:ring-offset-[#111111]"
+            aria-label={cartCount > 0 ? `Open cart with ${cartCount} items` : "Open cart"}
           >
-            <Filter className="h-3 w-3" />
-            Filters
-          </button>
-
-          <button
-            onClick={onOpenCart}
-            className="relative inline-flex items-center justify-center rounded-full bg-[#BFA06F] px-3 py-2 text-[#F5F1EB] shadow-md hover:bg-[#a58a5c] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#BFA06F] focus-visible:ring-offset-[#F5F1EB]"
-            aria-label="Open cart"
-          >
-            <ShoppingBag className="h-5 w-5" />
+            <ShoppingBag className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Cart</span>
             {cartCount > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[18px] rounded-full bg-[#2B2B2B] px-1 text-[10px] font-semibold text-[#F5F1EB] flex items-center justify-center">
+              <span className="absolute -right-1.5 -top-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-[#BFA06F] px-1 text-[10px] font-semibold leading-none text-[#2B2B2B] shadow-md">
                 {cartCount}
               </span>
             )}
+          </Button>
+
+          {/* Mobile menu toggle */}
+          <button
+            type="button"
+            className="inline-flex items-center justify-center rounded-full border border-[rgba(0,0,0,0.12)] bg-white/70 p-1.5 text-[#2B2B2B] shadow-sm transition-colors duration-200 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#BFA06F] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F5F1EB] dark:border-[rgba(255,255,255,0.14)] dark:bg-[#181818]/80 dark:text-[#F5F1EB] dark:hover:bg-[#222222] dark:focus-visible:ring-offset-[#111111] md:hidden"
+            aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={mobileOpen}
+            aria-controls="mobile-nav"
+            onClick={() => setMobileOpen((prev) => !prev)}
+          >
+            {mobileOpen ? <X className="h-4 w-4" aria-hidden="true" /> : <Menu className="h-4 w-4" aria-hidden="true" />}
           </button>
         </div>
       </div>
-    </header>
-  );
-};
 
-export const Footer: React.FC = () => {
-  return (
-    <footer className="border-t border-[rgba(43,43,43,0.08)] bg-[#F5F1EB] mt-16">
-      <div className="mx-auto max-w-6xl px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#7E6B5A] font-['Inter'] tracking-[0.12em] uppercase">
-        <div className="flex items-center gap-2">
-          <Shoe className="h-4 w-4" />
-          <span>Jootiya Studio — Crafted for the city in motion.</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1">
-            <Palette className="h-3 w-3" />
-            <span>Warm Ivory / Charcoal / Taupe / Gold</span>
-          </div>
-          <span className="hidden sm:inline">© {new Date().getFullYear()} Jootiya (Mock)</span>
-        </div>
+      {/* Mobile Nav Panel */}
+      <div
+        id="mobile-nav"
+        className={classNames(
+          "border-t border-[rgba(0,0,0,0.06)] bg-[#F5F1EB]/95 backdrop-blur-sm transition-[max-height,opacity] duration-200 ease-out overflow-hidden md:hidden dark:border-[rgba(255,255,255,0.08)] dark:bg-[#111111]/95",
+          mobileOpen ? "max-h-40 opacity-100" : "max-h-0 opacity-0"
+        )}
+      >
+        <nav className="mx-auto flex max-w-6xl flex-col space-y-1 px-4 py-3 sm:px-6 lg:px-8" aria-label="Mobile">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                classNames(
+                  "flex items-center justify-between border-b border-transparent py-2 text-sm font-medium uppercase tracking-[0.18em] transition-colors duration-200",
+                  "text-[#5A5145] hover:text-[#2B2B2B] dark:text-[#D1C7B8] dark:hover:text-[#F5F1EB]",
+                  isActive && "border-b-[#BFA06F] text-[#2B2B2B] dark:text-[#F5F1EB]"
+                )
+              }
+            >
+              <span>{item.label}</span>
+            </NavLink>
+          ))}
+        </nav>
       </div>
-    </footer>
+    </header>
   );
 };
 
