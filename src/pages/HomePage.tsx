@@ -1,449 +1,537 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
+import { ArrowRight, Quote, Sparkles } from "lucide-react";
+
 import {
+  Button,
   Card,
+  CardContent,
   CardHeader,
   CardTitle,
   CardDescription,
-  CardContent,
-  Button,
+  Avatar,
+  AvatarImage,
+  AvatarFallback,
   Badge,
-  Separator,
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
 } from "@/components/ui/shadcn";
-import { ArrowRight } from "lucide-react";
-import { Product, formatMoney } from "@/mock";
 
-// NOTE: This page is 100% frontend-only and relies entirely on mock data/state
-// defined in src/mock.ts. There is **no backend**; navigation simply routes to
-// the Catalog page with query params for a rich SPA experience.
+// NOTE: This entire application is 100% frontend-only and fully mocked.
+// All data and state helpers come from src/mock.ts and persist to localStorage.
+// There is NO backend involved.
+import type { Artisan, Product } from "@/mock";
+import { getArtisans, getProducts } from "@/mock";
 
-export interface HomePageProps {
-  featuredProducts: Product[];
-}
+const heroBackground =
+  "https://images.pexels.com/photos/2690323/pexels-photo-2690323.jpeg?auto=compress&cs=tinysrgb&w=2000";
 
-const heroTextVariant = {
+const sectionVariants = {
   hidden: { opacity: 0, y: 24 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.19, 1, 0.22, 1] } },
+  visible: { opacity: 1, y: 0 },
 };
 
-const heroSubVariant = {
-  hidden: { opacity: 0, y: 16 },
-  visible: { opacity: 1, y: 0, transition: { delay: 0.15, duration: 0.8, ease: [0.19, 1, 0.22, 1] } },
+const cardHoverTransition = {
+  type: "spring" as const,
+  stiffness: 260,
+  damping: 20,
 };
 
-const heroCtaVariant = {
-  hidden: { opacity: 0, y: 16 },
-  visible: { opacity: 1, y: 0, transition: { delay: 0.3, duration: 0.7, ease: [0.2, 0.8, 0.2, 1] } },
-};
-
-const cardContainerVariants = {
-  hidden: {},
-  visible: {
-    transition: {
-      staggerChildren: 0.1,
-      delayChildren: 0.15,
-    },
-  },
-};
-
-const cardVariants = {
-  hidden: { opacity: 0, y: 18 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease: [0.2, 0.8, 0.2, 1] } },
-};
-
-const HomePage: React.FC<HomePageProps> = ({ featuredProducts }) => {
+export const HomePage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const heroProduct = React.useMemo(
+  const [artisanSheetOpen, setArtisanSheetOpen] = useState(false);
+
+  const allProducts = useMemo<Product[]>(() => getProducts(), []);
+  const artisans = useMemo<Artisan[]>(() => getArtisans(), []);
+
+  // Pick a highlighted artisan (first for now, could be based on custom flag later)
+  const highlightedArtisan = artisans[0];
+
+  const featuredProducts = useMemo(
     () =>
-      featuredProducts.find((p) => p.featured && p.images?.[0]) ||
-      featuredProducts[0],
-    [featuredProducts]
+      [...allProducts]
+        .sort((a, b) => a.featuredRank - b.featuredRank)
+        .slice(0, 6),
+    [allProducts]
   );
 
-  const secondaryHighlights = React.useMemo(
-    () => featuredProducts.filter((p) => p.id !== heroProduct?.id).slice(0, 6),
-    [featuredProducts, heroProduct]
-  );
+  const artisanSectionRef = useRef<HTMLDivElement | null>(null);
 
-  const handleViewProduct = (productId: string) => {
-    // Navigate to catalog with preselected product via query param
-    navigate(`/catalog?featuredId=${encodeURIComponent(productId)}`);
-  };
+  // Optional hash navigation from header (e.g., /#artisans)
+  useEffect(() => {
+    if (location.hash === "#artisans" && artisanSectionRef.current) {
+      artisanSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [location]);
 
-  const handleExploreCatalog = () => {
+  const handleViewCatalog = () => {
     navigate("/catalog");
   };
 
+  const handleExploreProduct = (productId: string) => {
+    navigate(`/product/${productId}`);
+  };
+
+  const handleOpenArtisanStory = () => {
+    setArtisanSheetOpen(true);
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#f7f3ee] via-[#f8f5f1] to-[#f1ede8] text-neutral-900 dark:from-[#050505] dark:via-[#0a0705] dark:to-[#050505]">
-      {/* Hero Section */}
-      <section className="relative w-full overflow-hidden border-b border-neutral-200/70 dark:border-neutral-800/80">
-        {/* Background image */}
-        {heroProduct && heroProduct.images[0] && (
-          <div className="pointer-events-none absolute inset-0">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(0,0,0,0.22),_transparent_55%)] opacity-70 mix-blend-multiply dark:opacity-90" />
-            <div
-              className="absolute inset-0 bg-cover bg-center opacity-85 dark:opacity-70"
-              style={{
-                backgroundImage: `url(${heroProduct.images[0].url})`,
-              }}
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-[#f7f3ee] via-[#f7f3ee]/75 to-transparent dark:from-black dark:via-black/75" />
-          </div>
-        )}
-
-        <div className="relative mx-auto flex max-w-6xl flex-col gap-10 px-6 pb-20 pt-16 sm:px-8 md:flex-row md:items-end md:pb-24 md:pt-20 lg:pb-28 lg:pt-24">
-          {/* Left: Copy */}
-          <div className="z-10 max-w-xl md:flex-1">
-            <motion.div
-              initial="hidden"
-              animate="visible"
-              variants={heroTextVariant}
-              className="inline-flex items-center gap-3 rounded-full border border-amber-500/30 bg-neutral-50/80 px-3 py-1 text-xs tracking-[0.2em] text-neutral-800 shadow-sm backdrop-blur-sm dark:border-amber-400/40 dark:bg-neutral-900/80 dark:text-neutral-100"
-            >
-              <span className="h-1 w-6 rounded-full bg-gradient-to-r from-amber-600 to-amber-400 dark:from-amber-400 dark:to-amber-300" />
-              <span className="uppercase">Maison Jootiya Lookbook // 2024</span>
-            </motion.div>
-
-            <motion.h1
-              initial="hidden"
-              animate="visible"
-              variants={heroTextVariant}
-              className="mt-6 font-['Playfair_Display'] text-4xl leading-tight tracking-tight text-neutral-900 sm:text-5xl md:text-6xl md:leading-[1.05] dark:text-neutral-50"
-            >
-              Quietly {" "}
-              <span className="bg-gradient-to-r from-amber-700 via-amber-600 to-amber-500 bg-clip-text text-transparent dark:from-amber-300 dark:via-amber-200 dark:to-amber-100">
-                louder
-              </span>
-              . Crafted for the slow arrival.
-            </motion.h1>
-
-            <motion.p
-              initial="hidden"
-              animate="visible"
-              variants={heroSubVariant}
-              className="mt-4 max-w-lg text-sm leading-relaxed text-neutral-700 sm:text-base sm:leading-relaxed dark:text-neutral-200"
-            >
-              Jootiya curates sculptural sneakers and considered leather forms for
-              the rooms where conversation drops to a hush. Each pair is drawn
-              like architecture and finished like a photograph.
-            </motion.p>
-
-            <motion.div
-              initial="hidden"
-              animate="visible"
-              variants={heroCtaVariant}
-              className="mt-7 flex flex-wrap items-center gap-4"
-            >
-              <Button
-                variant="default"
-                onClick={handleExploreCatalog}
-                className="group relative overflow-hidden rounded-full bg-neutral-900 px-6 py-2.5 text-sm font-medium tracking-wide text-neutral-50 shadow-md shadow-neutral-900/25 transition-colors duration-200 hover:bg-neutral-800 focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-100 dark:bg-neutral-50 dark:text-neutral-900 dark:hover:bg-neutral-200 dark:shadow-black/50"
-              >
-                <span className="relative z-10 flex items-center gap-2">
-                  Explore the catalog
-                  <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-                </span>
-                <span className="absolute inset-0 bg-gradient-to-r from-amber-600/0 via-amber-600/40 to-amber-400/0 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
-              </Button>
-
-              {heroProduct && (
-                <button
-                  type="button"
-                  onClick={() => handleViewProduct(heroProduct.id)}
-                  className="group inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-neutral-900 transition-colors duration-150 hover:text-amber-700 dark:text-neutral-100 dark:hover:text-amber-300"
-                >
-                  View {heroProduct.brand} {heroProduct.name}
-                  <span className="h-px w-8 bg-neutral-500 transition-all duration-150 group-hover:w-11 group-hover:bg-amber-600 dark:bg-neutral-300 dark:group-hover:bg-amber-300" />
-                </button>
-              )}
-            </motion.div>
-          </div>
-
-          {/* Right: Hero product card */}
-          {heroProduct && (
-            <motion.div
-              initial={{ opacity: 0, x: 40 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.25, duration: 0.8, ease: [0.19, 1, 0.22, 1] }}
-              className="z-10 mt-8 w-full max-w-sm md:mt-0 md:flex-1 md:self-stretch"
-            >
-              <Card className="group relative flex h-full flex-col overflow-hidden rounded-3xl border border-neutral-200/80 bg-neutral-50/90 shadow-[0_18px_55px_rgba(15,23,42,0.24)] backdrop-blur-sm transition-shadow duration-200 hover:shadow-[0_26px_70px_rgba(15,23,42,0.32)] dark:border-neutral-800/90 dark:bg-neutral-900/80 dark:shadow-[0_18px_60px_rgba(0,0,0,0.8)]">
-                <div className="relative aspect-[4/5] overflow-hidden">
-                  {heroProduct.images[0] && (
-                    <img
-                      src={heroProduct.images[0].url}
-                      alt={heroProduct.images[0].alt}
-                      className="h-full w-full object-cover transition-transform duration-700 ease-[cubic-bezier(0.19,1,0.22,1)] group-hover:scale-[1.05]"
-                    />
-                  )}
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent" />
-                  <div className="absolute left-5 right-5 bottom-4 flex items-end justify-between">
-                    <div>
-                      <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-200/80">
-                        Featured silhouette
-                      </p>
-                      <p className="mt-1 font-['Playfair_Display'] text-lg text-neutral-50">
-                        {heroProduct.brand}
-                      </p>
-                      <p className="text-sm text-neutral-200">
-                        {heroProduct.name}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[11px] uppercase tracking-[0.22em] text-amber-300/90">
-                        {heroProduct.category}
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-neutral-50">
-                        {formatMoney(heroProduct.price, heroProduct.currency)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <Separator className="border-amber-500/40" />
-
-                <CardContent className="flex flex-col gap-3 px-4 py-4 sm:px-5">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {heroProduct.badges.slice(0, 2).map((badge) => (
-                        <Badge
-                          key={badge}
-                          variant="outline"
-                          className="border-amber-500/40 bg-amber-50/40 px-2 py-0.5 text-[11px] font-medium tracking-[0.16em] text-amber-800 backdrop-blur-sm dark:border-amber-300/50 dark:bg-amber-500/15 dark:text-amber-200"
-                        >
-                          {badge}
-                        </Badge>
-                      ))}
-                    </div>
-                    <span className="text-[10px] uppercase tracking-[0.22em] text-neutral-500 dark:text-neutral-400">
-                      Edit. {new Date(heroProduct.releaseDate).getFullYear()}
-                    </span>
-                  </div>
-
-                  <p className="line-clamp-3 text-xs leading-relaxed text-neutral-700 dark:text-neutral-200">
-                    {heroProduct.editorialCopy}
-                  </p>
-
-                  <div className="mt-1 flex items-center justify-between">
-                    <span className="text-[11px] uppercase tracking-[0.22em] text-neutral-600 dark:text-neutral-300">
-                      {heroProduct.origin}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleViewProduct(heroProduct.id)}
-                      className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-900 transition-colors duration-150 hover:text-amber-700 dark:text-neutral-100 dark:hover:text-amber-300"
-                    >
-                      View piece
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
-        </div>
-      </section>
-
-      {/* Brand manifesto / craftsmanship */}
-      <section className="mx-auto max-w-6xl px-6 py-12 sm:px-8 sm:py-14 md:py-16">
-        <div className="grid gap-10 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] md:items-start">
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.4 }}
-            transition={{ duration: 0.7, ease: [0.2, 0.8, 0.2, 1] }}
-          >
-            <div className="mb-4 flex items-center gap-3">
-              <span className="h-px w-8 bg-gradient-to-r from-amber-700 via-amber-600 to-amber-400 dark:from-amber-300 dark:via-amber-200 dark:to-amber-100" />
-              <p className="text-[11px] uppercase tracking-[0.26em] text-neutral-600 dark:text-neutral-400">
-                The Jootiya Manifesto
-              </p>
-            </div>
-            <h2 className="font-['Playfair_Display'] text-2xl leading-snug text-neutral-900 sm:text-3xl md:text-[2.15rem] dark:text-neutral-50">
-              Footwear as architecture for the body, drawn in lines of leather,
-              shadow and silence.
-            </h2>
-            <p className="mt-4 text-sm leading-relaxed text-neutral-700 sm:text-[0.95rem] sm:leading-relaxed dark:text-neutral-200">
-              We work with ateliers across Italy, Portugal and Spain, where last
-              makers and colorists have spent decades learning how light moves
-              across leather. Every Jootiya silhouette begins as a pencil
-              drawing on translucent paper before being transferred into form.
-            </p>
-            <p className="mt-3 text-sm leading-relaxed text-neutral-700 sm:text-[0.95rem] sm:leading-relaxed dark:text-neutral-200">
-              Our palette stays deliberately quiet: bone, onyx, cacao, chalk. It
-              lets your movement carry the volume while the shoes hold the
-              frame. No logos shouting, only proportions whispered at the edge
-              of perception.
-            </p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.4 }}
-            transition={{ delay: 0.1, duration: 0.7, ease: [0.2, 0.8, 0.2, 1] }}
-            className="relative rounded-3xl border border-neutral-200/80 bg-neutral-50/70 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.14)] backdrop-blur-sm dark:border-neutral-800 dark:bg-neutral-900/80 dark:shadow-[0_22px_60px_rgba(0,0,0,0.75)]"
-          >
-            <div className="absolute inset-x-5 top-5 flex items-center justify-between">
-              <span className="text-[11px] uppercase tracking-[0.22em] text-neutral-600 dark:text-neutral-300">
-                Materials, not seasons
-              </span>
-              <span className="h-px w-10 bg-amber-600/70 dark:bg-amber-300/70" />
-            </div>
-
-            <div className="mt-8 space-y-4 text-sm text-neutral-700 dark:text-neutral-200">
-              <p>
-                <span className="font-medium text-neutral-900 dark:text-neutral-50">
-                  Italian calfskin & patina labs —
-                </span>{" "}
-                Each hide is hand-selected for grain consistency. Our patina
-                partners in Marche hand-dye gradients over multiple days,
-                allowing pigment to sink, settle and only then be burnished.
-              </p>
-              <p>
-                <span className="font-medium text-neutral-900 dark:text-neutral-50">
-                  Silent engineering —
-                </span>{" "}
-                Lightweight cup soles and beveled waists are tuned for how the
-                shoes sound when they cross stone. It&apos;s luxury you feel under
-                dim light, never forced into the frame.
-              </p>
-              <p className="text-[11px] uppercase tracking-[0.26em] text-neutral-500 dark:text-neutral-400">
-                Every pair numbered. Every stitch accounted for.
-              </p>
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Asymmetric masonry highlights */}
-      <section className="mx-auto max-w-6xl px-6 pb-16 sm:px-8 sm:pb-20 md:pb-24">
-        <div className="mb-6 flex items-baseline justify-between gap-4">
-          <div>
-            <div className="mb-3 flex items-center gap-3">
-              <span className="h-px w-8 bg-gradient-to-r from-amber-700 via-amber-600 to-amber-400 dark:from-amber-300 dark:via-amber-200 dark:to-amber-100" />
-              <p className="text-[11px] uppercase tracking-[0.26em] text-neutral-600 dark:text-neutral-400">
-                Lookbook Highlights
-              </p>
-            </div>
-            <h3 className="font-['Playfair_Display'] text-xl text-neutral-900 sm:text-2xl dark:text-neutral-50">
-              Eight silhouettes in quiet conversation.
-            </h3>
-          </div>
-          <Button
-            variant="ghost"
-            onClick={handleExploreCatalog}
-            className="hidden rounded-full border border-neutral-300/70 bg-neutral-50/60 px-4 py-1.5 text-xs font-medium tracking-[0.18em] text-neutral-800 shadow-sm transition-colors duration-150 hover:border-neutral-900 hover:bg-neutral-900 hover:text-neutral-50 focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-100 dark:border-neutral-700 dark:bg-neutral-900/40 dark:text-neutral-200 dark:hover:border-neutral-50 dark:hover:bg-neutral-50 dark:hover:text-neutral-900 md:inline-flex"
-          >
-            Browse full catalog
-          </Button>
-        </div>
+    <div className="w-full bg-[#0f0b09] text-zinc-100">
+      {/* HERO SECTION */}
+      <section className="relative w-full min-h-[80vh] lg:min-h-[90vh] overflow-hidden">
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url(${heroBackground})` }}
+        />
+        {/* warm overlay gradient, slightly desaturated */}
+        <div className="absolute inset-0 bg-gradient-to-r from-[#120806]/95 via-[#1b100c]/80 to-[#3a1b17]/70" />
 
         <motion.div
-          variants={cardContainerVariants}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, amount: 0.18 }}
-          className="columns-1 gap-5 sm:columns-2 md:columns-3"
+          initial={{ opacity: 0, y: 40 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.9, ease: "easeOut" }}
+          className="relative z-10 w-full max-w-[1600px] mx-auto px-6 lg:px-12 py-20 lg:py-28 flex flex-col lg:flex-row gap-16 lg:items-end"
         >
-          {secondaryHighlights.map((product, index) => (
-            <motion.article
-              key={product.id}
-              variants={cardVariants}
-              className={`mb-5 break-inside-avoid ${
-                index % 3 === 0
-                  ? "md:translate-y-3"
-                  : index % 3 === 1
-                  ? "md:-translate-y-1"
-                  : "md:translate-y-6"
-              }`}
-            >
-              <Card className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-3xl border border-neutral-200/80 bg-neutral-50/90 shadow-[0_18px_40px_rgba(15,23,42,0.12)] transition-shadow duration-200 hover:shadow-[0_24px_60px_rgba(15,23,42,0.22)] dark:border-neutral-800/80 dark:bg-neutral-900/80 dark:shadow-[0_18px_60px_rgba(0,0,0,0.75)]">
-                <div className="relative overflow-hidden">
-                  <div className="aspect-[4/5] overflow-hidden">
-                    {product.images[0] && (
-                      <img
-                        src={product.images[0].url}
-                        alt={product.images[0].alt}
-                        className="h-full w-full object-cover transition-transform duration-700 ease-[cubic-bezier(0.19,1,0.22,1)] group-hover:scale-[1.05]"
-                      />
-                    )}
-                  </div>
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent opacity-80" />
+          <div className="flex-1 space-y-8">
+            <div className="inline-flex items-center gap-2 rounded-full bg-black/40 border border-white/10 px-4 py-1 text-xs tracking-[0.25em] uppercase text-amber-200/90">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_10px_rgba(250,204,21,0.9)]" />
+              Handcrafted in Jodhpur, Rajasthan
+            </div>
 
-                  <div className="absolute inset-x-4 bottom-4 flex items-end justify-between gap-4">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-[0.28em] text-neutral-300">
-                        {product.brand}
-                      </p>
-                      <p className="mt-1 font-['Playfair_Display'] text-[1.1rem] text-neutral-50">
-                        {product.name}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[10px] uppercase tracking-[0.26em] text-amber-300">
-                        {product.category}
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-neutral-50">
-                        {formatMoney(product.price, product.currency)}
-                      </p>
-                    </div>
+            <h1 className="font-['Playfair_Display'] text-4xl sm:text-5xl lg:text-6xl xl:text-[4.5rem] leading-tight max-w-3xl text-amber-50 drop-shadow-[0_18px_45px_rgba(0,0,0,0.65)]">
+              Jootiya — Mojris from the blue city, stitched for slow evenings.
+            </h1>
+
+            <p className="max-w-2xl text-sm sm:text-base lg:text-lg text-amber-100/80 leading-relaxed">
+              A curated edit of authentic Rajasthani mojris, cut and finished in intimate
+              Jodhpur ateliers. Each pair carries the memory of Marwar courtyards—barefoot
+              steps, quiet rituals, and the soft glint of zardozi under desert light.
+            </p>
+
+            <div className="flex flex-wrap items-center gap-4">
+              <motion.div whileHover={{ y: -1 }} whileTap={{ y: 0 }}>
+                <Button
+                  size="lg"
+                  className="rounded-full px-8 py-6 text-sm tracking-[0.22em] uppercase bg-[#7b1f30] hover:bg-[#8e263a] text-amber-50 border border-amber-300/40 shadow-[0_18px_40px_rgba(0,0,0,0.6)] transition-colors duration-200"
+                  onClick={handleViewCatalog}
+                >
+                  View the catalog
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </motion.div>
+
+              <motion.div whileHover={{ y: -1 }} whileTap={{ y: 0 }}>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="rounded-full px-8 py-6 text-sm tracking-[0.22em] uppercase border-amber-200/60 text-amber-100 bg-black/30 hover:bg-black/45 backdrop-blur-sm"
+                  onClick={handleOpenArtisanStory}
+                >
+                  Meet the artisans
+                </Button>
+              </motion.div>
+            </div>
+
+            <div className="flex flex-wrap gap-4 pt-4 text-xs text-amber-100/80">
+              <div className="flex items-center gap-2">
+                <span className="h-6 w-[1px] bg-amber-300/50" />
+                <span>Natural-dyed leathers</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-6 w-[1px] bg-amber-300/50" />
+                <span>Women-led ateliers</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-6 w-[1px] bg-amber-300/50" />
+                <span>Small batch, seasonless drops</span>
+              </div>
+            </div>
+          </div>
+
+          <motion.div
+            className="hidden lg:flex flex-1 justify-end"
+            initial={{ opacity: 0, x: 80 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 1, ease: "easeOut", delay: 0.1 }}
+          >
+            <div className="relative w-full max-w-md">
+              <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-gradient-to-br from-amber-400/40 to-rose-500/10 blur-3xl" />
+
+              <motion.div
+                className="relative rounded-3xl bg-black/55 border border-amber-100/15 backdrop-blur-md p-6 shadow-[0_30px_80px_rgba(0,0,0,0.85)]"
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.9, ease: "easeOut", delay: 0.2 }}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className="space-y-1">
+                    <p className="text-xs uppercase tracking-[0.2em] text-amber-300/80">Blue City Edit</p>
+                    <p className="font-['Playfair_Display'] text-lg text-amber-50">Featured Mojris</p>
                   </div>
+                  <Badge className="rounded-full bg-amber-200 text-[#3b1913] text-[10px] tracking-[0.18em] uppercase px-3 py-1 border border-amber-900/40">
+                    Limited
+                  </Badge>
                 </div>
 
-                <CardHeader className="px-4 pb-2 pt-3 sm:px-5 sm:pt-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {product.badges.slice(0, 2).map((badge) => (
-                        <Badge
-                          key={badge}
-                          variant="outline"
-                          className="border-amber-500/40 bg-amber-50/60 px-2 py-0.5 text-[10px] font-medium tracking-[0.16em] text-amber-800 backdrop-blur-sm dark:border-amber-300/50 dark:bg-amber-500/10 dark:text-amber-200"
-                        >
-                          {badge}
-                        </Badge>
-                      ))}
-                    </div>
-                    <span className="text-[10px] uppercase tracking-[0.22em] text-neutral-500 dark:text-neutral-400">
-                      {new Date(product.releaseDate).getFullYear()}
-                    </span>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="flex flex-1 flex-col px-4 pb-4 pt-0 sm:px-5">
-                  <p className="line-clamp-3 text-xs leading-relaxed text-neutral-700 dark:text-neutral-200">
-                    {product.editorialCopy}
-                  </p>
-
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.22em] text-neutral-500 dark:text-neutral-400">
-                      <span>{product.origin.replace("Made in ", "")}</span>
-                      <span className="h-px w-6 bg-neutral-300 dark:bg-neutral-600" />
-                      <span>
-                        {product.sizes.length} sizes 
-                        <span className="mx-1 h-0.5 w-1 rounded-full bg-amber-600 align-middle dark:bg-amber-300" />
-                        {product.colors.length} colors
-                      </span>
-                    </div>
-                    <Button
+                <div className="grid grid-cols-2 gap-3">
+                  {featuredProducts.slice(0, 4).map((product) => (
+                    <motion.button
+                      key={product.id}
                       type="button"
-                      variant="ghost"
-                      onClick={() => handleViewProduct(product.id)}
-                      className="inline-flex items-center gap-1 rounded-full border border-neutral-300/70 bg-neutral-50/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-neutral-900 shadow-sm transition-colors duration-150 hover:border-neutral-900 hover:bg-neutral-900 hover:text-neutral-50 focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-100 dark:border-neutral-700 dark:bg-neutral-900/40 dark:text-neutral-200 dark:hover:border-neutral-50 dark:hover:bg-neutral-50 dark:hover:text-neutral-900"
+                      className="group relative overflow-hidden rounded-2xl bg-zinc-900/70 border border-amber-100/15 text-left"
+                      whileHover={{ y: -3 }}
+                      transition={cardHoverTransition}
+                      onClick={() => handleExploreProduct(product.id)}
                     >
-                      View
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.article>
-          ))}
+                      <div
+                        className="h-24 w-full bg-cover bg-center"
+                        style={{ backgroundImage: `url(${product.heroImage || product.images[0]})` }}
+                      >
+                        <div className="h-full w-full bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                      </div>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-40 group-hover:opacity-60 transition-opacity duration-300" />
+                      <div className="absolute bottom-2 left-2 right-2">
+                        <p className="text-[11px] font-medium text-amber-50 truncate">
+                          {product.name}
+                        </p>
+                        <p className="text-[10px] text-amber-200/80">
+                          ₹{product.price.toLocaleString("en-IN")}
+                        </p>
+                      </div>
+                    </motion.button>
+                  ))}
+                </div>
+
+                <p className="mt-5 text-[11px] text-amber-100/70 leading-relaxed">
+                  Every pair in this edit is hand-finished within a few lanes of Mehrangarh Fort,
+                  carrying the quiet grain of Jodhpur leather and the memory of courtyard light.
+                </p>
+              </motion.div>
+            </div>
+          </motion.div>
         </motion.div>
       </section>
+
+      {/* FEATURED MASONRY SECTION */}
+      <motion.section
+        className="w-full py-16 lg:py-24 bg-[#130e0c]"
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.2 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+      >
+        <div className="w-full max-w-[1600px] mx-auto px-6 lg:px-12">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-10 lg:mb-14">
+            <div className="space-y-3 max-w-xl">
+              <p className="text-xs uppercase tracking-[0.2em] text-amber-300/80 flex items-center gap-2">
+                <span className="inline-flex h-1 w-6 rounded-full bg-amber-400" />
+                Featured pairs
+              </p>
+              <h2 className="font-['Playfair_Display'] text-2xl sm:text-3xl lg:text-4xl text-amber-50">
+                A small, deliberate edit of Jodhpur mojris.
+              </h2>
+              <p className="text-sm sm:text-base text-amber-100/80 leading-relaxed">
+                Curated for different kinds of evenings—bridal rituals, courtyard conversations,
+                festival rooftops, and quiet city walks. Each silhouette holds a distinct Marwar
+                story in its grain, dye, and stitch.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-3 text-xs text-amber-100/80">
+              <Badge className="rounded-full border border-amber-300/40 bg-amber-950/50 text-amber-100 text-[11px] tracking-[0.18em] uppercase px-3 py-1">
+                Zardozi • Gota • Indigo
+              </Badge>
+              <Badge className="rounded-full border border-rose-200/40 bg-rose-950/40 text-rose-50/90 text-[11px] tracking-[0.18em] uppercase px-3 py-1">
+                Jodhpur ateliers only
+              </Badge>
+            </div>
+          </div>
+
+          {/* Asymmetric masonry-like grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 lg:gap-7 auto-rows-[260px] sm:auto-rows-[280px] lg:auto-rows-[320px]">
+            {featuredProducts.map((product, index) => {
+              const spanClass = (() => {
+                if (index === 0) return "sm:row-span-2 xl:row-span-2 xl:col-span-2";
+                if (index === 1) return "xl:row-span-2";
+                if (index === 4) return "sm:row-span-2";
+                return "";
+              })();
+
+              return (
+                <motion.button
+                  key={product.id}
+                  type="button"
+                  className={`group relative overflow-hidden rounded-3xl border border-amber-100/12 bg-gradient-to-b from-zinc-900/70 via-zinc-900/80 to-black/80 text-left flex flex-col ${spanClass}`}
+                  whileHover={{ y: -8, scale: 1.01 }}
+                  transition={cardHoverTransition}
+                  onClick={() => handleExploreProduct(product.id)}
+                >
+                  <div className="relative flex-1 overflow-hidden">
+                    <div
+                      className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
+                      style={{
+                        backgroundImage: `url(${product.heroImage || product.images[0]})`,
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+                    <div className="absolute top-4 left-4 flex items-center gap-2">
+                      <Badge className="rounded-full bg-black/60 text-[10px] uppercase tracking-[0.16em] border border-amber-100/30 text-amber-50/90 px-3 py-1 backdrop-blur-sm">
+                        {product.style} • {product.color}
+                      </Badge>
+                      {index === 0 && (
+                        <Badge className="rounded-full bg-[#7b1f30] text-[10px] uppercase tracking-[0.16em] border border-amber-300/50 text-amber-50 px-3 py-1 shadow-[0_10px_25px_rgba(0,0,0,0.65)]">
+                          Editor's choice
+                        </Badge>
+                      )}
+                    </div>
+
+                    <div className="absolute bottom-4 left-4 right-4 space-y-2">
+                      <p className="text-xs text-amber-200/80">
+                        {product.originCity}, {product.originState}
+                      </p>
+                      <p className="font-['Playfair_Display'] text-lg sm:text-xl text-amber-50 line-clamp-2">
+                        {product.name}
+                      </p>
+                      <div className="flex items-center justify-between gap-2 text-xs text-amber-100/90">
+                        <span>₹{product.price.toLocaleString("en-IN")}</span>
+                        <span className="flex items-center gap-1 text-amber-200/85">
+                          <Sparkles className="h-3 w-3" />
+                          {product.craftTechnique.split(" ").slice(0, 2).join(" ")} craft
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <CardContent className="relative z-10 p-4 sm:p-5 flex items-center justify-between gap-4 bg-gradient-to-r from-black/80 via-black/70 to-zinc-900/80 border-t border-amber-100/10">
+                    <p className="text-[11px] text-amber-100/80 line-clamp-3">
+                      {product.description}
+                    </p>
+                    <div className="flex flex-col items-end gap-2 min-w-[115px]">
+                      <span className="text-[11px] text-amber-200/80 uppercase tracking-[0.18em]">
+                        View piece
+                      </span>
+                      <span className="h-px w-10 bg-amber-300/70 group-hover:w-14 transition-[width] duration-300" />
+                    </div>
+                  </CardContent>
+                </motion.button>
+              );
+            })}
+          </div>
+        </div>
+      </motion.section>
+
+      {/* ARTISAN HIGHLIGHT SECTION */}
+      <motion.section
+        ref={artisanSectionRef}
+        id="artisans"
+        className="w-full py-16 lg:py-24 bg-[#0e0a09] border-t border-amber-100/10"
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.25 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+      >
+        <div className="w-full max-w-[1600px] mx-auto px-6 lg:px-12 flex flex-col lg:flex-row gap-10 lg:gap-16 items-start">
+          <div className="flex-1 space-y-4 max-w-xl">
+            <p className="text-xs uppercase tracking-[0.2em] text-amber-300/80 flex items-center gap-2">
+              <span className="inline-flex h-1 w-6 rounded-full bg-amber-400" />
+              Atelier stories
+            </p>
+            <h2 className="font-['Playfair_Display'] text-2xl sm:text-3xl lg:text-[2.4rem] text-amber-50">
+              Behind each pair is a courtyard, a family, a city of blue walls.
+            </h2>
+            <p className="text-sm sm:text-base text-amber-100/85 leading-relaxed">
+              Jootiya works with a small circle of independent Jodhpur ateliers, each with their
+              own rhythm—afternoon light, shared chai breaks, and patterns passed down over
+              generations. We keep distances short, so stories and stitches travel together.
+            </p>
+
+            <div className="pt-4 flex flex-wrap gap-3 text-xs text-amber-100/80">
+              <Badge className="rounded-full border border-amber-300/40 bg-amber-950/50 text-amber-100 text-[11px] tracking-[0.18em] uppercase px-3 py-1">
+                100% Jodhpur crafted
+              </Badge>
+              <Badge className="rounded-full border border-emerald-200/40 bg-emerald-950/40 text-emerald-50/90 text-[11px] tracking-[0.18em] uppercase px-3 py-1">
+                Slow batch production
+              </Badge>
+            </div>
+
+            <motion.div whileHover={{ y: -1 }} whileTap={{ y: 0 }} className="pt-6">
+              <Button
+                variant="outline"
+                className="rounded-full border-amber-200/70 bg-black/40 hover:bg-black/60 text-amber-50 px-7 py-5 text-[11px] tracking-[0.2em] uppercase"
+                onClick={handleOpenArtisanStory}
+              >
+                Read the atelier story
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </motion.div>
+          </div>
+
+          {highlightedArtisan && (
+            <div className="flex-1 w-full">
+              <Card className="relative border border-amber-100/15 bg-gradient-to-br from-zinc-950/90 via-zinc-900/80 to-black/90 shadow-[0_25px_60px_rgba(0,0,0,0.85)] overflow-hidden">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.12),_transparent_60%)]" />
+                <div className="relative z-10 p-6 sm:p-7 flex flex-col gap-5">
+                  <div className="flex items-center gap-4">
+                    <Avatar className="h-14 w-14 border border-amber-100/40 shadow-[0_10px_25px_rgba(0,0,0,0.7)]">
+                      <AvatarImage src={highlightedArtisan.avatarUrl} alt={highlightedArtisan.name} />
+                      <AvatarFallback className="bg-amber-900/60 text-amber-100">
+                        {highlightedArtisan.name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="space-y-1">
+                      <p className="font-['Playfair_Display'] text-lg text-amber-50">
+                        {highlightedArtisan.name}
+                      </p>
+                      <p className="text-xs text-amber-100/80">
+                        {highlightedArtisan.atelierName}
+                      </p>
+                      <p className="text-[11px] text-amber-200/80">
+                        {highlightedArtisan.location}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 flex-wrap text-[11px] text-amber-100/80">
+                    <span>
+                      {highlightedArtisan.yearsOfCraft}+ years of craft • Lineage: {highlightedArtisan.lineage}
+                    </span>
+                  </div>
+
+                  <div className="relative mt-1">
+                    <Quote className="absolute -left-1 -top-2 h-6 w-6 text-amber-300/40" />
+                    <p className="pl-6 text-sm sm:text-base text-amber-50/90 leading-relaxed">
+                      {highlightedArtisan.bioShort}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {highlightedArtisan.specialties.slice(0, 3).map((spec) => (
+                      <Badge
+                        key={spec}
+                        className="border border-amber-300/35 bg-amber-50/5 text-amber-100 text-[10px] tracking-[0.16em] uppercase rounded-full px-3 py-1"
+                      >
+                        {spec}
+                      </Badge>
+                    ))}
+                  </div>
+
+                  <div className="pt-3 text-[11px] text-amber-100/75 leading-relaxed">
+                    <p className="line-clamp-3">{highlightedArtisan.bioLong}</p>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          )}
+        </div>
+      </motion.section>
+
+      {/* ARTISAN STORY SHEET (SLIDE-OVER) */}
+      {highlightedArtisan && (
+        <Sheet open={artisanSheetOpen} onOpenChange={setArtisanSheetOpen}>
+          <SheetContent
+            side="right"
+            className="w-full sm:max-w-md lg:max-w-xl bg-[#0d0907] border-l border-amber-100/20 text-amber-50 overflow-y-auto"
+          >
+            <SheetHeader className="space-y-3 mb-4 pt-4">
+              <SheetTitle className="font-['Playfair_Display'] text-2xl text-amber-50 flex items-center gap-3">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-900/70 border border-amber-300/50">
+                  <Sparkles className="h-4 w-4 text-amber-200" />
+                </span>
+                {highlightedArtisan.atelierName}
+              </SheetTitle>
+              <SheetDescription className="text-amber-100/80 text-sm leading-relaxed">
+                {highlightedArtisan.location} • {highlightedArtisan.yearsOfCraft}+ years of mojri
+                making • Languages: {highlightedArtisan.languages.join(", ")}
+              </SheetDescription>
+            </SheetHeader>
+
+            <div className="space-y-8 pb-10">
+              <div className="flex items-center gap-4">
+                <Avatar className="h-14 w-14 border border-amber-100/40">
+                  <AvatarImage src={highlightedArtisan.avatarUrl} alt={highlightedArtisan.name} />
+                  <AvatarFallback className="bg-amber-900/60 text-amber-100">
+                    {highlightedArtisan.name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-['Playfair_Display'] text-lg text-amber-50">
+                    {highlightedArtisan.name}
+                  </p>
+                  <p className="text-xs text-amber-100/80">{highlightedArtisan.lineage}</p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="font-['Playfair_Display'] text-xl text-amber-50">
+                  A courtyard in the blue city
+                </h3>
+                <p className="text-sm text-amber-100/85 leading-relaxed whitespace-pre-line">
+                  {highlightedArtisan.bioLong}
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="font-['Playfair_Display'] text-lg text-amber-50">
+                  Making a pair of mojris, step by step
+                </h4>
+                <div className="relative pl-4 border-l border-amber-100/20 space-y-4">
+                  {highlightedArtisan.makingProcessSteps.map((step, index) => (
+                    <div key={index} className="relative flex gap-3">
+                      <div className="absolute -left-[9px] top-1 h-4 w-4 rounded-full bg-[#7b1f30] border border-amber-200/80 shadow-[0_0_0_4px_rgba(124,31,48,0.5)]" />
+                      <div className="ml-3 space-y-1">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-amber-200/80">
+                          Step {index + 1}
+                        </p>
+                        <p className="text-sm text-amber-50/90 leading-relaxed">{step}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {highlightedArtisan.sustainabilityNotes && (
+                <div className="space-y-3">
+                  <h4 className="font-['Playfair_Display'] text-lg text-amber-50">
+                    Sustainability & community
+                  </h4>
+                  <p className="text-sm text-amber-100/85 leading-relaxed">
+                    {highlightedArtisan.sustainabilityNotes}
+                  </p>
+                </div>
+              )}
+
+              {highlightedArtisan.awards.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="font-['Playfair_Display'] text-lg text-amber-50">Recognitions</h4>
+                  <ul className="space-y-2 text-sm text-amber-100/85">
+                    {highlightedArtisan.awards.map((award) => (
+                      <li key={award} className="flex items-start gap-2">
+                        <span className="mt-[6px] h-[3px] w-6 rounded-full bg-amber-300/80" />
+                        <span>{award}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
+      )}
     </div>
   );
 };

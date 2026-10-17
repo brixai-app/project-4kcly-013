@@ -1,864 +1,962 @@
 // src/mock.ts
-// Central mock data store and localStorage-backed client state for Jootiya
-// NOTE: This is a 100% frontend-only mock implementation; there is **no backend**.
-
-import { safeStorage } from "@/lib/utils";
+// Single source of truth for all mock data, types, state helpers, and localStorage persistence.
+// 100% frontend-only mock implementation.
 
 // ----------------------
-// Types
+// Types & Interfaces
 // ----------------------
 
-export type CurrencyCode = "USD" | "EUR" | "GBP" | "INR";
+export type CurrencyCode = "INR";
 
-export type ProductCategory =
-  | "sneaker"
-  | "loafer"
-  | "boot"
-  | "high-top"
-  | "sandal";
-
-export type ProductBadge =
-  | "New Drop"
-  | "Exclusive"
-  | "Limited"
-  | "Handcrafted"
-  | "Sustainable"
-  | "Bestseller";
-
-export interface ProductImage {
-  url: string;
-  alt: string;
-  isPrimary?: boolean;
-  aspectRatio?: "portrait" | "landscape" | "square";
-}
-
-export interface ProductVariantKey {
-  size: string; // displayed size, e.g. "40", "US 9", "EU 42"
-  color: string; // e.g. "Bone", "Onyx"
-}
-
-export interface StockByVariant extends ProductVariantKey {
-  stock: number; // units available in mock
-  sku: string;
-}
+export type ProductStyle = "Bridal" | "Everyday" | "Festive" | "Classic" | "Heritage";
+export type ProductColor =
+  | "Ivory"
+  | "Maroon"
+  | "Gold"
+  | "Sand"
+  | "Black"
+  | "Indigo"
+  | "Rose";
 
 export interface Product {
   id: string;
+  slug: string;
   name: string;
-  brand: string;
-  category: ProductCategory;
   price: number;
   currency: CurrencyCode;
-  description: string;
-  editorialCopy: string;
-  images: ProductImage[];
-  sizes: string[];
-  colors: string[];
-  materials: string[];
-  origin: string;
-  releaseDate: string; // ISO string
-  badges: ProductBadge[];
+  images: string[];
+  heroImage: string;
+  style: ProductStyle;
+  color: ProductColor;
+  material: string;
+  motif: string;
+  craftTechnique: string;
+  originCity: "Jodhpur";
+  originState: "Rajasthan";
+  authenticity: string;
+  care: string;
+  sizingNotes: string;
+  sizes: number[];
+  stockBySize: Record<string, number>;
   tags: string[];
-  stockByVariant: StockByVariant[];
-  featured?: boolean;
+  description: string;
+  culturalHeritage: string;
+  artisanId: string;
+  artisanQuote: string;
+  featuredRank: number;
+  createdAt: string;
 }
 
-export interface CartItemVariant extends ProductVariantKey {}
+export interface ArtisanSocialLinks {
+  instagram?: string;
+  pinterest?: string;
+  youtube?: string;
+  website?: string;
+}
+
+export interface Artisan {
+  id: string;
+  name: string;
+  atelierName: string;
+  avatarUrl: string;
+  location: string;
+  languages: string[];
+  yearsOfCraft: number;
+  lineage: string;
+  specialties: string[];
+  bioShort: string;
+  bioLong: string;
+  makingProcessSteps: string[];
+  sustainabilityNotes: string;
+  awards: string[];
+  socialLinks: ArtisanSocialLinks;
+}
 
 export interface CartItem {
-  id: string; // cart line id
   productId: string;
-  variant: CartItemVariant;
+  size: number;
+  qty: number;
   unitPrice: number;
-  currency: CurrencyCode;
-  quantity: number;
-  addedAt: string; // ISO
-}
-
-export interface CartTotals {
-  subtotal: number;
-  estimatedTax: number;
-  shipping: number;
-  total: number;
-  currency: CurrencyCode;
 }
 
 export interface Cart {
-  id: string;
   items: CartItem[];
-  currency: CurrencyCode;
   updatedAt: string;
 }
 
-export interface Address {
+export interface ShippingAddress {
   fullName: string;
+  phone: string;
   line1: string;
   line2?: string;
   city: string;
-  region: string;
+  state: string;
   postalCode: string;
   country: string;
 }
 
-export interface UserSession {
+export interface UserProfile {
   id: string;
   name: string;
   email: string;
-  avatarColor: string;
-  defaultCurrency: CurrencyCode;
-  shippingAddress?: Address;
-  createdAt: string;
+  phone: string;
+  avatarUrl?: string; // optional: Header uses this for the Avatar image
+  defaultShipping?: ShippingAddress;
 }
 
-export interface OrderLine {
-  id: string;
+export type OrderStatus = "confirmed" | "preparing" | "shipped" | "delivered";
+
+export interface OrderItemSnapshot {
   productId: string;
-  productName: string;
-  brand: string;
-  variant: CartItemVariant;
+  name: string;
+  size: number;
+  qty: number;
   unitPrice: number;
-  quantity: number;
   lineTotal: number;
 }
 
-export type OrderStatus = "confirmed" | "processing" | "shipped" | "delivered";
+export interface OrderTotals {
+  subtotal: number;
+  estimatedShipping: number;
+  total: number;
+  itemCount: number;
+}
 
 export interface Order {
   id: string;
-  orderNumber: string;
-  userId?: string; // guest checkout possible
-  createdAt: string;
+  placedAt: string;
+  items: OrderItemSnapshot[];
+  totals: OrderTotals;
+  shippingAddress: ShippingAddress;
   status: OrderStatus;
-  currency: CurrencyCode;
+  artisanNotes?: string;
+}
+
+export interface Filters {
+  style?: ProductStyle;
+  color?: ProductColor;
+  artisanId?: string;
+  query?: string;
+}
+
+export interface SearchSuggestionResult {
+  products: Product[];
+  artisans: Artisan[];
+}
+
+export interface CartTotals {
   subtotal: number;
-  estimatedTax: number;
-  shipping: number;
+  estimatedShipping: number;
   total: number;
-  lines: OrderLine[];
-  shippingAddress?: Address;
+  itemCount: number;
 }
 
 // ----------------------
-// Internal constants & helpers
+// Safe Storage Utilities
 // ----------------------
 
 const STORAGE_KEYS = {
-  cart: "jootiya_cart_v1",
-  user: "jootiya_user_v1",
-  orders: "jootiya_orders_v1",
+  CART: "jootiya_cart_v1",
+  USER: "jootiya_user_v1",
+  ORDERS: "jootiya_orders_v1",
 } as const;
 
-const DEFAULT_CURRENCY: CurrencyCode = "USD";
-
-const TAX_RATE = 0.08; // 8% mock tax
-const SHIPPING_FLAT = 25; // flat luxury shipping
-
-// Small, deterministic-ish ID helper (client-only)
-function createId(prefix: string): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return `${prefix}_${crypto.randomUUID()}`;
+function isStorageAvailable(): boolean {
+  try {
+    if (typeof window === "undefined" || !("localStorage" in window)) return false;
+    const testKey = "__jootiya_test__";
+    window.localStorage.setItem(testKey, "1");
+    window.localStorage.removeItem(testKey);
+    return true;
+  } catch {
+    return false;
   }
-  return `${prefix}_${Math.random().toString(36).substring(2, 11)}`;
 }
 
-// Safe JSON parse with fallback
-function safeJsonParse<T>(raw: string | null, fallback: T): T {
-  if (!raw) return fallback;
+const canUseStorage = isStorageAvailable();
+
+export function load<T>(key: string, fallback: T): T {
+  if (!canUseStorage) return fallback;
   try {
-    return JSON.parse(raw) as T;
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as T;
+    return parsed ?? fallback;
   } catch {
     return fallback;
   }
 }
 
+export function save<T>(key: string, value: T): void {
+  if (!canUseStorage) return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // ignore
+  }
+}
+
 // ----------------------
-// Mock Products (static in-memory)
+// Seed Artisans
 // ----------------------
 
-// For imagery, we use neutral unsplash-like placeholders that evoke luxury leather / sneakers.
-
-const baseProducts: Product[] = [
+const seedArtisans: Artisan[] = [
   {
-    id: "p_aurum_low_001",
-    name: "Aurum Low Lunar",
-    brand: "Maison Jootiya",
-    category: "sneaker",
-    price: 620,
-    currency: "USD",
-    description:
-      "A low-profile court sneaker crafted from Italian calfskin in a muted lunar bone, finished with hand-painted edges and a featherweight cup sole.",
-    editorialCopy:
-      "Conceived for the quietest rooms and the loudest arrivals, Aurum Low Lunar pairs whisper-soft leather with architectural minimalism. Each panel is hand-burnished for a soft gradient that only deepens with wear.",
-    images: [
-      {
-        url: "https://images.unsplash.com/photo-1549298916-b41d501d3772?auto=format&fit=crop&w=1200&q=80",
-        alt: "A minimal white luxury sneaker on a sculptural plinth",
-        isPrimary: true,
-        aspectRatio: "landscape",
-      },
-      {
-        url: "https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?auto=format&fit=crop&w=900&q=80",
-        alt: "Detail of leather and stitching on luxury sneaker",
-        aspectRatio: "portrait",
-      },
+    id: "artisan-lalima-ji",
+    name: "Lalima Devi",
+    atelierName: "Lalima Zardozi Atelier",
+    avatarUrl:
+      "https://images.pexels.com/photos/3760852/pexels-photo-3760852.jpeg?auto=compress&cs=tinysrgb&w=400",
+    location: "Old City, Jodhpur, Rajasthan",
+    languages: ["Marwari", "Hindi"],
+    yearsOfCraft: 28,
+    lineage: "Third-generation zardozi artisan from a family of Jodhpur mojri makers.",
+    specialties: ["Fine zardozi", "Bridal motifs", "24k zari threading"],
+    bioShort:
+      "Known for feather-light bridal mojris that balance royal opulence with all-evening comfort.",
+    bioLong:
+      "In the blue lanes of Jodhpur, Lalima Devi leads a small women-led atelier that has kept the art of zardozi mojris alive for three generations. Each pair is embroidered in soft afternoon light, where gossip, folk songs, and the rhythm of needlework braid together. Her pieces quietly travel from local weddings to global runways, always carrying a fragment of Marwar in every stitch.",
+    makingProcessSteps: [
+      "Sketching motifs inspired by Jodhpur frescoes and palace jaalis.",
+      "Selecting leather treated with natural oils for breathable comfort.",
+      "Hand-embroidering zardozi patterns in small batches over several days.",
+      "Lasting and shaping mojris without rigid left-right distinction for easier break-in.",
+      "Finishing edges with soft cotton piping and burnishing the leather sole.",
     ],
-    sizes: ["39", "40", "41", "42", "43", "44"],
-    colors: ["Bone", "Onyx"],
-    materials: [
-      "Italian calfskin",
-      "Margom rubber",
-      "Cotton laces",
-      "Leather lining",
+    sustainabilityNotes:
+      "Works only with local tanneries using vegetable tanning and supports home-based women artisans with fair wages.",
+    awards: [
+      "Rajasthan Handloom & Handicraft Excellence Award, 2018",
+      "Featured in 'Crafts of Marwar' independent documentary, 2021",
     ],
-    origin: "Made in Italy",
-    releaseDate: "2024-04-18T00:00:00.000Z",
-    badges: ["Bestseller", "Handcrafted"],
-    tags: ["minimal", "court", "everyday", "white sneaker"],
-    stockByVariant: [],
-    featured: true,
+    socialLinks: {
+      instagram: "https://instagram.com/lalima.mojris",
+      pinterest: "https://pinterest.com/jodhpurmojris",
+    },
   },
   {
-    id: "p_onyx_chelsea_002",
-    name: "Onyx Chelsea Crest",
-    brand: "Atelier Noir",
-    category: "boot",
-    price: 890,
-    currency: "USD",
-    description:
-      "A sculpted Chelsea boot in deep onyx suede with an elongated toe and hand-carved leather sole, designed for evening silhouettes.",
-    editorialCopy:
-      "The Onyx Chelsea Crest was sketched at midnight in Paris and finished at dawn in Florence. Its line is almost liquid: a single gesture from elastic gusset to heel tab.",
-    images: [
-      {
-        url: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1200&q=80",
-        alt: "Black suede Chelsea boots on a warm neutral background",
-        isPrimary: true,
-        aspectRatio: "landscape",
-      },
-      {
-        url: "https://images.unsplash.com/photo-1514996937319-344454492b37?auto=format&fit=crop&w=900&q=80",
-        alt: "Close-up of suede texture on luxury boots",
-        aspectRatio: "portrait",
-      },
+    id: "artisan-salim-ji",
+    name: "Salim Khan",
+    atelierName: "Khan Mojri Karkhana",
+    avatarUrl:
+      "https://images.pexels.com/photos/461198/pexels-photo-461198.jpeg?auto=compress&cs=tinysrgb&w=400",
+    location: "Clock Tower Bazaar, Jodhpur, Rajasthan",
+    languages: ["Marwari", "Hindi", "Urdu"],
+    yearsOfCraft: 34,
+    lineage: "Descendant of royal shoemakers to the Rathore court of Jodhpur.",
+    specialties: ["Classic men's mojris", "Hand-burnished leather", "Minimalist silhouettes"],
+    bioShort:
+      "Salim ji is renowned for perfectly balanced mojris that mold to the wearer like a second skin.",
+    bioLong:
+      "Inside a modest karkhana facing the old clock tower, Salim Khan maps every mojri to the easy, unhurried walks of Jodhpur streets. His focus on structure, balance, and long-wearing comfort has earned him a quiet but loyal clientele—from local mahrajahs to film costume designers who value authenticity over spectacle.",
+    makingProcessSteps: [
+      "Pattern-making relying on decades-old wooden templates.",
+      "Selecting full-grain leather with visible, honest grain.",
+      "Hand-stitching uppers using waxed cotton thread.",
+      "Natural sun-drying followed by slow hand-burnishing.",
+      "Finishing with a thin oil layer for a lived-in sheen.",
     ],
-    sizes: ["40", "41", "42", "43", "44", "45"],
-    colors: ["Onyx"],
-    materials: ["Italian suede", "Leather sole", "Cotton pull tab"],
-    origin: "Made in Portugal",
-    releaseDate: "2024-02-10T00:00:00.000Z",
-    badges: ["Exclusive"],
-    tags: ["evening", "boot", "black"],
-    stockByVariant: [],
-    featured: true,
+    sustainabilityNotes:
+      "Each pair is made-to-small-batch to avoid overproduction; scrap leather is reused for children's mojris and sample swatches.",
+    awards: ["Crafts Council of India Heritage Artisan, 2015"],
+    socialLinks: {
+      instagram: "https://instagram.com/khan.mojri",
+      youtube: "https://youtube.com/@khan-mojri",
+    },
   },
   {
-    id: "p_muse_loaf_003",
-    name: "Muse Penny Loafer",
-    brand: "Casa Venturo",
-    category: "loafer",
-    price: 740,
-    currency: "USD",
-    description:
-      "A sculpted penny loafer in brushed cacao leather with a softly squared toe and hand-stitched apron.",
-    editorialCopy:
-      "Muse was imagined as a loafer you notice in silence. The toe is softened to echo gallery plinths, the saddle thinned to a single, precise line.",
-    images: [
-      {
-        url: "https://images.unsplash.com/photo-1600185365483-26d7a4cc7519?auto=format&fit=crop&w=1200&q=80",
-        alt: "Brown leather loafers on a neutral backdrop",
-        isPrimary: true,
-        aspectRatio: "landscape",
-      },
-      {
-        url: "https://images.unsplash.com/photo-1614252235316-8c857af1b228?auto=format&fit=crop&w=900&q=80",
-        alt: "Close-up of loafer stitching",
-        aspectRatio: "portrait",
-      },
+    id: "artisan-meera-ji",
+    name: "Meera Rathore",
+    atelierName: "Meera Blue City Studio",
+    avatarUrl:
+      "https://images.pexels.com/photos/3738088/pexels-photo-3738088.jpeg?auto=compress&cs=tinysrgb&w=400",
+    location: "Navchokiya, Jodhpur, Rajasthan",
+    languages: ["Marwari", "Hindi", "English"],
+    yearsOfCraft: 16,
+    lineage: "Trained under local masters and textile artists from Ahmedabad.",
+    specialties: ["Indigo dye", "Block-printed mojris", "Contemporary silhouettes"],
+    bioShort:
+      "Meera brings the blue of Jodhpur's walls onto supple mojri leather through experimental natural dyes.",
+    bioLong:
+      "Balancing design school training with childhood memories of Marwar fairs, Meera runs a young, design-forward atelier. She works closely with natural dyers and block printers to translate traditional motifs into quietly modern mojris that pair as easily with linen trousers as they do with lehengas.",
+    makingProcessSteps: [
+      "Preparing natural indigo vats with local dye masters.",
+      "Hand-block printing motifs on cotton that is later bonded with leather.",
+      "Cutting contemporary silhouettes with slightly elongated toes.",
+      "Hand-stitching linings with soft cotton for barefoot comfort.",
+      "Edge finishing and subtle speckle waxing for a lived-in feel.",
     ],
-    sizes: ["38", "39", "40", "41", "42", "43"],
-    colors: ["Cacao", "Sand"],
-    materials: [
-      "Vegetable-tanned leather",
-      "Leather sole",
-      "Goodyear welt",
+    sustainabilityNotes:
+      "Uses natural dyes, rainwater harvesting for rinses, and reuses test prints for lining and packaging.",
+    awards: [
+      "Design Talent Award - Rajasthan Craft Council, 2020",
+      "Featured in 'Indigo Futures' exhibition, 2022",
     ],
-    origin: "Made in Spain",
-    releaseDate: "2023-11-05T00:00:00.000Z",
-    badges: ["Handcrafted", "Sustainable"],
-    tags: ["loafer", "penny", "brown"],
-    stockByVariant: [],
-    featured: true,
+    socialLinks: {
+      instagram: "https://instagram.com/meerabluecity",
+      pinterest: "https://pinterest.com/meeramojris",
+      website: "https://meerabluecity.example.com",
+    },
   },
   {
-    id: "p_verve_high_004",
-    name: "Verve High Eclipse",
-    brand: "Maison Jootiya",
-    category: "high-top",
-    price: 680,
-    currency: "USD",
-    description:
-      "A high-top sneaker in off-black nubuck with a sculptural collar and concealed eyelets.",
-    editorialCopy:
-      "Verve Eclipse is cut for night flights and gallery openings. The padded collar traces the line of the ankle like ink on paper.",
-    images: [
-      {
-        url: "https://images.unsplash.com/photo-1539185441755-769473a23570?auto=format&fit=crop&w=1200&q=80",
-        alt: "Dark high-top sneaker on a plinth",
-        isPrimary: true,
-        aspectRatio: "landscape",
-      },
-      {
-        url: "https://images.unsplash.com/photo-1543508282-6319a3e2621f?auto=format&fit=crop&w=900&q=80",
-        alt: "High-top sneaker side view",
-        aspectRatio: "portrait",
-      },
+    id: "artisan-omprakash-ji",
+    name: "Omprakash Ji",
+    atelierName: "Marwar Heritage Mojris",
+    avatarUrl:
+      "https://images.pexels.com/photos/2777898/pexels-photo-2777898.jpeg?auto=compress&cs=tinysrgb&w=400",
+    location: "Sur Sagar, Jodhpur, Rajasthan",
+    languages: ["Marwari", "Hindi"],
+    yearsOfCraft: 42,
+    lineage: "Started as an apprentice at 13, now mentors a cluster of rural artisans.",
+    specialties: ["Gota patti", "Mirror work", "Festival mojris"],
+    bioShort:
+      "Omprakash ji's mojris carry the joyful maximalism of Marwar weddings.",
+    bioLong:
+      "For Omprakash ji, a mojri is a moving piece of festival—something that should look at home under fairy lights and desert sunsets. His atelier works with gota, mirrors, and metallic threads to compose exuberant, yet balanced pieces that never feel costume-like.",
+    makingProcessSteps: [
+      "Choosing base textiles that can hold intricate embellishment.",
+      "Mapping mirror placement to catch light with every step.",
+      "Hand-applying gota borders with tiny, almost invisible stitches.",
+      "Reinforcing stress points for long-term durability.",
+      "Final softening and lining for barefoot festivals.",
     ],
-    sizes: ["39", "40", "41", "42", "43", "44"],
-    colors: ["Eclipse", "Ivory"],
-    materials: ["Nubuck", "Rubber sole", "Memory foam insole"],
-    origin: "Made in Italy",
-    releaseDate: "2024-06-01T00:00:00.000Z",
-    badges: ["New Drop"],
-    tags: ["high-top", "black", "street"],
-    stockByVariant: [],
-    featured: true,
-  },
-  {
-    id: "p_sable_slide_005",
-    name: "Sable Gallery Slide",
-    brand: "Linea Oro",
-    category: "sandal",
-    price: 420,
-    currency: "USD",
-    description:
-      "A minimal slide with padded strap in sable leather and an ultra-thin profile sole.",
-    editorialCopy:
-      "Designed for marble corridors and slow mornings, Sable Gallery Slide hugs the foot like a line of ink across soft paper.",
-    images: [
-      {
-        url: "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=1200&q=80",
-        alt: "Minimal black slide sandals",
-        isPrimary: true,
-        aspectRatio: "landscape",
-      },
-    ],
-    sizes: ["37", "38", "39", "40", "41", "42"],
-    colors: ["Sable", "Crema"],
-    materials: ["Nappa leather", "Leather footbed"],
-    origin: "Made in Italy",
-    releaseDate: "2023-05-15T00:00:00.000Z",
-    badges: ["Bestseller"],
-    tags: ["slide", "sandal", "summer"],
-    stockByVariant: [],
-    featured: false,
-  },
-  {
-    id: "p_terra_boot_006",
-    name: "Terra Ridge Boot",
-    brand: "Atelier Noir",
-    category: "boot",
-    price: 960,
-    currency: "USD",
-    description:
-      "A lug-soled boot in smoked taupe leather, built on a sculpted last with exaggerated welt.",
-    editorialCopy:
-      "Terra Ridge walks the line between alpine and avenue. Each welt is inked by hand in a deep umber tone, catching light at every step.",
-    images: [
-      {
-        url: "https://images.unsplash.com/photo-1590874103328-eac38a683ce7?auto=format&fit=crop&w=1200&q=80",
-        alt: "Taupe leather boots with rugged sole",
-        isPrimary: true,
-        aspectRatio: "landscape",
-      },
-    ],
-    sizes: ["40", "41", "42", "43", "44", "45"],
-    colors: ["Smoked Taupe"],
-    materials: ["Pebbled leather", "Rubber lug sole", "Waxed laces"],
-    origin: "Made in Romania",
-    releaseDate: "2023-12-22T00:00:00.000Z",
-    badges: ["Limited"],
-    tags: ["boot", "lug sole", "taupe"],
-    stockByVariant: [],
-    featured: false,
-  },
-  {
-    id: "p_lumen_low_007",
-    name: "Lumen Low Chalk",
-    brand: "Maison Jootiya",
-    category: "sneaker",
-    price: 650,
-    currency: "USD",
-    description:
-      "A monochrome low-top in chalk leather with tonal stitching and blind debossed branding.",
-    editorialCopy:
-      "Lumen Low is the whisper in a white room. The outsole has been tinted to the slightest warm ivory to mirror gallery walls at dusk.",
-    images: [
-      {
-        url: "https://images.unsplash.com/photo-1519744792095-2f2205e87b6f?auto=format&fit=crop&w=1200&q=80",
-        alt: "White minimal low-top sneaker",
-        isPrimary: true,
-        aspectRatio: "landscape",
-      },
-    ],
-    sizes: ["38", "39", "40", "41", "42", "43", "44"],
-    colors: ["Chalk"],
-    materials: ["Full-grain leather", "Rubber cup sole"],
-    origin: "Made in Italy",
-    releaseDate: "2024-01-15T00:00:00.000Z",
-    badges: ["New Drop", "Bestseller"],
-    tags: ["sneaker", "white", "minimal"],
-    stockByVariant: [],
-    featured: true,
-  },
-  {
-    id: "p_ombre_loaf_008",
-    name: "Ombre Tassel Loafer",
-    brand: "Casa Venturo",
-    category: "loafer",
-    price: 780,
-    currency: "USD",
-    description:
-      "A tassel loafer with ombre hand-dyed patina fading from espresso to crema.",
-    editorialCopy:
-      "Each Ombre Tassel Loafer passes through eight layers of dye and wax, building a soft gradient that feels almost cinematic.",
-    images: [
-      {
-        url: "https://images.unsplash.com/photo-1583497381213-9c19cc28521c?auto=format&fit=crop&w=1200&q=80",
-        alt: "Brown ombre loafers on a light background",
-        isPrimary: true,
-        aspectRatio: "landscape",
-      },
-    ],
-    sizes: ["39", "40", "41", "42", "43"],
-    colors: ["Espresso Ombre"],
-    materials: [
-      "Hand-dyed leather",
-      "Leather sole",
-      "Cotton tassels",
-    ],
-    origin: "Made in Spain",
-    releaseDate: "2022-09-10T00:00:00.000Z",
-    badges: ["Handcrafted"],
-    tags: ["loafer", "tassel", "patina"],
-    stockByVariant: [],
-    featured: false,
-  },
-  {
-    id: "p_arc_runner_009",
-    name: "Arc Runner Smoke",
-    brand: "Linea Oro",
-    category: "sneaker",
-    price: 580,
-    currency: "USD",
-    description:
-      "A sculpted runner with smoked mesh, suede overlays and a softly exaggerated sole.",
-    editorialCopy:
-      "Arc Runner traces a single stroke from toe to heel. The sole flares just enough to cast a shadow, never to shout.",
-    images: [
-      {
-        url: "https://images.unsplash.com/photo-1528701800489-20be3c30c1d5?auto=format&fit=crop&w=1200&q=80",
-        alt: "Luxury running-style sneakers in neutral tones",
-        isPrimary: true,
-        aspectRatio: "landscape",
-      },
-    ],
-    sizes: ["39", "40", "41", "42", "43", "44"],
-    colors: ["Smoke", "Stone"],
-    materials: ["Mesh", "Suede", "EVA sole"],
-    origin: "Made in Portugal",
-    releaseDate: "2023-08-01T00:00:00.000Z",
-    badges: ["Sustainable"],
-    tags: ["runner", "sneaker", "neutral"],
-    stockByVariant: [],
-    featured: false,
-  },
-  {
-    id: "p_courtyard_010",
-    name: "Courtyard Derby",
-    brand: "Atelier Noir",
-    category: "boot",
-    price: 820,
-    currency: "USD",
-    description:
-      "An open-laced derby on a sleek last with a bevelled waist and blind eyelets.",
-    editorialCopy:
-      "Courtyard walks like a dress shoe and photographs like sculpture. The vamp is cut from a single piece of leather for uninterrupted shine.",
-    images: [
-      {
-        url: "https://images.unsplash.com/photo-1595385409880-f2e1c5cde1be?auto=format&fit=crop&w=1200&q=80",
-        alt: "Black leather derby shoes on stone floor",
-        isPrimary: true,
-        aspectRatio: "landscape",
-      },
-    ],
-    sizes: ["40", "41", "42", "43", "44"],
-    colors: ["Ink"],
-    materials: ["Calfskin", "Leather sole"],
-    origin: "Made in Italy",
-    releaseDate: "2022-03-18T00:00:00.000Z",
-    badges: ["Exclusive"],
-    tags: ["derby", "formal", "black"],
-    stockByVariant: [],
-    featured: false,
-  },
-  {
-    id: "p_arcade_high_011",
-    name: "Arcade High Ivory",
-    brand: "Maison Jootiya",
-    category: "high-top",
-    price: 710,
-    currency: "USD",
-    description:
-      "A paneled high-top in ivory leather with subtle perforations and contrast foxing.",
-    editorialCopy:
-      "Arcade is an ode to late-night lights on wet pavement. Its lines borrow from vintage sport, sharpened for the present.",
-    images: [
-      {
-        url: "https://images.unsplash.com/photo-1584735175015-7aaad614c366?auto=format&fit=crop&w=1200&q=80",
-        alt: "Ivory high-top sneaker on neutral background",
-        isPrimary: true,
-        aspectRatio: "landscape",
-      },
-    ],
-    sizes: ["38", "39", "40", "41", "42", "43", "44"],
-    colors: ["Ivory", "Ink"],
-    materials: ["Leather", "Rubber sole", "Cotton laces"],
-    origin: "Made in Italy",
-    releaseDate: "2024-03-02T00:00:00.000Z",
-    badges: ["New Drop", "Limited"],
-    tags: ["high-top", "ivory"],
-    stockByVariant: [],
-    featured: true,
-  },
-  {
-    id: "p_silent_mule_012",
-    name: "Silent Studio Mule",
-    brand: "Linea Oro",
-    category: "sandal",
-    price: 460,
-    currency: "USD",
-    description:
-      "A backless mule with sculpted topline in soft pebble leather.",
-    editorialCopy:
-      "Silent Studio Mule slips on like a brushstroke. The heel is tuned to studio floors and gallery tiles alike.",
-    images: [
-      {
-        url: "https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?auto=format&fit=crop&w=1200&q=80",
-        alt: "Neutral leather mules on fabric backdrop",
-        isPrimary: true,
-        aspectRatio: "landscape",
-      },
-    ],
-    sizes: ["36", "37", "38", "39", "40", "41"],
-    colors: ["Cloud", "Ink"],
-    materials: ["Pebble leather", "Leather sole"],
-    origin: "Made in Spain",
-    releaseDate: "2023-04-01T00:00:00.000Z",
-    badges: ["Handcrafted"],
-    tags: ["mule", "studio"],
-    stockByVariant: [],
-    featured: false,
-  },
-  {
-    id: "p_night_runner_013",
-    name: "Night Runner Obsidian",
-    brand: "Casa Venturo",
-    category: "sneaker",
-    price: 590,
-    currency: "USD",
-    description:
-      "A low-profile runner in obsidian mesh with tonal leather overlays and reflective piping.",
-    editorialCopy:
-      "Night Runner was built for hidden cities and late flights. Its reflective line catches light for a second, then disappears.",
-    images: [
-      {
-        url: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80",
-        alt: "Black running sneakers on a concrete block",
-        isPrimary: true,
-        aspectRatio: "landscape",
-      },
-    ],
-    sizes: ["39", "40", "41", "42", "43", "44"],
-    colors: ["Obsidian"],
-    materials: ["Mesh", "Leather", "Rubber sole"],
-    origin: "Made in Vietnam",
-    releaseDate: "2023-10-10T00:00:00.000Z",
-    badges: ["Sustainable"],
-    tags: ["runner", "black"],
-    stockByVariant: [],
-    featured: false,
-  },
-  {
-    id: "p_gallery_oxford_014",
-    name: "Gallery Oxford",
-    brand: "Atelier Noir",
-    category: "boot",
-    price: 910,
-    currency: "USD",
-    description:
-      "A closed-laced oxford with an elongated last, mirror gloss toe, and subtle gold foil signature.",
-    editorialCopy:
-      "Gallery Oxford is for opening nights and quiet awards. Built on our sharpest last, it catches every reflection without a single shout.",
-    images: [
-      {
-        url: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1200&q=80",
-        alt: "Polished black oxford shoes",
-        isPrimary: true,
-        aspectRatio: "landscape",
-      },
-    ],
-    sizes: ["40", "41", "42", "43", "44", "45"],
-    colors: ["Noir"],
-    materials: ["Patent leather", "Leather sole"],
-    origin: "Made in Italy",
-    releaseDate: "2021-11-11T00:00:00.000Z",
-    badges: ["Exclusive"],
-    tags: ["oxford", "formal"],
-    stockByVariant: [],
-    featured: false,
+    sustainabilityNotes:
+      "Collaborates with rural women's collectives for embellishment work, ensuring flexible hours and fair compensation.",
+    awards: ["Rajasthan State Craft Mentor Award, 2012"],
+    socialLinks: {
+      instagram: "https://instagram.com/marwarheritagemojris",
+    },
   },
 ];
 
-// Generate deterministic mock stockByVariant from sizes & colors if empty
-export const products: Product[] = baseProducts.map((p) => {
-  if (p.stockByVariant.length === 0) {
-    const variants: StockByVariant[] = [];
-    p.sizes.forEach((size) => {
-      p.colors.forEach((color) => {
-        const sku = `${p.id}-${size.replace(/\s+/g, "").toUpperCase()}-${color
-          .replace(/\s+/g, "")
-          .toUpperCase()}`;
-        const stock = 3 + Math.floor(Math.random() * 7); // 3–9 pairs
-        variants.push({ size, color, stock, sku });
-      });
-    });
-    return { ...p, stockByVariant: variants } as Product;
-  }
-  return p;
-});
-
 // ----------------------
-// Formatting & derived helpers
+// Seed Products
 // ----------------------
 
-export function formatMoney(
-  amount: number,
-  currency: CurrencyCode = DEFAULT_CURRENCY
-): string {
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  } catch {
-    return `$${amount.toFixed(0)}`;
-  }
-}
-
-export function computeCartTotals(
-  cart: Cart,
-  options?: { taxRate?: number; shippingFlat?: number }
-): CartTotals {
-  const taxRate = options?.taxRate ?? TAX_RATE;
-  const shippingFlat = options?.shippingFlat ?? SHIPPING_FLAT;
-
-  const subtotal = cart.items.reduce(
-    (sum, line) => sum + line.unitPrice * line.quantity,
-    0
-  );
-  const estimatedTax = Math.round(subtotal * taxRate);
-  const shipping = cart.items.length === 0 ? 0 : shippingFlat;
-  const total = subtotal + estimatedTax + shipping;
-
-  return {
-    subtotal,
-    estimatedTax,
-    shipping,
-    total,
-    currency: cart.currency,
-  };
-}
+const seedProducts: Product[] = [
+  {
+    id: "mojri-noor-ivory-bride",
+    slug: "noor-ivory-bridal-zardozi-mojri",
+    name: "Noor Ivory Bridal Zardozi Mojri",
+    price: 8200,
+    currency: "INR",
+    images: [
+      "https://images.pexels.com/photos/169211/pexels-photo-169211.jpeg?auto=compress&cs=tinysrgb&w=1200",
+      "https://images.pexels.com/photos/2690323/pexels-photo-2690323.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    ],
+    heroImage:
+      "https://images.pexels.com/photos/2690323/pexels-photo-2690323.jpeg?auto=compress&cs=tinysrgb&w=1600",
+    style: "Bridal",
+    color: "Ivory",
+    material: "Vegetable-tanned leather with silk brocade upper",
+    motif: "Fine floral zardozi with scattered pearls",
+    craftTechnique: "Hand-embroidered zardozi using real zari on silk brocade",
+    originCity: "Jodhpur",
+    originState: "Rajasthan",
+    authenticity:
+      "Designed and embroidered entirely in Jodhpur, each pair is signed on the lining by Lalima Devi.",
+    care:
+      "Keep away from moisture, wipe gently with a soft cloth after wear, store in the breathable muslin pouch provided.",
+    sizingNotes:
+      "Runs slightly snug for the first 2–3 wears. If you are between sizes, we recommend sizing up.",
+    sizes: [35, 36, 37, 38, 39, 40, 41],
+    stockBySize: {
+      "35": 3,
+      "36": 6,
+      "37": 10,
+      "38": 8,
+      "39": 5,
+      "40": 4,
+      "41": 2,
+    },
+    tags: ["bridal", "ivory", "zardozi", "pearls", "limited edition", "lalima atelier"],
+    description:
+      "Noor is an ode to slow bridal rituals—the pausing of bangles, the tying of ghungroos, the quiet moments before music. A slender silhouette in ivory silk brocade, traced in fine zardozi and hand-set pearls.",
+    culturalHeritage:
+      "Inspired by the understated ivory mojris once commissioned for royal brides of Marwar, Noor stays faithful to traditional left-right agnostic shapes while softening the inner lining for modern comfort.",
+    artisanId: "artisan-lalima-ji",
+    artisanQuote:
+      "A bridal mojri should glow softly, like the last light on Mehrangarh's walls—not shout.",
+    featuredRank: 1,
+    createdAt: "2023-11-05T10:00:00.000Z",
+  },
+  {
+    id: "mojri-mehr-maroon-festive",
+    slug: "mehr-maroon-festive-mojri",
+    name: "Mehr Maroon Festive Mojri",
+    price: 4800,
+    currency: "INR",
+    images: [
+      "https://images.pexels.com/photos/1407358/pexels-photo-1407358.jpeg?auto=compress&cs=tinysrgb&w=1200",
+      "https://images.pexels.com/photos/783745/pexels-photo-783745.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    ],
+    heroImage:
+      "https://images.pexels.com/photos/1407358/pexels-photo-1407358.jpeg?auto=compress&cs=tinysrgb&w=1600",
+    style: "Festive",
+    color: "Maroon",
+    material: "Hand-dyed maroon velvet with leather lining",
+    motif: "Gold gota patti vines",
+    craftTechnique: "Hand-applied gota borders with delicate backstitching",
+    originCity: "Jodhpur",
+    originState: "Rajasthan",
+    authenticity:
+      "Cut and embellished in Sur Sagar by Omprakash ji's festival collective.",
+    care:
+      "Keep away from liquids and oils, brush velvet gently in one direction, air after heavy wear.",
+    sizingNotes: "True to size with a snug velvet upper that relaxes with wear.",
+    sizes: [36, 37, 38, 39, 40, 41, 42],
+    stockBySize: {
+      "36": 8,
+      "37": 10,
+      "38": 10,
+      "39": 6,
+      "40": 4,
+      "41": 4,
+      "42": 2,
+    },
+    tags: ["festive", "maroon", "velvet", "gota patti", "omprakash atelier"],
+    description:
+      "Mehr is made for sangeet floors and courtyard mehfils: a plush maroon velvet base traced with fluid gota vines that shimmer, not glare, under fairy lights.",
+    culturalHeritage:
+      "Gota patti, once reserved for royal garments, finds a softer expression here—adapted for bare-foot comfort and all-night dancing.",
+    artisanId: "artisan-omprakash-ji",
+    artisanQuote:
+      "Maroon is the color of celebration in Marwar; it hides dust and remembers every night of dancing.",
+    featuredRank: 3,
+    createdAt: "2023-10-12T08:30:00.000Z",
+  },
+  {
+    id: "mojri-sooraj-sand-everyday",
+    slug: "sooraj-sand-everyday-leather-mojri",
+    name: "Sooraj Sand Everyday Leather Mojri",
+    price: 3600,
+    currency: "INR",
+    images: [
+      "https://images.pexels.com/photos/19090/pexels-photo.jpg?auto=compress&cs=tinysrgb&w=1200",
+      "https://images.pexels.com/photos/267202/pexels-photo-267202.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    ],
+    heroImage:
+      "https://images.pexels.com/photos/19090/pexels-photo.jpg?auto=compress&cs=tinysrgb&w=1600",
+    style: "Everyday",
+    color: "Sand",
+    material: "Hand-burnished sand leather with cotton lining",
+    motif: "Minimal tonal stitch lines",
+    craftTechnique: "Traditional hand-lasting on wooden blocks, slow burnishing by hand",
+    originCity: "Jodhpur",
+    originState: "Rajasthan",
+    authenticity:
+      "Pattern cut using Salim ji's decades-old templates mastered for daily wear.",
+    care: "Brush off dust with a soft bristle brush, condition lightly once a season.",
+    sizingNotes:
+      "True to size with a balanced, forgiving width. Ideal as a first mojri for new wearers.",
+    sizes: [39, 40, 41, 42, 43],
+    stockBySize: {
+      "39": 10,
+      "40": 12,
+      "41": 12,
+      "42": 10,
+      "43": 6,
+    },
+    tags: ["everyday", "sand", "minimal", "leather", "salim atelier"],
+    description:
+      "Sooraj is the mojri you reach for without thinking—soft sand leather that pairs with denim, linens, or a cotton kurta with equal ease.",
+    culturalHeritage:
+      "Retains the classic, gently upturned Marwari toe while subtly refining internal padding for city pavements.",
+    artisanId: "artisan-salim-ji",
+    artisanQuote: "If you forget you are wearing them by noon, the mojri has done its job.",
+    featuredRank: 4,
+    createdAt: "2023-09-01T09:00:00.000Z",
+  },
+  {
+    id: "mojri-neel-indigo-classic",
+    slug: "neel-indigo-classic-mojri",
+    name: "Neel Indigo Classic Mojri",
+    price: 4200,
+    currency: "INR",
+    images: [
+      "https://images.pexels.com/photos/2048548/pexels-photo-2048548.jpeg?auto=compress&cs=tinysrgb&w=1200",
+      "https://images.pexels.com/photos/1192602/pexels-photo-1192602.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    ],
+    heroImage:
+      "https://images.pexels.com/photos/2048548/pexels-photo-2048548.jpeg?auto=compress&cs=tinysrgb&w=1600",
+    style: "Classic",
+    color: "Indigo",
+    material: "Indigo-dyed leather with block-printed cotton lining",
+    motif: "Subtle block-printed buta on lining",
+    craftTechnique: "Natural indigo vat dyeing and hand-block printing",
+    originCity: "Jodhpur",
+    originState: "Rajasthan",
+    authenticity:
+      "Dyed and printed in collaboration with Meera Blue City Studio's natural dye partners.",
+    care:
+      "Colour may gently evolve with time. Avoid harsh detergents, let dry in shade if damp.",
+    sizingNotes: "True to size with a gently hugging upper. Breaks in over 2–3 wears.",
+    sizes: [36, 37, 38, 39, 40, 41],
+    stockBySize: {
+      "36": 4,
+      "37": 8,
+      "38": 8,
+      "39": 10,
+      "40": 8,
+      "41": 4,
+    },
+    tags: ["classic", "indigo", "natural dye", "meera studio"],
+    description:
+      "Neel carries the unmistakable blue of Jodhpur—deep, grainy, and full of quiet detail. A versatile pair for both pared-back saris and crisp shirts.",
+    culturalHeritage:
+      "Honours Jodhpur's indigo legacy by keeping the palette monochrome while letting grain and texture take centre stage.",
+    artisanId: "artisan-meera-ji",
+    artisanQuote: "Indigo is never flat; it remembers every dip in the dye vat.",
+    featuredRank: 2,
+    createdAt: "2023-08-15T07:00:00.000Z",
+  },
+  {
+    id: "mojri-raas-gold-festive",
+    slug: "raas-gold-festive-mirrorwork-mojri",
+    name: "Raas Gold Mirrorwork Mojri",
+    price: 5400,
+    currency: "INR",
+    images: [
+      "https://images.pexels.com/photos/3755706/pexels-photo-3755706.jpeg?auto=compress&cs=tinysrgb&w=1200",
+      "https://images.pexels.com/photos/3755703/pexels-photo-3755703.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    ],
+    heroImage:
+      "https://images.pexels.com/photos/3755706/pexels-photo-3755706.jpeg?auto=compress&cs=tinysrgb&w=1600",
+    style: "Festive",
+    color: "Gold",
+    material: "Gold-toned brocade with leather base",
+    motif: "Scattered mirror and gota florets",
+    craftTechnique: "Hand-applied mirror work with couching stitches",
+    originCity: "Jodhpur",
+    originState: "Rajasthan",
+    authenticity:
+      "A signature festival pair from Marwar Heritage Mojris, assembled by a 6-person embellishment team.",
+    care:
+      "Store wrapped in soft tissue, avoid impact on mirrors, dab gently if soiled.",
+    sizingNotes:
+      "Snug across the forefoot to keep mirrors stable; breaks in with warmth of wear.",
+    sizes: [35, 36, 37, 38, 39, 40],
+    stockBySize: {
+      "35": 5,
+      "36": 5,
+      "37": 7,
+      "38": 9,
+      "39": 6,
+      "40": 4,
+    },
+    tags: ["festive", "gold", "mirror work", "gota", "omprakash atelier"],
+    description:
+      "Raas is built for garba nights and rooftop weddings—small mirrors catch the slightest movement, echoing the spin of a ghagra.",
+    culturalHeritage:
+      "Mirror work travels across Gujarat and Rajasthan; here, it leans into Marwar restraint, keeping sparkle measured.",
+    artisanId: "artisan-omprakash-ji",
+    artisanQuote: "The trick is to let the mirrors dance without making the foot feel heavy.",
+    featuredRank: 5,
+    createdAt: "2023-09-23T10:15:00.000Z",
+  },
+  {
+    id: "mojri-khamma-black-classic",
+    slug: "khamma-black-classic-mens-mojri",
+    name: "Khamma Black Classic Men's Mojri",
+    price: 3900,
+    currency: "INR",
+    images: [
+      "https://images.pexels.com/photos/298863/pexels-photo-298863.jpeg?auto=compress&cs=tinysrgb&w=1200",
+      "https://images.pexels.com/photos/19090/pexels-photo.jpg?auto=compress&cs=tinysrgb&w=1200",
+    ],
+    heroImage:
+      "https://images.pexels.com/photos/298863/pexels-photo-298863.jpeg?auto=compress&cs=tinysrgb&w=1600",
+    style: "Classic",
+    color: "Black",
+    material: "Hand-burnished black leather with soft inner padding",
+    motif: "Minimal saddle stitch",
+    craftTechnique: "Traditional hand-stitching and burnishing by Salim ji",
+    originCity: "Jodhpur",
+    originState: "Rajasthan",
+    authenticity:
+      "Each pair is burnished by hand using cotton cloth and natural wax in Khan Mojri Karkhana.",
+    care: "Brush off dust, condition annually, avoid direct heat.",
+    sizingNotes: "Generous through the midfoot, ideal for long days of standing.",
+    sizes: [40, 41, 42, 43, 44],
+    stockBySize: {
+      "40": 10,
+      "41": 10,
+      "42": 8,
+      "43": 6,
+      "44": 4,
+    },
+    tags: ["classic", "black", "mens", "salim atelier"],
+    description:
+      "Khamma is a bow to those who like their mojris understated—inky black leather, a quiet upturn, and a weightless feel under formal or casual wear.",
+    culturalHeritage:
+      "Borrowing from court footwear worn with achkans, this pair removes ornament to spotlight silhouette and craftsmanship.",
+    artisanId: "artisan-salim-ji",
+    artisanQuote: "Some feet ask for silence, not decoration.",
+    featuredRank: 6,
+    createdAt: "2023-07-19T11:00:00.000Z",
+  },
+  {
+    id: "mojri-gulab-rose-heritage",
+    slug: "gulab-rose-heritage-mojri",
+    name: "Gulab Rose Heritage Mojri",
+    price: 5100,
+    currency: "INR",
+    images: [
+      "https://images.pexels.com/photos/1126993/pexels-photo-1126993.jpeg?auto=compress&cs=tinysrgb&w=1200",
+      "https://images.pexels.com/photos/1124465/pexels-photo-1124465.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    ],
+    heroImage:
+      "https://images.pexels.com/photos/1126993/pexels-photo-1126993.jpeg?auto=compress&cs=tinysrgb&w=1600",
+    style: "Heritage",
+    color: "Rose",
+    material: "Rose silk with leather sole",
+    motif: "Vintage-inspired rose vines with tiny sequins",
+    craftTechnique: "Fine aari embroidery by a women-led cluster",
+    originCity: "Jodhpur",
+    originState: "Rajasthan",
+    authenticity:
+      "Motifs adapted from a 19th-century haveli fresco from the old city.",
+    care:
+      "Keep in dust bag, avoid abrasion on sequins, dab away spills immediately.",
+    sizingNotes: "Slim profile; narrow-footed wearers may size down.",
+    sizes: [35, 36, 37, 38, 39],
+    stockBySize: {
+      "35": 3,
+      "36": 5,
+      "37": 7,
+      "38": 7,
+      "39": 4,
+    },
+    tags: ["heritage", "rose", "aari", "lalima atelier"],
+    description:
+      "Gulab revisits an old haveli mural in soft rose silk, with winding vines that catch daylight in the subtlest way.",
+    culturalHeritage:
+      "Jodhpur havelis often carried rose frescoes in inner courtyards; Gulab brings that intimacy to the foot.",
+    artisanId: "artisan-lalima-ji",
+    artisanQuote: "Some colours belong to shade more than sunlight—rose is one of them.",
+    featuredRank: 7,
+    createdAt: "2023-06-11T09:30:00.000Z",
+  },
+  {
+    id: "mojri-aangan-sand-everyday",
+    slug: "aangan-sand-stitched-everyday-mojri",
+    name: "Aangan Hand-Stitched Sand Mojri",
+    price: 3300,
+    currency: "INR",
+    images: [
+      "https://images.pexels.com/photos/19090/pexels-photo.jpg?auto=compress&cs=tinysrgb&w=1200",
+      "https://images.pexels.com/photos/267301/pexels-photo-267301.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    ],
+    heroImage:
+      "https://images.pexels.com/photos/267301/pexels-photo-267301.jpeg?auto=compress&cs=tinysrgb&w=1600",
+    style: "Everyday",
+    color: "Sand",
+    material: "Matte sand leather with canvas lining",
+    motif: "Contrast top stitches",
+    craftTechnique: "Hand-guided machine stitching with hand-finished edges",
+    originCity: "Jodhpur",
+    originState: "Rajasthan",
+    authenticity: "Cut in Salim ji's karkhana as a daily-wear option for city commutes.",
+    care: "Wipe with a damp cloth, let dry naturally, condition occasionally.",
+    sizingNotes: "Roomy toe box, ideal for all-day wear.",
+    sizes: [37, 38, 39, 40, 41, 42],
+    stockBySize: {
+      "37": 9,
+      "38": 12,
+      "39": 12,
+      "40": 10,
+      "41": 8,
+      "42": 6,
+    },
+    tags: ["everyday", "sand", "stitched", "salim atelier"],
+    description:
+      "Aangan is the pair you leave by the door—reliable, soft, and structured enough for daily errands and desk days alike.",
+    culturalHeritage:
+      "Blends traditional mojri construction with subtle top-stitch references from worker shoes seen in old Jodhpur bazaars.",
+    artisanId: "artisan-salim-ji",
+    artisanQuote: "Daily pairs should age with you, not wear out before you do.",
+    featuredRank: 8,
+    createdAt: "2023-05-20T09:00:00.000Z",
+  },
+];
 
 // ----------------------
-// Local persistence: cart, user, orders
+// In-memory State & Helpers
 // ----------------------
 
-function loadCartInternal(): Cart {
-  const raw = safeStorage.getItem(STORAGE_KEYS.cart);
-  const fallback: Cart = {
-    id: "cart_default",
-    items: [],
-    currency: DEFAULT_CURRENCY,
-    updatedAt: new Date().toISOString(),
-  };
-  return safeJsonParse<Cart>(raw, fallback);
-}
+let productsState: Product[] | null = null;
+let artisansState: Artisan[] | null = null;
+let cartState: Cart | null = null;
 
-function saveCartInternal(cart: Cart): void {
-  const serialised = JSON.stringify(cart);
-  safeStorage.setItem(STORAGE_KEYS.cart, serialised);
-}
+// Simple pub-sub for cart changes
+const cartSubscribers = new Set<() => void>();
 
-function loadUserInternal(): UserSession | undefined {
-  const raw = safeStorage.getItem(STORAGE_KEYS.user);
-  return safeJsonParse<UserSession | undefined>(raw, undefined);
-}
-
-function saveUserInternal(user: UserSession | undefined): void {
-  if (!user) {
-    safeStorage.removeItem(STORAGE_KEYS.user);
-    return;
-  }
-  safeStorage.setItem(STORAGE_KEYS.user, JSON.stringify(user));
-}
-
-function loadOrdersInternal(): Order[] {
-  const raw = safeStorage.getItem(STORAGE_KEYS.orders);
-  return safeJsonParse<Order[]>(raw, []);
-}
-
-function saveOrdersInternal(orders: Order[]): void {
-  safeStorage.setItem(STORAGE_KEYS.orders, JSON.stringify(orders));
-}
-
-// ----------------------
-// Public getters: products & filters
-// ----------------------
-
-export function getProducts(): Product[] {
-  return [...products];
-}
-
-export function getBrands(): string[] {
-  const brands = new Set<string>();
-  products.forEach((p) => brands.add(p.brand));
-  return Array.from(brands).sort();
-}
-
-export function getAvailableSizes(): string[] {
-  const sizes = new Set<string>();
-  products.forEach((p) => p.sizes.forEach((s) => sizes.add(s)));
-  return Array.from(sizes).sort((a, b) => {
-    const na = parseFloat(a.replace(/[^0-9.]/g, ""));
-    const nb = parseFloat(b.replace(/[^0-9.]/g, ""));
-    if (isNaN(na) || isNaN(nb)) return a.localeCompare(b);
-    return na - nb;
+function notifyCartSubscribers() {
+  cartSubscribers.forEach((fn) => {
+    try {
+      fn();
+    } catch {
+      // ignore subscriber errors
+    }
   });
 }
 
-export function getAvailableColors(): string[] {
-  const colors = new Set<string>();
-  products.forEach((p) => p.colors.forEach((c) => colors.add(c)));
-  return Array.from(colors).sort();
+export function subscribe(listener: () => void): void {
+  cartSubscribers.add(listener);
+}
+
+export function unsubscribe(listener: () => void): void {
+  cartSubscribers.delete(listener);
 }
 
 // ----------------------
-// Cart helpers
+// Accessors for mock data
 // ----------------------
 
-export function getCart(): Cart {
-  return loadCartInternal();
+export function getProducts(): Product[] {
+  if (!productsState) {
+    // clone to avoid external mutation
+    productsState = seedProducts.map((p) => ({ ...p, stockBySize: { ...p.stockBySize } }));
+  }
+  return productsState.map((p) => ({ ...p, stockBySize: { ...p.stockBySize } }));
 }
 
-export function addToCart(
-  productId: string,
-  variant: CartItemVariant,
-  qty: number
-): Cart {
-  const normalizedQty = Math.max(1, Math.floor(qty || 1));
-  const cart = loadCartInternal();
-  const product = products.find((p) => p.id === productId);
-  if (!product) {
-    return cart;
+export function getArtisans(): Artisan[] {
+  if (!artisansState) {
+    artisansState = seedArtisans.map((a) => ({ ...a }));
+  }
+  return artisansState.map((a) => ({ ...a, socialLinks: { ...a.socialLinks } }));
+}
+
+export function getProductById(id: string): Product | undefined {
+  return getProducts().find((p) => p.id === id);
+}
+
+export function getProductsByIds(ids: string[]): Product[] {
+  const set = new Set(ids);
+  return getProducts().filter((p) => set.has(p.id));
+}
+
+// ----------------------
+// Filtering & Search
+// ----------------------
+
+export function getFilteredProducts(filters: Filters): Product[] {
+  const all = getProducts();
+  if (!filters || Object.keys(filters).length === 0) {
+    return all;
   }
 
-  // See if same product + variant already exists; if so, increment
+  return all.filter((product) => {
+    if (filters.style && product.style !== filters.style) return false;
+    if (filters.color && product.color !== filters.color) return false;
+    if (filters.artisanId && product.artisanId !== filters.artisanId) return false;
+
+    if (filters.query && filters.query.trim() !== "") {
+      const q = filters.query.trim().toLowerCase();
+      const haystack = [
+        product.name,
+        product.description,
+        product.craftTechnique,
+        product.material,
+        product.motif,
+        product.tags.join(" "),
+      ]
+        .join(" ")
+        .toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+
+    return true;
+  });
+}
+
+export function searchSuggestions(query: string): SearchSuggestionResult {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return { products: [], artisans: [] };
+  }
+  const q = trimmed.toLowerCase();
+
+  const products = getProducts().filter((p) => {
+    const text = [p.name, p.description, p.tags.join(" ")].join(" ").toLowerCase();
+    return text.includes(q);
+  });
+
+  const artisans = getArtisans().filter((a) => {
+    const text = [a.name, a.atelierName, a.bioShort].join(" ").toLowerCase();
+    return text.includes(q);
+  });
+
+  return { products, artisans };
+}
+
+// Convenience wrapper to match Header import name
+export function getSearchSuggestions(query: string): SearchSuggestionResult {
+  return searchSuggestions(query);
+}
+
+// ----------------------
+// Cart implementation
+// ----------------------
+
+function getEmptyCart(): Cart {
+  return { items: [], updatedAt: new Date().toISOString() };
+}
+
+export function getCart(): Cart {
+  if (!cartState) {
+    cartState = load<Cart>(STORAGE_KEYS.CART, getEmptyCart());
+  }
+  // clone to avoid mutation
+  return {
+    ...cartState,
+    items: cartState.items.map((i) => ({ ...i })),
+  };
+}
+
+function persistCart(next: Cart) {
+  cartState = { ...next, items: next.items.map((i) => ({ ...i })) };
+  save<Cart>(STORAGE_KEYS.CART, cartState);
+  notifyCartSubscribers();
+}
+
+export function addToCart(productId: string, size: number, qty: number): void {
+  if (qty <= 0) return;
+  const product = getProductById(productId);
+  if (!product) {
+    throw new Error("Product not found in mock catalog.");
+  }
+
+  const cart = getCart();
   const existing = cart.items.find(
-    (line) =>
-      line.productId === productId &&
-      line.variant.size === variant.size &&
-      line.variant.color === variant.color
+    (item) => item.productId === productId && item.size === size,
   );
 
   if (existing) {
-    existing.quantity += normalizedQty;
+    existing.qty += qty;
   } else {
     cart.items.push({
-      id: createId("line"),
       productId,
-      variant: { ...variant },
+      size,
+      qty,
       unitPrice: product.price,
-      currency: product.currency,
-      quantity: normalizedQty,
-      addedAt: new Date().toISOString(),
     });
   }
 
-  cart.currency = product.currency;
   cart.updatedAt = new Date().toISOString();
-  saveCartInternal(cart);
-  return cart;
+  persistCart(cart);
 }
 
-export function updateCartQty(lineId: string, qty: number): Cart {
-  const cart = loadCartInternal();
-  const line = cart.items.find((l) => l.id === lineId);
-  if (!line) return cart;
-
-  const normalizedQty = Math.max(0, Math.floor(qty || 0));
-  if (normalizedQty <= 0) {
-    cart.items = cart.items.filter((l) => l.id !== lineId);
-  } else {
-    line.quantity = normalizedQty;
-  }
-
+export function removeFromCart(productId: string, size: number): void {
+  const cart = getCart();
+  cart.items = cart.items.filter(
+    (item) => !(item.productId === productId && item.size === size),
+  );
   cart.updatedAt = new Date().toISOString();
-  saveCartInternal(cart);
-  return cart;
+  persistCart(cart);
 }
 
-export function removeFromCart(lineId: string): Cart {
-  const cart = loadCartInternal();
-  cart.items = cart.items.filter((l) => l.id !== lineId);
-  cart.updatedAt = new Date().toISOString();
-  saveCartInternal(cart);
-  return cart;
+export function clearCart(): void {
+  persistCart(getEmptyCart());
 }
 
-export function clearCart(): Cart {
-  const empty: Cart = {
-    id: "cart_default",
-    items: [],
-    currency: DEFAULT_CURRENCY,
-    updatedAt: new Date().toISOString(),
-  };
-  saveCartInternal(empty);
-  return empty;
+export function getCartTotals(): CartTotals {
+  const cart = getCart();
+  const subtotal = cart.items.reduce(
+    (acc, item) => acc + item.unitPrice * item.qty,
+    0,
+  );
+  const itemCount = cart.items.reduce((acc, item) => acc + item.qty, 0);
+  const estimatedShipping = subtotal > 0 ? 250 : 0;
+  const total = subtotal + estimatedShipping;
+  return { subtotal, estimatedShipping, total, itemCount };
+}
+
+// Alias to satisfy Header import name while keeping existing usage intact
+export function computeCartTotals(cart: Cart): CartTotals {
+  const subtotal = cart.items.reduce(
+    (acc, item) => acc + item.unitPrice * item.qty,
+    0,
+  );
+  const itemCount = cart.items.reduce((acc, item) => acc + item.qty, 0);
+  const estimatedShipping = subtotal > 0 ? 250 : 0;
+  const total = subtotal + estimatedShipping;
+  return { subtotal, estimatedShipping, total, itemCount };
 }
 
 // ----------------------
-// User session helpers
-// ----------------------
-
-export function getUser(): UserSession | undefined {
-  return loadUserInternal();
-}
-
-export function setUser(user: UserSession | undefined): void {
-  saveUserInternal(user);
-}
-
-// ----------------------
-// Orders helpers (mock)
+// Orders (minimal mock)
 // ----------------------
 
 export function getOrders(): Order[] {
-  return loadOrdersInternal();
+  return load<Order[]>(STORAGE_KEYS.ORDERS, []);
 }
 
-export function saveOrder(order: Order): void {
-  const orders = loadOrdersInternal();
-  orders.push(order);
-  saveOrdersInternal(orders);
+export function addMockOrderFromCart(address: ShippingAddress): Order {
+  const cart = getCart();
+  if (cart.items.length === 0) {
+    throw new Error("Cannot place order with an empty cart in this mock.");
+  }
+
+  const productsById = new Map(getProducts().map((p) => [p.id, p] as const));
+
+  const items: OrderItemSnapshot[] = cart.items.map((item) => {
+    const product = productsById.get(item.productId);
+    const name = product ? product.name : "Unknown mojri";
+    const lineTotal = item.unitPrice * item.qty;
+    return {
+      productId: item.productId,
+      name,
+      size: item.size,
+      qty: item.qty,
+      unitPrice: item.unitPrice,
+      lineTotal,
+    };
+  });
+
+  const subtotal = items.reduce((acc, i) => acc + i.lineTotal, 0);
+  const itemCount = items.reduce((acc, i) => acc + i.qty, 0);
+  const estimatedShipping = subtotal > 0 ? 250 : 0;
+  const total = subtotal + estimatedShipping;
+
+  const order: Order = {
+    id: `mock-order-${Date.now()}`,
+    placedAt: new Date().toISOString(),
+    items,
+    totals: { subtotal, estimatedShipping, total, itemCount },
+    shippingAddress: { ...address },
+    status: "confirmed",
+  };
+
+  const current = getOrders();
+  const next = [order, ...current];
+  save<Order[]>(STORAGE_KEYS.ORDERS, next);
+
+  clearCart();
+
+  return order;
+}
+
+// ----------------------
+// User profile (lightweight)
+// ----------------------
+
+export function getUser(): UserProfile | null {
+  return load<UserProfile | null>(STORAGE_KEYS.USER, null);
+}
+
+export function saveUser(profile: UserProfile | null): void {
+  if (!profile) {
+    save<UserProfile | null>(STORAGE_KEYS.USER, null);
+  } else {
+    save<UserProfile | null>(STORAGE_KEYS.USER, { ...profile });
+  }
+}
+
+// Convenience: featured products sorted by rank
+export function getFeaturedProducts(limit = 8): Product[] {
+  return [...getProducts()]
+    .sort((a, b) => a.featuredRank - b.featuredRank)
+    .slice(0, limit);
 }
