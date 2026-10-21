@@ -1,46 +1,23 @@
 <!doctype html>
-<html lang="en-IN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#F7F3EB" />
-    <meta name="color-scheme" content="light dark" />
-    <meta
-      name="description"
-      content="Discover Jootiya: an editorial collection of Rajasthani Mojris crafted in Jodhpur. Explore traditional craftsmanship, considered materials, and timeless footwear. Browser-only demo storefront with simulated orders and payments."
-    />
-    <meta name="application-name" content="Jootiya" />
-    <meta property="og:type" content="website" />
-    <meta property="og:locale" content="en_IN" />
-    <meta property="og:site_name" content="Jootiya" />
-    <meta property="og:title" content="Jootiya — Rajasthani Mojris, Crafted in Jodhpur" />
-    <meta
-      property="og:description"
-      content="An ode to Jodhpur craftsmanship. Discover Rajasthani Mojris in a contemporary luxury lookbook. A browser-only demo; orders and payments are simulated."
-    />
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="Jootiya — Rajasthani Mojris, Crafted in Jodhpur" />
-    <meta
-      name="twitter:description"
-      content="Discover the craft, character, and heritage of Jodhpur-made Mojris. Explore our browser-only demo storefront with simulated checkout."
-    />
-    <title>Jootiya — Rajasthani Mojris, Crafted in Jodhpur</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap"
-      rel="stylesheet"
-    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <title>Jootiya</title>
+    <script>
+      window.global = window;
+      window.process = { env: { NODE_ENV: 'production' } };
+      window.require = function(pkg) {
+        console.warn('[shim] require("' + pkg + '") called in browser. Returning mock.');
+        return {};
+      };
+    </script>
   </head>
   <body>
     <div id="root"></div>
-    <noscript>
-      <p>
-        Please enable JavaScript to explore Jootiya’s Jodhpur-crafted Rajasthani
-        Mojris. This storefront runs entirely in your browser; orders and payments
-        are simulated, and no real payment is collected.
-      </p>
-    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

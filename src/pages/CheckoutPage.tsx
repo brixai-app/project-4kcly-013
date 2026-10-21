@@ -1,275 +1,295 @@
-import { useMemo, useRef, useState } from 'react';
-import type { FormEvent } from 'react';
-import { Link } from 'react-router-dom';
-import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, Info, Loader2, ShoppingBag } from 'lucide-react';
+import React, { useEffect, useRef } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, Loader2, ShieldCheck, ShoppingBag } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button, Input, Separator, Switch } from '@/components/ui/shadcn';
 import {
-  useStore,
-  getCartLines,
-  getCartTotals,
-  formatCurrency,
-  formatDate,
-  MAX_CART_QUANTITY,
+  Badge, Button, Card, CardContent, DropdownMenu, DropdownMenuContent,
+  DropdownMenuItem, DropdownMenuTrigger, Input, Label, Separator,
+} from '@/components/ui/shadcn';
+import {
+  DEMO_NOTICE, EMPTY_ADDRESS, PAYMENT_METHODS, ROUTES, SHIPPING_POLICY,
+  calculateTotals, formatPrice, placeOrder, prefillCustomer, retryPersistence,
+  setOverlay, updateCheckout, useMockStore,
 } from '@/mock';
-import type { Address, CheckoutErrors, PaymentMethod } from '@/mock';
+import type { ShippingAddress, Totals } from '@/mock';
+
+function TotalsBreakdown({ totals }: { totals: Readonly<Totals> }) {
+  return (
+    <dl className="space-y-4 text-sm">
+      <div className="flex justify-between gap-4"><dt>Subtotal · {totals.units} {totals.units === 1 ? 'pair' : 'pairs'}</dt><dd>{formatPrice(totals.subtotal)}</dd></div>
+      <div className="flex justify-between gap-4"><dt>Simulated shipping</dt><dd>{totals.shipping ? formatPrice(totals.shipping) : 'Complimentary'}</dd></div>
+      <Separator className="bg-current/15" />
+      <div className="flex justify-between gap-4 text-lg font-medium"><dt>Demo total</dt><dd>{formatPrice(totals.total)}</dd></div>
+      <p className="text-xs leading-relaxed opacity-75">All amounts are in INR. This is a demonstration total, not a charge.</p>
+    </dl>
+  );
+}
 
 export function CheckoutPage() {
-  const cart = useStore(state => state.cart);
-  const products = useStore(state => state.products);
-  const draft = useStore(state => state.checkoutDraft);
-  const checkoutKey = useStore(state => state.checkoutKey);
-  const orders = useStore(state => state.orders);
-  const lastOrderId = useStore(state => state.lastOrderId);
-  const isPlacingOrder = useStore(state => state.isPlacingOrder);
-  const storageStatus = useStore(state => state.storageStatus);
-  const updateDraft = useStore(state => state.updateCheckoutDraft);
-  const placeOrder = useStore(state => state.placeOrder);
-  const openCart = useStore(state => state.openCart);
-  const reducedMotion = useReducedMotion();
+  const state = useMockStore();
+  const { checkout, cart, products, users, orders, storageError } = state;
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
   const formRef = useRef<HTMLFormElement>(null);
-  const submissionLock = useRef(false);
-  const [errors, setErrors] = useState<CheckoutErrors>({});
-  const [submissionMessage, setSubmissionMessage] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const errorRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const submittingRef = useRef(false);
+  const orderReference = params.get('order');
+  const hasOrderReference = params.has('order');
+  const order = hasOrderReference ? orders.find((item) => item.id === orderReference) : undefined;
+  const totals = calculateTotals(cart, products);
+  const busy = checkout.submitting;
+  const errors = checkout.errors;
+  const surface = 'border-[#ded3c5] bg-[#fffdf8] text-[#352b28] shadow-none dark:border-[#59463e] dark:bg-[#2c2421] dark:text-[#f5ecdf]';
+  const primary = 'bg-[#682f3e] text-white hover:bg-[#512331] focus-visible:ring-[#925568] dark:bg-[#e7c2bd] dark:text-[#35212a] dark:hover:bg-[#f1d4ce]';
 
-  const lines = useMemo(() => getCartLines(cart, products), [cart, products]);
-  const totals = useMemo(() => getCartTotals(cart, products), [cart, products]);
-  const order = orders.find(entry => entry.id === lastOrderId);
-  const completedOrder = cart.length === 0 ? order : undefined;
-  const stockChanged = lines.length !== cart.length || lines.some(line =>
-    line.quantity > line.availableStock || line.quantity > MAX_CART_QUANTITY || line.quantity < 1,
-  );
-  const busy = submitting || isPlacingOrder;
-  const summaryItems = completedOrder ? completedOrder.items : lines.map(line => ({
-    productId: line.productId,
-    name: line.product.name,
-    size: line.size,
-    quantity: line.quantity,
-    unitPrice: line.unitPrice,
-    lineTotal: line.lineTotal,
-    image: line.product.images[0],
-  }));
-  const summaryTotals = completedOrder?.totals ?? totals;
+  useEffect(() => {
+    document.title = hasOrderReference ? 'Your demo receipt | Jootiya' : 'Guest checkout | Jootiya';
+    if (hasOrderReference) headingRef.current?.focus();
+  }, [hasOrderReference, orderReference]);
 
-  function clearError(key: keyof CheckoutErrors) {
-    setErrors(current => ({ ...current, [key]: undefined }));
-    setSubmissionMessage('');
+  function focusErrors() {
+    requestAnimationFrame(() => {
+      const invalid = formRef.current?.querySelector<HTMLInputElement>('[aria-invalid="true"]');
+      if (invalid) invalid.focus();
+      else errorRef.current?.focus();
+    });
   }
 
-  function updateAddress(key: keyof Omit<Address, 'country'>, value: string) {
-    updateDraft({ address: { [key]: value } });
-    clearError(key === 'line2' ? 'line1' : key);
+  function fillSavedCustomer(id: string) {
+    const result = prefillCustomer(id);
+    if (!result.ok) { toast.error(result.error); return; }
+    const address = useMockStore.getState().checkout.address;
+    Object.keys(EMPTY_ADDRESS).forEach((key) => {
+      const input = formRef.current?.elements.namedItem(key);
+      if (input instanceof HTMLInputElement) input.value = address[key as keyof ShippingAddress];
+    });
+    toast.success('Saved shipping details filled in. Please review them.');
   }
 
-  function choosePayment(paymentMethod: PaymentMethod) {
-    updateDraft({ paymentMethod });
-    clearError('paymentMethod');
+  function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (submittingRef.current || useMockStore.getState().checkout.submitting) return;
+    submittingRef.current = true;
+    try {
+      const data = new FormData(event.currentTarget);
+      const address: ShippingAddress = {
+        fullName: String(data.get('fullName') ?? ''), email: String(data.get('email') ?? ''),
+        phone: String(data.get('phone') ?? ''), line1: String(data.get('line1') ?? ''),
+        line2: String(data.get('line2') ?? ''), city: String(data.get('city') ?? ''),
+        state: String(data.get('state') ?? ''), postalCode: String(data.get('postalCode') ?? ''), country: 'India',
+      };
+      const saved = updateCheckout({ address });
+      if (!saved.ok) { toast.error(saved.error); focusErrors(); return; }
+      const result = placeOrder(useMockStore.getState().checkout.idempotencyKey);
+      if (!result.ok) { toast.error(result.error); focusErrors(); return; }
+      toast.success('Demo order confirmed. No payment was charged.');
+      navigate(`${ROUTES.checkout}?order=${encodeURIComponent(result.value.id)}`, { replace: true });
+    } catch {
+      toast.error('Checkout could not finish. Please review your bag and try again.');
+    } finally {
+      submittingRef.current = false;
+    }
   }
 
-  function addressField(
-    key: keyof Omit<Address, 'country'>,
-    label: string,
-    autoComplete: string,
-    options: { optional?: boolean; maxLength?: number; inputMode?: 'text' | 'tel' | 'numeric'; type?: string } = {},
-  ) {
-    const error = errors[key === 'line2' ? 'line1' : key];
+  function field(name: keyof ShippingAddress, label: string, autoComplete: string, type = 'text', optional = false) {
+    const error = errors[name];
     return (
       <div className="min-w-0 space-y-2">
-        <label htmlFor={`checkout-${key}`} className="text-sm font-medium">
-          {label}{options.optional && <span className="ml-2 font-normal text-muted-foreground">Optional</span>}
-        </label>
+        <Label htmlFor={`shipping-${name}`} className="text-sm">{label}{optional && <span className="ml-2 text-xs opacity-65">Optional</span>}</Label>
         <Input
-          id={`checkout-${key}`}
-          name={key}
-          autoComplete={autoComplete}
-          type={options.type ?? 'text'}
-          inputMode={options.inputMode}
-          required={!options.optional}
-          maxLength={options.maxLength ?? 100}
-          value={draft.address[key]}
-          onChange={event => updateAddress(key, event.target.value)}
-          aria-invalid={Boolean(error)}
-          aria-describedby={error ? `checkout-${key}-error` : undefined}
-          className="h-12 bg-background"
+          id={`shipping-${name}`} name={name} type={type} autoComplete={autoComplete}
+          defaultValue={checkout.address[name]} required={!optional} readOnly={name === 'country'}
+          aria-invalid={Boolean(error)} aria-describedby={error ? `${name}-error` : name === 'phone' ? 'phone-hint' : undefined}
+          inputMode={name === 'postalCode' ? 'numeric' : name === 'phone' ? 'tel' : name === 'email' ? 'email' : undefined}
+          maxLength={name === 'postalCode' ? 6 : name === 'email' ? 254 : name === 'phone' ? 20 : name === 'line1' || name === 'line2' ? 200 : 100}
+          className="h-12 border-[#d8cbbd] bg-transparent text-base focus-visible:ring-[#925568] dark:border-[#705c50]"
+          onBlur={(event) => {
+            if (name === 'country') return;
+            const result = updateCheckout({ address: { [name]: event.currentTarget.value } });
+            if (!result.ok) toast.error(result.error);
+          }}
         />
-        {error && <p id={`checkout-${key}-error`} className="text-sm text-destructive">{error}</p>}
+        {name === 'phone' && !error && <p id="phone-hint" className="text-xs opacity-70">Indian mobile number; +91 is optional.</p>}
+        {error && <p id={`${name}-error`} className="text-sm text-[#8c3048] dark:text-[#f1afb9]">{error}</p>}
       </div>
     );
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (submissionLock.current || busy) return;
-    submissionLock.current = true;
-    setSubmitting(true);
-    setErrors({});
-    setSubmissionMessage('');
-    try {
-      // The centralized action validates the latest inventory and atomically creates the demo order.
-      const result = placeOrder(draft, checkoutKey);
-      if (!result.ok || !result.order) {
-        setErrors(result.errors ?? {});
-        setSubmissionMessage(result.message);
-        toast.error(result.message);
-        requestAnimationFrame(() => {
-          const target = formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
-          (target ?? formRef.current?.querySelector<HTMLElement>('[data-checkout-error]'))?.focus();
-        });
-        return;
-      }
-      toast.success(result.message);
-      window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' });
-    } catch {
-      const message = 'The simulated checkout could not finish. Review your bag before trying again.';
-      setSubmissionMessage(message);
-      toast.error(message);
-    } finally {
-      submissionLock.current = false;
-      setSubmitting(false);
-    }
+  if (hasOrderReference && !order) {
+    return (
+      <section className="w-full bg-[#f5efe5] px-6 py-24 text-[#352b28] dark:bg-[#211c19] dark:text-[#f5ecdf] lg:px-12">
+        <p className="mb-5 text-xs uppercase tracking-[0.24em]">Jootiya · browser-saved receipts</p>
+        <h1 ref={headingRef} tabIndex={-1} className="font-serif text-4xl outline-none md:text-6xl">This receipt is not available.</h1>
+        <p className="mt-6 max-w-prose leading-relaxed opacity-75">The reference may be incorrect, or this order was saved in a different browser. Receipts are stored only on the device where the demo order was placed.</p>
+        <div className="mt-9 flex flex-wrap gap-4">
+          <Button asChild className={primary}><Link to={ROUTES.catalog}>Explore the collection</Link></Button>
+          {cart.length > 0 && <Button asChild variant="outline"><Link to={ROUTES.checkout}>Return to checkout</Link></Button>}
+        </div>
+      </section>
+    );
   }
 
-  if (!cart.length && !completedOrder) {
+  if (order) {
     return (
-      <main className="w-full bg-background text-foreground">
-        <div className="mx-auto flex min-h-[65vh] w-full max-w-[1600px] flex-col items-start justify-center gap-6 px-6 py-20 lg:px-12">
-          <ShoppingBag className="h-9 w-9 text-muted-foreground" aria-hidden="true" />
-          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Your next chapter</p>
-          <h1 className="font-serif text-4xl md:text-6xl">A little room for tradition.</h1>
-          <p className="text-muted-foreground">Your bag is empty. Discover the Mojri collection before checking out.</p>
-          <Button asChild className="h-12 bg-[#a83d29] px-6 text-white hover:bg-[#87301f]"><Link to="/catalog">Explore Mojris <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+      <section className="w-full bg-[#f5efe5] text-[#352b28] dark:bg-[#211c19] dark:text-[#f5ecdf]">
+        <div className="mx-auto w-full max-w-[1600px] px-6 py-16 lg:px-12 lg:py-24">
+          <CheckCircle2 className="mb-6 h-10 w-10 text-[#682f3e] dark:text-[#e7c2bd]" aria-hidden="true" />
+          <Badge variant="outline" className="mb-5 border-current/25 text-inherit">Demonstration confirmed</Badge>
+          <h1 ref={headingRef} tabIndex={-1} className="font-serif text-4xl outline-none md:text-6xl">A little piece of Jodhpur.</h1>
+          <p className="mt-5 max-w-prose leading-relaxed opacity-80">Thank you, {order.address.fullName}. Your demo receipt is saved in this browser. No payment is charged and no shipment is initiated. No confirmation email is sent.</p>
+          <p className="mt-5 break-all text-xs opacity-70">Reference: {order.id} · <time dateTime={order.createdAt}>{new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</time></p>
+          <div className="mt-12 grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-8">
+            <Card className={`${surface} min-w-0 lg:col-span-7`}>
+              <CardContent className="space-y-7 p-6 md:p-8">
+                <h2 className="font-serif text-2xl">Your chosen pairs</h2>
+                {order.items.map((item) => (
+                  <div key={`${item.productId}:${item.size}`} className="flex min-w-0 gap-4 border-b border-current/10 pb-6">
+                    <img src={item.image} alt={item.name} className="h-28 w-20 shrink-0 rounded-sm bg-[#eadfce] object-cover" />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <Link to={ROUTES.product(item.slug)} className="font-serif text-xl underline-offset-4 hover:underline">{item.name}</Link>
+                      <p className="text-sm opacity-75">{item.color} · EU {item.size} · Quantity {item.quantity}</p>
+                      <p className="text-xs opacity-70">{item.artisanName}</p>
+                      <p className="text-sm">{formatPrice(item.unitPrice)} per pair · {formatPrice(item.lineTotal)}</p>
+                    </div>
+                  </div>
+                ))}
+                <TotalsBreakdown totals={order.totals} />
+              </CardContent>
+            </Card>
+            <div className="min-w-0 space-y-6 lg:col-span-5">
+              <Card className={surface}>
+                <CardContent className="space-y-6 p-6 md:p-8">
+                  <h2 className="font-serif text-2xl">Delivery details · demo only</h2>
+                  <address className="break-words text-sm not-italic leading-7">
+                    {order.address.fullName}<br />{order.address.line1}<br />
+                    {order.address.line2 && <>{order.address.line2}<br /></>}
+                    {order.address.city}, {order.address.state} {order.address.postalCode}<br />
+                    {order.address.country}<br />{order.address.phone}<br />{order.address.email}
+                  </address>
+                  <Separator className="bg-current/15" />
+                  <p className="text-sm leading-relaxed"><strong>{PAYMENT_METHODS.find((method) => method.id === order.paymentMethod)?.label ?? 'Demo payment'}</strong><br />Status: simulated. No money collected.</p>
+                </CardContent>
+              </Card>
+              <Button asChild className={`${primary} h-12 w-full`}><Link to={ROUTES.catalog}>Continue shopping <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+              <p className="text-xs leading-relaxed opacity-70">Keep this URL to revisit your receipt in this browser. Clearing site data removes saved orders.</p>
+            </div>
+          </div>
         </div>
-      </main>
+      </section>
+    );
+  }
+
+  if (!cart.length) {
+    return (
+      <section className="w-full bg-[#f5efe5] px-6 py-24 text-[#352b28] dark:bg-[#211c19] dark:text-[#f5ecdf] lg:px-12">
+        <ShoppingBag className="mb-6 h-9 w-9" aria-hidden="true" />
+        <h1 className="font-serif text-4xl md:text-6xl">Your next heirloom awaits.</h1>
+        <p className="mt-5 leading-relaxed opacity-75">Your bag is empty. Choose a pair and a size before checking out.</p>
+        <div className="mt-8 flex flex-wrap gap-4">
+          <Button asChild className={primary}><Link to={ROUTES.catalog}>Discover the collection <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+          {checkout.lastOrderId && <Button asChild variant="outline"><Link to={`${ROUTES.checkout}?order=${encodeURIComponent(checkout.lastOrderId)}`}>View last demo receipt</Link></Button>}
+        </div>
+      </section>
     );
   }
 
   return (
-    <motion.main
-      initial={reducedMotion ? false : { opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="w-full bg-background text-foreground"
-    >
-      <div className="mx-auto w-full max-w-[1600px] px-6 py-10 lg:px-12 lg:py-16">
-        <Link to="/catalog" className="inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"><ArrowLeft className="h-4 w-4" />Back to the collection</Link>
-        <header className="mb-10 mt-6 space-y-4 lg:mb-14">
-          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Jootiya · The final stitch</p>
-          <h1 className="break-words font-serif text-4xl md:text-6xl">{completedOrder ? 'A story, beautifully begun.' : 'Make it yours.'}</h1>
-          <p className="text-muted-foreground">Simulated checkout. No real payment, shipment or backend request is made.</p>
-        </header>
-
-        {storageStatus === 'memory-only' && (
-          <div role="status" className="mb-8 flex items-start gap-3 rounded-md border border-border bg-muted p-4 text-sm">
-            <Info className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-            <p>Browser storage is unavailable. Your bag and demo order remain available while this page stays open, but may be lost on refresh.</p>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:gap-12">
-          <section className="min-w-0 lg:col-span-7" aria-label={completedOrder ? 'Order confirmation' : 'Checkout details'}>
-            {completedOrder ? (
-              <div role="status" className="space-y-7 border-t border-border py-8">
-                <CheckCircle2 className="h-10 w-10 text-[#a83d29] dark:text-[#edaa91]" aria-hidden="true" />
-                <h2 className="font-serif text-3xl">Your demo order is confirmed.</h2>
-                <div className="space-y-2">
-                  <p className="text-sm uppercase tracking-widest text-muted-foreground">Order reference</p>
-                  <p className="break-words text-2xl font-medium">{completedOrder.reference}</p>
-                  <p className="text-sm text-muted-foreground">{formatDate(completedOrder.createdAt)} · Simulated order</p>
-                </div>
-                <p className="leading-relaxed text-muted-foreground">No money was collected and nothing will be shipped. Your contact and address details have been cleared. This confirmation remains available when you return during this session; save the reference for your own records.</p>
-                <Button asChild className="h-12 bg-[#a83d29] px-6 text-white hover:bg-[#87301f]"><Link to="/catalog">Continue exploring <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
-              </div>
-            ) : (
-              <form ref={formRef} onSubmit={submit} noValidate className="space-y-10" aria-busy={busy}>
-                <fieldset disabled={busy} className="min-w-0 space-y-6">
-                  <legend className="mb-6 font-serif text-2xl">01 — Contact</legend>
-                  <p className="text-sm leading-relaxed text-muted-foreground">Required fields are marked by their labels; only address line 2 is optional. Personal details stay in memory for this session only, are not saved with orders, and are never sent anywhere.</p>
-                  <div className="space-y-2">
-                    <label htmlFor="checkout-email" className="text-sm font-medium">Email address</label>
-                    <Input id="checkout-email" name="email" type="email" autoComplete="email" required maxLength={254} value={draft.email} onChange={event => { updateDraft({ email: event.target.value }); clearError('email'); }} aria-invalid={Boolean(errors.email)} aria-describedby={errors.email ? 'checkout-email-error' : undefined} className="h-12 bg-background" />
-                    {errors.email && <p id="checkout-email-error" className="text-sm text-destructive">{errors.email}</p>}
-                  </div>
-                  {addressField('phone', 'Indian mobile number', 'tel', { type: 'tel', inputMode: 'tel', maxLength: 20 })}
-                </fieldset>
-                <Separator />
-                <fieldset disabled={busy} className="min-w-0 space-y-6">
-                  <legend className="mb-6 font-serif text-2xl">02 — Shipping address</legend>
-                  {addressField('fullName', 'Full name', 'shipping name')}
-                  {addressField('line1', 'House / flat and street', 'shipping address-line1', { maxLength: 200 })}
-                  {addressField('line2', 'Area / landmark', 'shipping address-line2', { optional: true, maxLength: 200 })}
-                  <div className="grid min-w-0 gap-6 sm:grid-cols-2">
-                    {addressField('city', 'City', 'shipping address-level2', { maxLength: 80 })}
-                    {addressField('state', 'State / union territory', 'shipping address-level1', { maxLength: 80 })}
-                    {addressField('postalCode', 'PIN code', 'shipping postal-code', { inputMode: 'numeric', maxLength: 6 })}
-                    <div className="space-y-2"><label htmlFor="checkout-country" className="text-sm font-medium">Country</label><Input id="checkout-country" name="country" value="India" readOnly autoComplete="shipping country-name" className="h-12 bg-muted" /><p className="text-xs text-muted-foreground">Indian addresses only for this demo.</p></div>
-                  </div>
-                </fieldset>
-                <Separator />
-                <fieldset disabled={busy} className="min-w-0 space-y-5" aria-describedby="payment-description">
-                  <legend className="mb-5 font-serif text-2xl">03 — A payment rehearsal</legend>
-                  <p id="payment-description" className="text-sm text-muted-foreground">Choose a demo option. Do not enter card, bank or UPI details. No payment is processed.</p>
-                  <div className="flex flex-wrap gap-3" role="group" aria-label="Simulated payment method">
-                    <Button type="button" variant={draft.paymentMethod === 'demo-upi' ? 'default' : 'outline'} aria-pressed={draft.paymentMethod === 'demo-upi'} onClick={() => choosePayment('demo-upi')} className="h-auto min-h-11 whitespace-normal rounded-full px-5 py-3">{draft.paymentMethod === 'demo-upi' && <Check className="mr-2 h-4 w-4" />}Demo UPI</Button>
-                    <Button type="button" variant={draft.paymentMethod === 'demo-card' ? 'default' : 'outline'} aria-pressed={draft.paymentMethod === 'demo-card'} onClick={() => choosePayment('demo-card')} className="h-auto min-h-11 whitespace-normal rounded-full px-5 py-3">{draft.paymentMethod === 'demo-card' && <Check className="mr-2 h-4 w-4" />}Demo card</Button>
-                    <Button type="button" variant={draft.paymentMethod === 'demo-cod' ? 'default' : 'outline'} aria-pressed={draft.paymentMethod === 'demo-cod'} onClick={() => choosePayment('demo-cod')} className="h-auto min-h-11 whitespace-normal rounded-full px-5 py-3">{draft.paymentMethod === 'demo-cod' && <Check className="mr-2 h-4 w-4" />}Demo cash on delivery</Button>
-                  </div>
-                  {errors.paymentMethod && <p role="alert" className="text-sm text-destructive">{errors.paymentMethod}</p>}
-                  <div className="flex items-start gap-3 rounded-md border border-border p-4">
-                    <Switch id="checkout-acknowledgement" checked={draft.acceptedDemo} onCheckedChange={checked => { updateDraft({ acceptedDemo: checked }); clearError('acceptedDemo'); }} aria-invalid={Boolean(errors.acceptedDemo)} aria-describedby={errors.acceptedDemo ? 'checkout-acknowledgement-error' : undefined} className="mt-0.5 shrink-0" />
-                    <label htmlFor="checkout-acknowledgement" className="cursor-pointer text-sm leading-relaxed">I understand this is a fictional browser-only order. No payment is collected and no goods will be delivered.</label>
-                  </div>
-                  {errors.acceptedDemo && <p id="checkout-acknowledgement-error" className="text-sm text-destructive">{errors.acceptedDemo}</p>}
-                </fieldset>
-                {(stockChanged || errors.cart || submissionMessage) && (
-                  <div role="alert" tabIndex={-1} data-checkout-error className="space-y-3 rounded-md border border-destructive/40 p-4 text-sm">
-                    <p>{errors.cart || (stockChanged ? 'Availability has changed. Review your bag and adjust quantities before continuing.' : submissionMessage)}</p>
-                    {(stockChanged || errors.cart) && <Button type="button" variant="outline" onClick={openCart}>Review your bag</Button>}
-                  </div>
-                )}
-                <Button type="submit" disabled={busy || stockChanged} className="h-auto min-h-14 w-full whitespace-normal bg-[#a83d29] px-6 py-4 text-white hover:bg-[#87301f]">
-                  {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <ShoppingBag className="mr-2 h-4 w-4" aria-hidden="true" />}
-                  {busy ? 'Placing simulated order…' : `Place demo order · ${formatCurrency(totals.total)}`}
-                </Button>
-                <p className="text-center text-xs leading-relaxed text-muted-foreground">No payment details. No account required. No real transaction.</p>
-              </form>
-            )}
-          </section>
-
-          <aside className="min-w-0 lg:col-span-5" aria-labelledby="checkout-summary-title">
-            <div className="rounded-sm border border-border bg-muted/40 p-5 sm:p-8 lg:sticky lg:top-8">
-              <div className="flex w-full flex-wrap items-center justify-between gap-3">
-                <h2 id="checkout-summary-title" className="font-serif text-2xl">{completedOrder ? 'Your order' : 'In your bag'}</h2>
-                <span className="text-sm text-muted-foreground">{summaryTotals.itemCount} {summaryTotals.itemCount === 1 ? 'pair' : 'pairs'}</span>
-              </div>
-              <ul className="my-7 space-y-6" aria-label="Order items">
-                {summaryItems.map(item => (
-                  <li key={`${item.productId}:${item.size}`} className="flex min-w-0 items-start gap-4">
-                    <img src={item.image.src} alt={item.image.alt} onError={event => { if (event.currentTarget.getAttribute('src') !== item.image.fallback) event.currentTarget.src = item.image.fallback; }} className="h-28 w-20 shrink-0 rounded-sm bg-muted object-cover" loading="lazy" />
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <h3 className="break-words font-serif text-lg">{item.name}</h3>
-                      <p className="text-xs text-muted-foreground">EU {item.size} · Quantity {item.quantity}</p>
-                      <p className="text-xs text-muted-foreground">{formatCurrency(item.unitPrice)} / pair</p>
-                      <p className="text-sm font-medium">{formatCurrency(item.lineTotal)}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              {!completedOrder && <Button type="button" variant="outline" className="mb-6 min-h-11 w-full" onClick={openCart}>Edit your bag</Button>}
-              <Separator />
-              <dl className="space-y-4 py-6 text-sm">
-                <div className="flex justify-between gap-4"><dt>Subtotal</dt><dd>{formatCurrency(summaryTotals.subtotal)}</dd></div>
-                <div className="flex justify-between gap-4"><dt>Demo shipping</dt><dd>{summaryTotals.shipping === 0 ? 'Complimentary' : formatCurrency(summaryTotals.shipping)}</dd></div>
-                <div className="flex justify-between gap-4 border-t border-border pt-5 text-lg font-medium"><dt>Total <span className="text-xs font-normal text-muted-foreground">INR</span></dt><dd>{formatCurrency(summaryTotals.total)}</dd></div>
-              </dl>
-              {!completedOrder && totals.freeShippingRemaining > 0 && <p className="mb-5 text-xs leading-relaxed text-muted-foreground">Add {formatCurrency(totals.freeShippingRemaining)} for complimentary demo shipping.</p>}
-              <div className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground"><Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><p>Illustrative products and pricing. The total is a simulation, not an amount charged.</p></div>
+    <section className="w-full bg-[#f5efe5] text-[#352b28] dark:bg-[#211c19] dark:text-[#f5ecdf]">
+      <div className="mx-auto w-full max-w-[1600px] px-6 py-12 lg:px-12 lg:py-20">
+        <Link to={ROUTES.catalog} className="mb-8 inline-flex items-center gap-2 text-sm underline-offset-4 hover:underline"><ArrowLeft className="h-4 w-4" /> Back to the collection</Link>
+        <p className="text-xs uppercase tracking-[0.24em]">A considered purchase</p>
+        <h1 className="mt-4 font-serif text-4xl md:text-6xl">The final details.</h1>
+        <p className="mt-5 max-w-prose text-sm leading-7 opacity-80">Guest checkout, entirely in your browser. No payment is charged and no shipment is initiated. Never enter real card or UPI credentials.</p>
+        <div ref={errorRef} tabIndex={-1} aria-live="polite" className="mt-6 space-y-2 outline-none">
+          {(storageError || errors.storage) && (
+            <div role="alert" className="flex flex-wrap items-center justify-between gap-4 rounded-md border border-[#a36b58] p-4 text-sm">
+              <p className="min-w-0 flex-1">{storageError || errors.storage} Your bag has not been intentionally cleared.</p>
+              <Button type="button" variant="outline" onClick={() => { const result = retryPersistence(); if (!result.ok) toast.error(result.error); else toast.success('Saved data reloaded. Please review checkout.'); }}>Retry storage</Button>
             </div>
+          )}
+          {errors.cart && <p role="alert" className="text-sm text-[#8c3048] dark:text-[#f1afb9]">{errors.cart} <Button variant="link" className="text-inherit underline" onClick={() => setOverlay('cart', true)}>Review bag</Button></p>}
+          {Object.keys(errors).some((key) => key !== 'storage' && key !== 'cart') && <p role="alert" className="text-sm text-[#8c3048] dark:text-[#f1afb9]">Please check the highlighted fields below.</p>}
+        </div>
+        <div className="mt-8 grid grid-cols-1 items-start gap-6 lg:grid-cols-12 lg:gap-8">
+          <form ref={formRef} onSubmit={submit} noValidate aria-busy={busy} className="min-w-0 space-y-6 lg:col-span-7">
+            <Card className={surface}>
+              <CardContent className="p-6 md:p-8">
+                <div className="mb-8 flex w-full flex-wrap items-center justify-between gap-4">
+                  <h2 className="font-serif text-2xl">01 / Shipping details</h2>
+                  {users.length > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild><Button type="button" variant="outline" disabled={busy}>Use saved customer <ChevronDown className="ml-2 h-4 w-4" /></Button></DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="max-h-72 max-w-[calc(100vw-3rem)] overflow-y-auto">
+                        {users.map((user) => <DropdownMenuItem key={user.id} onSelect={() => fillSavedCustomer(user.id)} className="flex flex-col items-start gap-1"><span>{user.name}</span><span className="break-all text-xs opacity-70">{user.email}</span></DropdownMenuItem>)}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
+                <fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-6 sm:grid-cols-2">
+                  <legend className="sr-only">Indian shipping address</legend>
+                  {field('fullName', 'Full name', 'shipping name')}
+                  {field('email', 'Email address', 'email', 'email')}
+                  {field('phone', 'Mobile number', 'shipping tel', 'tel')}
+                  {field('country', 'Country', 'shipping country-name')}
+                  <div className="min-w-0 sm:col-span-2">{field('line1', 'Street address', 'shipping address-line1')}</div>
+                  <div className="min-w-0 sm:col-span-2">{field('line2', 'Apartment, landmark or building', 'shipping address-line2', 'text', true)}</div>
+                  {field('city', 'City', 'shipping address-level2')}
+                  {field('state', 'State / union territory', 'shipping address-level1')}
+                  {field('postalCode', 'PIN code', 'shipping postal-code')}
+                </fieldset>
+                <p className="mt-6 text-xs leading-relaxed opacity-70">India-only demo checkout. Details are saved locally on this device, not sent to a server. Use fictional contact information for this demonstration.</p>
+              </CardContent>
+            </Card>
+            <Card className={surface}>
+              <CardContent className="space-y-6 p-6 md:p-8">
+                <h2 className="font-serif text-2xl">02 / Simulated payment</h2>
+                <div className="grid gap-3" role="group" aria-label="Choose a demonstration payment method" aria-describedby="payment-notice">
+                  {PAYMENT_METHODS.map((method) => (
+                    <Button key={method.id} type="button" variant="outline" disabled={busy} aria-pressed={checkout.paymentMethod === method.id}
+                      className={`h-auto min-h-20 justify-start gap-4 whitespace-normal px-5 py-4 text-left transition-colors ${checkout.paymentMethod === method.id ? 'border-[#682f3e] bg-[#f0e1dd] text-[#502332] hover:bg-[#e9d6d0] dark:border-[#e7c2bd] dark:bg-[#493038] dark:text-[#f5ecdf]' : 'border-current/20 bg-transparent hover:bg-[#ece2d5] dark:hover:bg-[#3c302a]'}`}
+                      onClick={() => { const result = updateCheckout({ paymentMethod: method.id }); if (!result.ok) toast.error(result.error); }}>
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-current" aria-hidden="true">{checkout.paymentMethod === method.id && <Check className="h-3 w-3" />}</span>
+                      <span className="min-w-0"><span className="block text-sm font-medium">{method.label}</span><span className="mt-1 block text-xs font-normal leading-relaxed opacity-80">{method.description}</span></span>
+                    </Button>
+                  ))}
+                </div>
+                {errors.paymentMethod && <p role="alert" className="text-sm text-[#8c3048] dark:text-[#f1afb9]">{errors.paymentMethod}</p>}
+                <p id="payment-notice" className="text-xs leading-relaxed opacity-75">Every option is simulated. No card number, security code, UPI ID or bank details are requested.</p>
+                <Button type="submit" disabled={busy} className={`${primary} h-14 w-full whitespace-normal px-5`}>
+                  {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving demo order…</> : <>Place demo order · {formatPrice(totals.total)} <ArrowRight className="ml-2 h-4 w-4 shrink-0" /></>}
+                </Button>
+                <p className="text-xs leading-relaxed opacity-70">{DEMO_NOTICE}</p>
+              </CardContent>
+            </Card>
+          </form>
+          <aside aria-label="Live order summary" className="min-w-0 lg:sticky lg:top-24 lg:col-span-5">
+            <Card className={surface}>
+              <CardContent className="space-y-7 p-6 md:p-8">
+                <div className="flex w-full items-center justify-between gap-3"><h2 className="font-serif text-2xl">Your selection</h2><Button type="button" variant="link" className="shrink-0 text-inherit underline underline-offset-4" onClick={() => setOverlay('cart', true)}>Edit bag</Button></div>
+                <ul className="space-y-6">
+                  {cart.map((line) => {
+                    const product = products.find((item) => item.id === line.productId);
+                    return <li key={line.key} className="flex min-w-0 gap-4">
+                      {product && <Link to={ROUTES.product(product.slug)} className="shrink-0"><img src={product.images[0].src} alt={product.images[0].alt} className="h-28 w-20 rounded-sm bg-[#eadfce] object-cover" /></Link>}
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <h3 className="break-words font-serif text-xl">{product ? <Link to={ROUTES.product(product.slug)} className="underline-offset-4 hover:underline">{product.name}</Link> : 'Unavailable product'}</h3>
+                        <p className="text-sm opacity-75">{product?.color} · EU {line.size} · Qty {line.quantity}</p>
+                        <p className="text-sm">{product ? formatPrice(product.price * line.quantity) : 'Please remove this item from your bag.'}</p>
+                      </div>
+                    </li>;
+                  })}
+                </ul>
+                <Separator className="bg-current/15" />
+                <TotalsBreakdown totals={totals} />
+                <p className="text-xs leading-relaxed opacity-75">Complimentary simulated shipping on orders from {formatPrice(SHIPPING_POLICY.freeAbove)}; otherwise {formatPrice(SHIPPING_POLICY.fee)}. {SHIPPING_POLICY.estimate}</p>
+                <div className="flex items-start gap-3 rounded-md bg-[#f1e8dc] p-4 dark:bg-[#3b2f29]"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" /><p className="text-xs leading-relaxed">Browser-only checkout. Your receipt remains available after refreshing, provided site storage is retained.</p></div>
+              </CardContent>
+            </Card>
           </aside>
         </div>
       </div>
-    </motion.main>
+    </section>
   );
 }
 

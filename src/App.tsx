@@ -7,6 +7,7 @@ import HomePage from '@/pages/HomePage';
 import CatalogPage from '@/pages/CatalogPage';
 import ProductDetailPage from '@/pages/ProductDetailPage';
 import CheckoutPage from '@/pages/CheckoutPage';
+import ArtisanStoryPage from '@/pages/ArtisanStoryPage';
 
 export default function App() {
   return (
@@ -18,8 +19,9 @@ export default function App() {
           <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/catalog" element={<CatalogPage />} />
-          <Route path="/product/:id" element={<ProductDetailPage />} />
+          <Route path="/product/:slug" element={<ProductDetailPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/artisans" element={<ArtisanStoryPage />} />
             <Route path="*" element={<HomePage />} />
           </Routes>
         </main>
