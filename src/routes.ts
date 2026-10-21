@@ -12,14 +12,14 @@ export const APP_ROUTES: RouteItem[] = [
     "path": "/",
     "name": "HomePage",
     "filePath": "src/pages/HomePage.tsx",
-    "navLabel": "Home",
+    "navLabel": "The Lookbook",
     "showInNav": true
   },
   {
     "path": "/catalog",
     "name": "CatalogPage",
     "filePath": "src/pages/CatalogPage.tsx",
-    "navLabel": "Catalog",
+    "navLabel": "Shop Mojris",
     "showInNav": true
   },
   {
@@ -27,13 +27,6 @@ export const APP_ROUTES: RouteItem[] = [
     "name": "ProductDetailPage",
     "filePath": "src/pages/ProductDetailPage.tsx",
     "showInNav": false
-  },
-  {
-    "path": "/cart",
-    "name": "CartPage",
-    "filePath": "src/pages/CartPage.tsx",
-    "navLabel": "Cart",
-    "showInNav": true
   },
   {
     "path": "/checkout",
@@ -46,14 +39,10 @@ export const APP_ROUTES: RouteItem[] = [
 export const NAV_LINKS: Array<{ path: string; label: string }> = [
   {
     "path": "/",
-    "label": "Home"
+    "label": "The Lookbook"
   },
   {
     "path": "/catalog",
-    "label": "Catalog"
-  },
-  {
-    "path": "/cart",
-    "label": "Cart"
+    "label": "Shop Mojris"
   }
 ];

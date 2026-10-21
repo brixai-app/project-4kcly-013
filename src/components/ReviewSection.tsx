@@ -1,296 +1,237 @@
-import React, { useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { Star, ThumbsUp, Info } from "lucide-react";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  Badge,
-  Avatar,
-  AvatarImage,
-  AvatarFallback,
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-  Button,
-} from "@/components/ui/shadcn";
-import { Review, useProductDetail } from "@/mock";
-import { cn } from "@/lib/utils";
-
-// NOTE: This component renders FRONTEND-ONLY, FULLY MOCKED reviews.
-// All review data comes from the in-memory mock store in src/mock.ts.
-// There is NO backend. Any interactions (sorting, helpful votes) are
-// purely client-side state and are not persisted.
+import React, { useId, useMemo, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { MessageSquare, Star } from 'lucide-react';
+import { toast } from 'sonner';
+import { Avatar, AvatarFallback, Badge, Button, Input, Textarea } from '@/components/ui/shadcn';
+import { formatDate, getProductReviews, getReviewSummary, useStore } from '@/mock';
+import { cn } from '@/lib/utils';
 
 export interface ReviewSectionProps {
-  productId?: string;
+  productId: string;
   className?: string;
 }
 
-type SortMode = "helpful" | "newest";
-
-const SORT_OPTIONS: { id: SortMode; label: string }[] = [
-  { id: "helpful", label: "Most helpful" },
-  { id: "newest", label: "Newest" },
-];
-
-function sortReviews(list: Review[], mode: SortMode): Review[] {
-  const reviews = [...list];
-  if (mode === "helpful") {
-    return reviews.sort((a, b) => b.helpfulVotes - a.helpfulVotes);
-  }
-  if (mode === "newest") {
-    return reviews.sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
-  }
-  return reviews;
-}
-
-function formatDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Recently";
-  return date.toLocaleDateString("en-IN", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function StarRating({ rating }: { rating: number }) {
+function RatingStars({ rating }: { rating: number }) {
   return (
-    <div className="flex items-center gap-1" aria-label={`${rating} out of 5 stars`}>
-      {Array.from({ length: 5 }).map((_, index) => {
-        const filled = index + 1 <= rating;
-        return (
-          <Star
-            key={index}
-            className={cn(
-              "h-4 w-4 transition-colors",
-              filled
-                ? "fill-amber-500 text-amber-500"
-                : "text-muted-foreground/40",
-            )}
-          />
-        );
-      })}
-    </div>
+    <span role="img" aria-label={`${rating.toFixed(1)} out of 5 stars`} className="inline-flex gap-1 text-primary">
+      {Array.from({ length: 5 }, (_, index) => (
+        <Star
+          key={index}
+          aria-hidden="true"
+          className={cn('h-4 w-4', index < Math.round(rating) ? 'fill-current' : 'text-muted-foreground/40')}
+        />
+      ))}
+    </span>
   );
 }
 
-const helpfulVariants = {
-  initial: { scale: 1 },
-  tap: { scale: 0.94 },
-};
+function ReviewForm({ productId }: { productId: string }) {
+  const id = useId();
+  const submitReview = useStore(state => state.submitReview);
+  const storageStatus = useStore(state => state.storageStatus);
+  const [rating, setRating] = useState(0);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const ratingRef = useRef<HTMLButtonElement>(null);
+  const submissionLock = useRef(false);
 
-export const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, className }) => {
-  const { reviews } = useProductDetail(productId ?? "");
-  const [sort, setSort] = useState<SortMode>("helpful");
-  // local optimistic helpful state (mocked, not persisted)
-  const [localHelpful, setLocalHelpful] = useState<Record<string, number>>({});
-
-  const sorted = useMemo(() => sortReviews(reviews, sort), [reviews, sort]);
-
-  const averageRating = useMemo(() => {
-    if (!reviews.length) return 0;
-    const total = reviews.reduce((sum, r) => sum + r.rating, 0);
-    return Math.round((total / reviews.length) * 10) / 10;
-  }, [reviews]);
-
-  const handleHelpful = (id: string) => {
-    setLocalHelpful((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
-  };
-
-  const totalReviews = reviews.length;
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (submissionLock.current) return;
+    setError('');
+    if (!rating) {
+      setError('Choose a rating from 1 to 5 before submitting.');
+      ratingRef.current?.focus();
+      return;
+    }
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    submissionLock.current = true;
+    setSaving(true);
+    try {
+      const result = submitReview({
+        productId,
+        name: String(data.get('name') ?? ''),
+        rating,
+        text: String(data.get('text') ?? ''),
+      });
+      if (!result.ok) {
+        setError(result.message);
+        toast.error(result.message);
+        return;
+      }
+      form.reset();
+      setRating(0);
+      const memoryOnly = useStore.getState().storageStatus === 'memory-only';
+      toast.success(memoryOnly
+        ? 'Demo review added for this session. Browser storage is unavailable; it will not survive a reload.'
+        : result.message);
+    } catch {
+      const message = 'Your demo review could not be saved. Please try again.';
+      setError(message);
+      toast.error(message);
+    } finally {
+      submissionLock.current = false;
+      setSaving(false);
+    }
+  }
 
   return (
-    <section
-      className={cn(
-        "w-full border-t border-border/60 bg-background/80 backdrop-blur-sm",
-        className,
-      )}
-      aria-label="Customer reviews"
-    >
-      <div className="w-full max-w-[1600px] mx-auto px-6 lg:px-12 py-10 lg:py-14">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10">
-          {/* Summary column */}
-          <div className="lg:col-span-4 min-w-0 flex flex-col gap-4">
-            <Card className="bg-muted/40 border-border/60 shadow-sm">
-              <CardHeader className="space-y-2">
-                <div className="flex items-center justify-between w-full">
-                  <CardTitle className="text-lg font-semibold tracking-tight font-['Playfair_Display']">
-                    Patron impressions
-                  </CardTitle>
-                  {totalReviews > 0 && (
-                    <Badge className="rounded-full bg-amber-100 text-amber-900 border border-amber-200 text-xs font-medium px-3 py-1">
-                      {averageRating.toFixed(1)} ★
-                    </Badge>
-                  )}
-                </div>
-                <CardDescription className="text-sm text-muted-foreground whitespace-normal break-words">
-                  Every pair is hand-finished in Rajasthan. These notes are from early Jootiya patrons.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {totalReviews > 0 ? (
-                  <div className="flex items-center gap-3">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-3xl font-semibold tracking-tight font-['Playfair_Display']">
-                        {averageRating.toFixed(1)}
-                      </span>
-                      <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                        AVERAGE RATING
-                      </span>
-                    </div>
-                    <div className="h-12 w-px bg-border/70" />
-                    <div className="flex flex-col gap-1">
-                      <StarRating rating={averageRating} />
-                      <span className="text-xs text-muted-foreground">
-                        Based on {totalReviews} review{totalReviews === 1 ? "" : "s"}
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    This pair is fresh from the atelier. Be the first to leave an impression.
-                  </p>
+    <form onSubmit={handleSubmit} className="min-w-0 space-y-6" aria-labelledby={`${id}-heading`}>
+      <div className="space-y-3">
+        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Your perspective</p>
+        <h3 id={`${id}-heading`} className="break-words font-serif text-3xl">Leave a demo review</h3>
+        <p id={`${id}-notice`} className="text-sm leading-relaxed text-muted-foreground">
+          Try the review experience. Feedback stays in this browser only, is not published online, and does not represent a verified purchase.
+        </p>
+      </div>
+      <div className="space-y-2">
+        <label htmlFor={`${id}-name`} className="text-sm font-medium">Display name <span className="text-muted-foreground">(required)</span></label>
+        <Input
+          id={`${id}-name`}
+          name="name"
+          autoComplete="nickname"
+          placeholder="How should we credit you?"
+          required
+          minLength={2}
+          maxLength={60}
+          className="h-12 bg-background"
+        />
+      </div>
+      <fieldset className="min-w-0 space-y-3">
+        <legend className="text-sm font-medium">Your rating <span className="text-muted-foreground">(required)</span></legend>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Choose a rating from 1 to 5 stars">
+          {Array.from({ length: 5 }, (_, index) => {
+            const value = index + 1;
+            return (
+              <Button
+                key={value}
+                ref={value === 1 ? ratingRef : undefined}
+                type="button"
+                variant="outline"
+                aria-pressed={rating === value}
+                aria-label={`${value} ${value === 1 ? 'star' : 'stars'}`}
+                onClick={() => { setRating(value); setError(''); }}
+                className={cn(
+                  'h-11 gap-2 rounded-full px-4 transition-colors',
+                  rating === value && 'border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground',
                 )}
+              >
+                <span>{value}</span>
+                <Star aria-hidden="true" className={cn('h-4 w-4', rating === value && 'fill-current')} />
+              </Button>
+            );
+          })}
+        </div>
+      </fieldset>
+      <div className="space-y-2">
+        <label htmlFor={`${id}-text`} className="text-sm font-medium">Your review <span className="text-muted-foreground">(required)</span></label>
+        <Textarea
+          id={`${id}-text`}
+          name="text"
+          required
+          minLength={10}
+          maxLength={1500}
+          rows={5}
+          placeholder="What catches your eye about this Mojri design?"
+          aria-describedby={`${id}-help ${id}-notice`}
+          className="min-h-36 resize-y bg-background"
+        />
+        <p id={`${id}-help`} className="text-xs text-muted-foreground">10–1,500 characters. Please do not include contact or payment details.</p>
+      </div>
+      {error && <p role="alert" className="text-sm font-medium text-destructive">{error}</p>}
+      {storageStatus === 'memory-only' && (
+        <p role="status" className="text-sm text-muted-foreground">Browser storage is unavailable. Your review will remain only until this page is reloaded.</p>
+      )}
+      <Button type="submit" disabled={saving} aria-busy={saving} className="min-h-12 w-full px-7 sm:w-auto">
+        {saving ? 'Saving demo review…' : 'Submit demo review'}
+      </Button>
+    </form>
+  );
+}
 
-                <div className="pt-2 border-t border-border/60 mt-2 flex items-center justify-between gap-3 flex-wrap">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Info className="h-3.5 w-3.5" />
-                    <span className="whitespace-normal break-words">
-                      Reviews are fully mocked and live only in your browser for this preview.
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs">
-                    {SORT_OPTIONS.map((option) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => setSort(option.id)}
-                        className={cn(
-                          "rounded-full border px-3 py-1 transition-colors text-xs font-medium flex items-center gap-1.5",
-                          sort === option.id
-                            ? "bg-amber-900 text-amber-50 border-amber-800"
-                            : "bg-background text-muted-foreground border-border hover:bg-muted/80",
-                        )}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+export function ReviewSection({ productId, className }: ReviewSectionProps) {
+  const reviews = useStore(state => state.reviews);
+  const reducedMotion = useReducedMotion();
+  const headingId = useId();
+  const entries = useMemo(() => getProductReviews(productId, reviews), [productId, reviews]);
+  const summary = useMemo(() => getReviewSummary(productId, reviews), [productId, reviews]);
+
+  return (
+    <section aria-labelledby={headingId} className={cn('w-full border-t border-border bg-background py-16 text-foreground lg:py-24', className)}>
+      <div className="mx-auto w-full max-w-[1600px] px-6 lg:px-12">
+        <div className="mb-12 flex w-full flex-wrap items-end justify-between gap-6">
+          <div className="min-w-0 space-y-3">
+            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">The conversation around craft</p>
+            <h2 id={headingId} className="whitespace-normal break-words font-serif text-4xl md:text-5xl">Notes on the details</h2>
           </div>
-
-          {/* Reviews column */}
-          <div className="lg:col-span-8 min-w-0">
-            {sorted.length === 0 ? (
-              <Card className="bg-muted/40 border-dashed border-border/60">
-                <CardContent className="py-10 flex flex-col items-start gap-3">
-                  <p className="text-sm text-muted-foreground whitespace-normal break-words max-w-prose">
-                    No stories yet for this mojri. Early patrons often share how they styled their pair and where it travelled with them.
-                  </p>
-                  <Badge className="rounded-full bg-indigo-50 text-indigo-900 border border-indigo-100 text-xs px-3 py-1">
-                    Mock preview
-                  </Badge>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="flex flex-col gap-4">
-                {sorted.map((review) => {
-                  const optimisticHelpful = review.helpfulVotes + (localHelpful[review.id] ?? 0);
+          <Badge variant="outline" className="rounded-full px-4 py-2">Demo reviews · Not verified purchases</Badge>
+        </div>
+        <div className="grid min-w-0 grid-cols-1 gap-12 lg:grid-cols-12 lg:gap-16">
+          <div className="min-w-0 lg:col-span-7">
+            <div className="grid min-w-0 gap-8 border-b border-border pb-10 sm:grid-cols-[auto_1fr] sm:gap-12">
+              <div className="space-y-3">
+                <p className="font-serif text-6xl" aria-label={summary.count ? `Average rating ${summary.average.toFixed(1)} out of 5` : 'No ratings yet'}>
+                  {summary.count ? summary.average.toFixed(1) : '—'}
+                </p>
+                <RatingStars rating={summary.average} />
+                <p className="text-sm text-muted-foreground">{summary.count} demo {summary.count === 1 ? 'review' : 'reviews'}</p>
+              </div>
+              <div className="min-w-0 space-y-3" aria-label="Rating distribution">
+                {[5, 4, 3, 2, 1].map(stars => {
+                  const count = summary.distribution[stars] ?? 0;
+                  const percent = summary.count ? count / summary.count * 100 : 0;
                   return (
-                    <motion.div
-                      key={review.id}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.22, ease: "easeOut" }}
-                    >
-                      <Card className="bg-background/90 border-border/70 shadow-sm">
-                        <CardContent className="pt-5 pb-4 flex flex-col gap-3">
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex items-start gap-3">
-                              <Avatar className="h-9 w-9 border border-border/60 bg-muted/80">
-                                {/* Mock-only avatar; no remote fetch */}
-                                <AvatarImage src={undefined as unknown as string} alt={review.userName} />
-                                <AvatarFallback className="bg-amber-900 text-amber-50 text-xs font-semibold">
-                                  {review.avatarInitials}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <p className="text-sm font-medium leading-tight whitespace-normal break-words">
-                                    {review.userName}
-                                  </p>
-                                  <Badge className="rounded-full bg-indigo-50 text-indigo-900 border border-indigo-100 text-[10px] font-medium px-2 py-0.5">
-                                    Verified mock patron
-                                  </Badge>
-                                </div>
-                                <StarRating rating={review.rating} />
-                              </div>
-                            </div>
-                            <span className="text-xs text-muted-foreground whitespace-nowrap">
-                              {formatDate(review.createdAt)}
-                            </span>
-                          </div>
-
-                          <div className="space-y-1.5">
-                            <h4 className="text-sm font-semibold tracking-tight whitespace-normal break-words">
-                              {review.title}
-                            </h4>
-                            <p className="text-sm text-muted-foreground whitespace-normal break-words leading-relaxed">
-                              {review.body}
-                            </p>
-                          </div>
-
-                          <div className="flex items-center justify-between gap-3 pt-1 flex-wrap">
-                            <motion.button
-                              type="button"
-                              variants={helpfulVariants}
-                              whileTap="tap"
-                              initial="initial"
-                              onClick={() => handleHelpful(review.id)}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/60 px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                            >
-                              <ThumbsUp className="h-3.5 w-3.5" />
-                              <span>Helpful</span>
-                              <span className="text-[10px] text-muted-foreground/80">
-                                {optimisticHelpful}
-                              </span>
-                            </motion.button>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 rounded-full border border-dashed border-border/60 text-muted-foreground hover:bg-muted/80"
-                                >
-                                  <Info className="h-3.5 w-3.5" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
-                                These interactions are a preview only. In a full build, your feedback would help future patrons choose their perfect mojri.
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
+                    <div key={stars} className="flex items-center gap-3 text-sm" aria-label={`${stars} stars: ${count} reviews`}>
+                      <span className="w-12 shrink-0 text-muted-foreground">{stars} star</span>
+                      <div aria-hidden="true" className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-primary motion-safe:transition-[width] motion-safe:duration-500" style={{ width: `${percent}%` }} />
+                      </div>
+                      <span aria-hidden="true" className="w-6 shrink-0 text-right tabular-nums text-muted-foreground">{count}</span>
+                    </div>
                   );
                 })}
               </div>
+            </div>
+            {entries.length ? (
+              <ul className="divide-y divide-border">
+                {entries.map(review => (
+                  <motion.li key={review.id} initial={reducedMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22 }} className="min-w-0 py-8">
+                    <article className="space-y-4">
+                      <header className="flex w-full flex-wrap items-center justify-between gap-4">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <Avatar className="h-10 w-10 shrink-0">
+                            <AvatarFallback className="bg-muted text-xs text-foreground">{review.name.split(/\s+/).map(part => part.charAt(0)).slice(0, 2).join('').toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <p className="break-words text-sm font-medium">{review.name}</p>
+                            <p className="text-xs text-muted-foreground">{review.source === 'seed' ? 'Illustrative demo persona' : 'Browser visitor · Demo submission'}</p>
+                          </div>
+                        </div>
+                        <time dateTime={review.createdAt} className="text-xs text-muted-foreground">{formatDate(review.createdAt)}</time>
+                      </header>
+                      <RatingStars rating={review.rating} />
+                      {review.title && <h3 className="break-words font-serif text-xl">{review.title}</h3>}
+                      <p className="whitespace-pre-wrap break-words text-sm leading-7 text-muted-foreground">{review.text}</p>
+                    </article>
+                  </motion.li>
+                ))}
+              </ul>
+            ) : (
+              <div className="space-y-4 py-12">
+                <MessageSquare aria-hidden="true" className="h-7 w-7 text-muted-foreground" />
+                <h3 className="font-serif text-2xl">A conversation waiting to begin</h3>
+                <p className="text-sm leading-relaxed text-muted-foreground">No demo reviews for this design yet. Share a first impression using the form; nothing is published or sent to a backend.</p>
+              </div>
             )}
           </div>
+          <aside className="min-w-0 border-t border-border pt-10 lg:col-span-5 lg:border-l lg:border-t-0 lg:pl-10 lg:pt-0">
+            <ReviewForm key={productId} productId={productId} />
+          </aside>
         </div>
       </div>
     </section>
   );
-};
+}
 
 export default ReviewSection;

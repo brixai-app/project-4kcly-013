@@ -1,151 +1,228 @@
-import React from "react";
-import { Separator } from "@/components/ui/shadcn";
-import { cn } from "@/lib/utils";
+import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowUpRight, MapPin } from 'lucide-react';
+import {
+  Button,
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/shadcn';
+import {
+  categories,
+  DEMO_NOTICE,
+  FREE_SHIPPING_THRESHOLD,
+  SHIPPING_FEE,
+  SIZES,
+  formatCurrency,
+} from '@/mock';
 
-const currentYear = new Date().getFullYear();
-
-export interface FooterProps {
-  className?: string;
+function FooterGuide({
+  label,
+  title,
+  description,
+  children,
+}: {
+  label: string;
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button
+          variant="ghost"
+          className="h-auto min-h-11 justify-start whitespace-normal rounded-sm px-0 py-2 text-left text-sm font-normal text-stone-300 underline-offset-4 transition-colors hover:bg-transparent hover:text-white hover:underline focus-visible:ring-stone-300 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-950"
+        >
+          {label}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[85dvh] overflow-y-auto border-stone-300 bg-[#f8f4ed] text-stone-900 dark:border-stone-700 dark:bg-stone-950 dark:text-stone-100 sm:max-w-xl">
+        <DialogHeader className="text-left">
+          <DialogTitle className="pr-6 font-serif text-3xl font-normal leading-tight">
+            {title}
+          </DialogTitle>
+          <DialogDescription className="pt-2 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
+            {description}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-5 py-3 text-sm leading-7 text-stone-700 dark:text-stone-300">
+          {children}
+        </div>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button className="min-h-11 bg-stone-900 text-stone-50 transition-colors hover:bg-stone-700 dark:bg-stone-100 dark:text-stone-950 dark:hover:bg-stone-300">
+              Understood
+            </Button>
+          </DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
-const Footer: React.FC<FooterProps> = ({ className }) => {
+export function Footer() {
   return (
-    <footer
-      className={cn(
-        "w-full border-t border-neutral-200/70 dark:border-neutral-800/80 bg-[#f6f0e8] dark:bg-slate-950/95 text-neutral-800 dark:text-neutral-100",
-        "mt-16",
-        className,
-      )}
-    >
-      {/* Subtle divider to echo editorial layouts */}
-      <Separator className="w-full border-neutral-200/70 dark:border-neutral-800/80" />
-
-      <div className="w-full max-w-[1600px] mx-auto px-6 lg:px-12 py-10 lg:py-12 flex flex-col gap-8">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 lg:gap-10 items-start">
-          {/* Brand & story */}
-          <div className="md:col-span-5 flex flex-col gap-3 min-w-0">
-            <div className="text-2xl tracking-wide font-semibold font-['Playfair_Display'] text-[#1e2240] dark:text-slate-50">
-              Jootiya
-            </div>
-            <p className="text-sm leading-relaxed text-neutral-700/90 dark:text-neutral-300">
-              A curated salon of Rajasthani mojris, crafted by hand in small ateliers across
-              Jaipur and Jodhpur. Each pair celebrates leather, pattern, and the quiet rituals of
-              dressing well.
-            </p>
-          </div>
-
-          {/* Navigation columns */}
-          <div className="md:col-span-4 flex flex-col sm:flex-row gap-8 min-w-0">
-            <div className="flex-1 min-w-0">
-              <h3 className="text-xs font-medium tracking-[0.18em] uppercase text-neutral-600 dark:text-neutral-400 mb-3">
-                Explore
-              </h3>
-              <nav className="flex flex-col gap-1.5 text-sm text-neutral-700 dark:text-neutral-300">
-                <a
-                  href="/"
-                  className="inline-flex items-center gap-1.5 hover:text-[#9a6a32] dark:hover:text-amber-300 transition-colors"
-                >
-                  Home
-                </a>
-                <a
-                  href="/catalog"
-                  className="inline-flex items-center gap-1.5 hover:text-[#9a6a32] dark:hover:text-amber-300 transition-colors"
-                >
-                  Catalog
-                </a>
-                <a
-                  href="/cart"
-                  className="inline-flex items-center gap-1.5 hover:text-[#9a6a32] dark:hover:text-amber-300 transition-colors"
-                >
-                  Cart
-                </a>
-                <a
-                  href="/#artisans"
-                  className="inline-flex items-center gap-1.5 hover:text-[#9a6a32] dark:hover:text-amber-300 transition-colors"
-                >
-                  Artisan stories
-                </a>
-              </nav>
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <h3 className="text-xs font-medium tracking-[0.18em] uppercase text-neutral-600 dark:text-neutral-400 mb-3">
-                Care & Details
-              </h3>
-              <ul className="flex flex-col gap-1.5 text-sm text-neutral-700 dark:text-neutral-300">
-                <li className="flex items-baseline gap-2">
-                  <span className="h-[3px] w-[3px] rounded-full bg-neutral-500/60 dark:bg-neutral-400/70" />
-                  <span>Handcrafted in Rajasthan, India</span>
-                </li>
-                <li className="flex items-baseline gap-2">
-                  <span className="h-[3px] w-[3px] rounded-full bg-neutral-500/60 dark:bg-neutral-400/70" />
-                  <span>Responsibly sourced leathers</span>
-                </li>
-                <li className="flex items-baseline gap-2">
-                  <span className="h-[3px] w-[3px] rounded-full bg-neutral-500/60 dark:bg-neutral-400/70" />
-                  <span>Limited, small-batch editions</span>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          {/* Newsletter & socials (purely visual, no backend) */}
-          <div className="md:col-span-3 flex flex-col gap-3 min-w-0">
-            <h3 className="text-xs font-medium tracking-[0.18em] uppercase text-neutral-600 dark:text-neutral-400">
-              Stay close to the atelier
-            </h3>
-            <p className="text-sm text-neutral-700/90 dark:text-neutral-300 mb-1">
-              Receive occasional studio notes on new drops, care rituals, and journeys across
-              Rajasthan. Entirely optional, forever respectful.
-            </p>
-            <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-              This is a frontend-only demo. Subscribing here does not send data to any server.
-            </p>
-            <div className="flex flex-wrap items-center gap-3 mt-1">
-              <SocialLink href="https://instagram.com" label="Instagram" />
-              <SocialLink href="https://pinterest.com" label="Pinterest" />
-              <SocialLink href="mailto:studio@jootiya.in" label="Email Studio" />
-            </div>
-          </div>
-        </div>
-
-        <Separator className="w-full border-neutral-200/70 dark:border-neutral-800/80" />
-
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs text-neutral-600 dark:text-neutral-400">
-          <p>
-            © {currentYear} Jootiya. A lovingly crafted mock storefront celebrating Rajasthani
-            mojris. Frontend-only; all data is stored in your browser.
+    <footer className="w-full border-t border-stone-800 bg-stone-950 px-6 text-stone-100 lg:px-12">
+      <div className="grid w-full grid-cols-1 gap-x-12 gap-y-12 py-16 sm:grid-cols-2 lg:grid-cols-12 lg:py-20">
+        <div className="min-w-0 sm:col-span-2 lg:col-span-6">
+          <Link
+            to="/"
+            aria-label="Jootiya home"
+            className="inline-block rounded-sm font-serif text-5xl tracking-tight text-stone-100 transition-colors hover:text-[#dfad8d] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-8 focus-visible:outline-stone-300 sm:text-6xl"
+          >
+            Jootiya<span className="text-[#dfad8d]">.</span>
+          </Link>
+          <p className="mt-6 max-w-lg whitespace-normal font-serif text-2xl leading-relaxed text-stone-200 sm:text-3xl">
+            The soul of Rajasthan.<br />
+            A story in every stitch.
           </p>
-          <div className="flex flex-wrap items-center gap-3">
-            <span>Crafted for exploration.</span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-neutral-300/70 dark:border-neutral-700/80 px-3 py-1 text-[11px] tracking-wide uppercase">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#9a6a32]" />
-              <span className="font-medium">Mock Experience</span>
-            </span>
-          </div>
+          <p className="mt-5 max-w-lg text-sm leading-7 text-stone-400">
+            An editorial tribute to the Rajasthani Mojri and Jodhpur’s
+            enduring language of hand-cut leather, sculpted toes and patient
+            threadwork.
+          </p>
+          <p className="mt-6 flex items-center gap-2 text-xs tracking-wide text-stone-300">
+            <MapPin className="h-4 w-4 shrink-0 text-[#dfad8d]" aria-hidden="true" />
+            Inspired by Jodhpur, Rajasthan, India
+          </p>
         </div>
+
+        <nav aria-label="Footer collections" className="min-w-0 lg:col-span-3">
+          <h2 className="mb-5 text-xs font-medium uppercase tracking-[0.2em] text-[#dfad8d]">
+            The collections
+          </h2>
+          <ul className="space-y-1">
+            <li>
+              <Button
+                asChild
+                variant="ghost"
+                className="h-auto min-h-11 justify-start whitespace-normal rounded-sm px-0 py-2 text-sm font-normal text-stone-300 transition-colors hover:bg-transparent hover:text-white focus-visible:ring-stone-300"
+              >
+                <Link to="/catalog" className="gap-2">
+                  Explore all Mojris
+                  <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+                </Link>
+              </Button>
+            </li>
+            {categories.map((category) => (
+              <li key={category.id}>
+                <Button
+                  asChild
+                  variant="ghost"
+                  className="h-auto min-h-11 justify-start whitespace-normal rounded-sm px-0 py-2 text-left text-sm font-normal text-stone-300 underline-offset-4 transition-colors hover:bg-transparent hover:text-white hover:underline focus-visible:ring-stone-300"
+                >
+                  <Link to={`/catalog?category=${encodeURIComponent(category.id)}`}>
+                    {category.name}
+                  </Link>
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <section aria-labelledby="footer-guidance" className="min-w-0 lg:col-span-3">
+          <h2 id="footer-guidance" className="mb-5 text-xs font-medium uppercase tracking-[0.2em] text-[#dfad8d]">
+            A little guidance
+          </h2>
+          <div className="flex flex-col items-start gap-1">
+            <FooterGuide
+              label="Shipping information"
+              title="From the imagined atelier"
+              description="Shipping information for this browser-only demonstration. No physical orders are dispatched."
+            >
+              <p>
+                The checkout supports Indian addresses only. Demo shipping is{' '}
+                {formatCurrency(SHIPPING_FEE)} for a non-empty bag below{' '}
+                {formatCurrency(FREE_SHIPPING_THRESHOLD)}; bags at or above that
+                subtotal receive free simulated shipping.
+              </p>
+              <p>
+                Your bag and checkout show the same calculated shipping total.
+                No courier is booked, tracking number issued or delivery date
+                promised. Entered contact and address details are not saved to
+                persistent order history.
+              </p>
+            </FooterGuide>
+
+            <FooterGuide
+              label="Size & fit guidance"
+              title="Find your comfortable fit"
+              description="General guidance, not a measured size chart for a physical product."
+            >
+              <p>
+                This collection uses EU sizes {SIZES[0]}–{SIZES[SIZES.length - 1]}.
+                Choose your usual closed-shoe size; if you are between sizes,
+                choose the larger size. Each product page shows its fit notes
+                and available demo inventory.
+              </p>
+              <p>
+                For real footwear, measure both feet while standing and use the
+                longer measurement against the maker’s own chart. A Mojri should
+                feel secure without pinching the toes. We do not provide invented
+                centimetre conversions or guarantee a physical fit.
+              </p>
+            </FooterGuide>
+
+            <FooterGuide
+              label="Caring for your Mojris"
+              title="A little care, a longer story"
+              description="Gentle, general care advice for traditional leather and embroidered footwear."
+            >
+              <p>
+                Keep Mojris dry and away from prolonged direct sunlight. After
+                wearing, let them air naturally before storing them in a
+                breathable cotton bag.
+              </p>
+              <p>
+                Remove surface dust gently with a soft, dry cloth. Avoid soaking,
+                machine washing, harsh cleaners and direct heat. Treat delicate
+                threadwork lightly; do not scrub embellished uppers.
+              </p>
+              <p>
+                Always follow the material-specific care notes on the product
+                page. For an actual handmade pair, ask its maker before applying
+                leather treatments to silk, velvet or embroidered areas.
+              </p>
+            </FooterGuide>
+
+            <FooterGuide
+              label="Returns & exchanges"
+              title="A note on returns"
+              description="There are no real purchases, payments, shipments or refunds in this demo."
+            >
+              <p>
+                Before placing a simulated order, you can change sizes by
+                removing a bag item and adding your preferred available size.
+                Quantity changes and removals are available directly in your bag.
+              </p>
+              <p>
+                Placing a demo order records a fictional order in this browser
+                and updates demo stock. It does not charge you or establish a
+                real returns policy. Post-order returns, exchanges and refunds
+                are not processed in this prototype.
+              </p>
+            </FooterGuide>
+          </div>
+        </section>
+      </div>
+
+      <div className="flex w-full flex-col gap-6 border-t border-stone-800 py-8 lg:flex-row lg:items-start lg:justify-between lg:gap-16">
+        <p className="min-w-0 text-xs leading-6 text-stone-400 lg:max-w-3xl">
+          <span className="font-medium text-stone-200">An illustrative storefront. </span>
+          {DEMO_NOTICE}
+        </p>
+        <p className="shrink-0 text-xs leading-6 tracking-wide text-stone-400">
+          © {new Date().getFullYear()} Jootiya · Craft, considered.
+        </p>
       </div>
     </footer>
   );
-};
-
-interface SocialLinkProps {
-  href: string;
-  label: string;
 }
-
-const SocialLink: React.FC<SocialLinkProps> = ({ href, label }) => {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      className="text-xs font-medium tracking-wide uppercase inline-flex items-center gap-1.5 text-neutral-700 dark:text-neutral-200 hover:text-[#9a6a32] dark:hover:text-amber-300 border-b border-transparent hover:border-[#9a6a32]/70 dark:hover:border-amber-300/70 transition-colors"
-    >
-      <span className="h-[3px] w-[3px] rounded-full bg-neutral-500/70 dark:bg-neutral-300" />
-      {label}
-    </a>
-  );
-};
 
 export default Footer;

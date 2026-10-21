@@ -1,261 +1,257 @@
-import React from "react";
-import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
-import { ShoppingBag, Sparkles } from "lucide-react";
+import React, { useEffect, useId, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { motion, useReducedMotion } from 'framer-motion';
+import { ArrowUpRight, Check, ShoppingBag } from 'lucide-react';
+import { toast } from 'sonner';
 import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-  Badge,
   Button,
-} from "@/components/ui/shadcn";
-import { cn } from "@/lib/utils";
-import { Product, artisans, formatPriceINR, useCart } from "@/mock";
-import { toast } from "sonner";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/shadcn';
+import {
+  MAX_CART_QUANTITY,
+  formatCurrency,
+  isValidSize,
+  useStore,
+  type Product,
+  type ShoeSize,
+} from '@/mock';
+import { cn } from '@/lib/utils';
 
 export interface ProductCardProps {
   product: Product;
   className?: string;
-  /**
-   * When true, renders a slightly more prominent treatment (used for hero/featured rows)
-   */
-  featured?: boolean;
+  imageClassName?: string;
+  priority?: boolean;
 }
 
-// Map internal color tokens to display labels and swatch classes
-const COLOR_META: Record<
-  string,
-  { label: string; swatchClass: string; badgeClass: string }
-> = {
-  "deep-indigo": {
-    label: "Deep Indigo",
-    swatchClass: "bg-[#1f2341]",
-    badgeClass:
-      "border-indigo-500/40 text-indigo-900 dark:text-indigo-100 bg-indigo-50/80 dark:bg-indigo-500/20",
-  },
-  "warm-ochre": {
-    label: "Warm Ochre",
-    swatchClass: "bg-[#c27a32]",
-    badgeClass:
-      "border-amber-500/40 text-amber-900 dark:text-amber-100 bg-amber-50/80 dark:bg-amber-500/20",
-  },
-  "sand-beige": {
-    label: "Sand Beige",
-    swatchClass: "bg-[#d0b89f]",
-    badgeClass:
-      "border-amber-300/50 text-stone-900 dark:text-stone-50 bg-amber-50/70 dark:bg-amber-500/10",
-  },
-  marigold: {
-    label: "Marigold",
-    swatchClass: "bg-[#e09a28]",
-    badgeClass:
-      "border-orange-400/60 text-orange-900 dark:text-orange-50 bg-orange-50/80 dark:bg-orange-500/20",
-  },
-};
-
-const cardMotion = {
-  initial: { y: 0, opacity: 0.92, boxShadow: "0 0 0 rgba(0,0,0,0)" },
-  whileHover: {
-    y: -6,
-    boxShadow: "0 18px 45px rgba(15, 23, 42, 0.18)",
-  },
-  transition: {
-    type: "spring",
-    stiffness: 230,
-    damping: 22,
-    mass: 0.9,
-  },
-};
-
-const imageMotion = {
-  whileHover: { scale: 1.03 },
-  transition: { type: "spring", stiffness: 220, damping: 24 },
-};
-
-export const ProductCard: React.FC<ProductCardProps> = ({
+export function ProductCard({
   product,
   className,
-  featured,
-}) => {
-  const { addToCart, cart } = useCart();
+  imageClassName,
+  priority = false,
+}: ProductCardProps) {
+  const reducedMotion = useReducedMotion();
+  const fieldId = useId();
+  const [size, setSize] = useState<ShoeSize | undefined>();
+  const [imageStage, setImageStage] = useState<0 | 1 | 2>(0);
+  const [addCount, setAddCount] = useState(0);
+  const [added, setAdded] = useState(false);
 
-  const artisan = artisans.find((a) => a.id === product.artisanId);
-
-  const uniqueColors = Array.from(
-    new Set(product.variants.map((v) => v.color)),
+  // Atomic selectors keep snapshots stable while reflecting checkout inventory changes.
+  const liveProduct = useStore(state =>
+    state.products.find(item => item.id === product.id),
   );
+  const addToCart = useStore(state => state.addToCart);
+  const openCart = useStore(state => state.openCart);
+  const quantityInBag = useStore(state =>
+    state.cart.find(line => line.productId === product.id && line.size === size)
+      ?.quantity ?? 0,
+  );
+  const item = liveProduct ?? product;
+  const image = item.images[0];
+  const detailPath = `/product/${encodeURIComponent(item.slug)}`;
+  const inStock = item.variants.some(variant => variant.stock > 0);
+  const selectedVariant = item.variants.find(variant => variant.size === size);
+  const remaining = Math.max(
+    0,
+    Math.min(MAX_CART_QUANTITY, selectedVariant?.stock ?? 0) - quantityInBag,
+  );
+  const canAdd = Boolean(liveProduct && size !== undefined && remaining > 0);
+  const imageSource = imageStage === 0 ? image?.src : image?.fallback;
+  const stockMessage = !inStock
+    ? 'Currently out of demo stock'
+    : size === undefined
+      ? 'Available in selected EU sizes'
+      : !selectedVariant || selectedVariant.stock === 0
+        ? 'This size is out of demo stock'
+        : remaining === 0
+          ? 'Bag limit reached for this size'
+          : `${remaining} ${remaining === 1 ? 'pair' : 'pairs'} available to add in EU ${size}`;
 
-  const handleQuickAdd = () => {
-    // Choose first available variant for quick-add
-    const variant = product.variants[0];
-    if (!variant) return;
+  useEffect(() => {
+    setSize(undefined);
+    setAdded(false);
+    setAddCount(0);
+  }, [product.id]);
 
-    addToCart(product.id, { size: variant.size, color: variant.color }, 1);
+  useEffect(() => {
+    setImageStage(0);
+  }, [product.id, image?.src, image?.fallback]);
 
-    const existingLine = cart.find(
-      (item) =>
-        item.productId === product.id &&
-        item.variant.size === variant.size &&
-        item.variant.color === variant.color,
-    );
+  function selectSize(value: string) {
+    const parsed = Number(value);
+    if (!isValidSize(parsed)) return;
+    setSize(parsed);
+    setAdded(false);
+  }
 
-    const actionLabel = existingLine ? "Updated cart" : "Added to cart";
+  function handleAdd(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (size === undefined) {
+      toast.error('Choose an available EU size first.');
+      return;
+    }
 
-    toast.success(actionLabel, {
-      description: `${product.name} · ${variant.size} · ${COLOR_META[variant.color]?.label ?? variant.color}`,
+    const result = addToCart(item.id, size, 1);
+    if (!result.ok) {
+      setAdded(false);
+      toast.error(result.message);
+      return;
+    }
+
+    setAdded(true);
+    setAddCount(count => count + 1);
+    const memoryOnly = useStore.getState().storageStatus === 'memory-only';
+    toast.success(result.message, {
+      description: memoryOnly
+        ? 'Browser storage is unavailable. Your demo bag lasts for this open page only.'
+        : 'Saved in this browser. No real purchase or payment.',
+      action: { label: 'View bag', onClick: () => openCart() },
     });
-  };
-
-  const isLowStock = product.variants.some((v) => v.stock > 0 && v.stock <= 2);
-  const isInStock = product.variants.some((v) => v.stock > 0);
+  }
 
   return (
-    <motion.div
-      className={cn("h-full", className)}
-      initial={cardMotion.initial}
-      whileHover={cardMotion.withinHover}
+    <motion.article
+      className={cn('group w-full min-w-0 text-foreground', className)}
+      initial={false}
+      whileHover={reducedMotion ? undefined : { y: -3 }}
+      transition={{ duration: 0.22, ease: 'easeOut' }}
+      aria-labelledby={`${fieldId}-title`}
     >
-      <Card
-        className={cn(
-          "group flex h-full flex-col overflow-hidden border border-slate-200/70 bg-gradient-to-b from-stone-50/90 via-white to-stone-50/60 shadow-sm transition-[box-shadow,transform,border-color,background] duration-200 dark:border-slate-800/80 dark:from-slate-900/60 dark:via-slate-950 dark:to-slate-900/60",
-          featured &&
-            "border-amber-300/70 bg-gradient-to-b from-amber-50/80 via-white to-stone-50/80 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900",
-        )}
+      <Link
+        to={detailPath}
+        className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4"
+        aria-label={`Discover ${item.name}`}
       >
-        <Link to={`/product/${product.id}`} className="block">
-          <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-200/60 dark:bg-slate-800/60">
+        <div
+          className={cn(
+            'relative aspect-[4/5] w-full overflow-hidden bg-[#eee7dd] dark:bg-[#302a25]',
+            imageClassName,
+          )}
+        >
+          {image && imageStage < 2 && imageSource ? (
             <motion.img
-              src={product.primaryImage}
-              alt={product.name}
-              className="h-full w-full object-cover transition-[filter] duration-300 group-hover:brightness-110"
-              whileHover={imageMotion.withinHover}
+              key={`${item.id}-${imageStage}-${imageSource}`}
+              src={imageSource}
+              alt={imageStage === 1 ? `Illustrated Mojri study for ${item.name}; not a product photograph` : image.alt}
+              loading={priority ? 'eager' : 'lazy'}
+              decoding="async"
+              className="h-full w-full object-cover"
+              whileHover={reducedMotion ? undefined : { scale: 1.035 }}
+              transition={{ duration: 0.5, ease: 'easeOut' }}
+              onError={() => setImageStage(stage => stage === 0 ? 1 : 2)}
             />
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/45 via-transparent to-slate-950/10 opacity-70 mix-blend-multiply" />
-
-            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-3 text-xs font-medium text-stone-50">
-              <div className="flex min-w-0 flex-col gap-1">
-                <span className="font-['Playfair_Display'] text-[0.8rem] tracking-[0.08em] uppercase text-amber-100">
-                  Jootiya · {artisan?.region ?? "Rajasthan"}
-                </span>
-                <span className="whitespace-normal break-words text-[0.85rem] font-semibold">
-                  {product.name}
-                </span>
-              </div>
-              {featured && (
-                <div className="flex items-center gap-1 rounded-full bg-amber-100/90 px-2 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-amber-900 shadow-sm dark:bg-amber-400/90 dark:text-amber-950">
-                  <Sparkles className="h-3 w-3" />
-                  <span>Featured</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </Link>
-
-        <CardHeader className="flex flex-col gap-2 px-4 pt-4 md:px-5 md:pt-5">
-          <div className="flex items-center justify-between gap-2">
-            <CardTitle className="whitespace-normal break-words text-base font-semibold tracking-tight text-slate-900 dark:text-slate-50">
-              {product.name}
-            </CardTitle>
-            <span className="shrink-0 text-sm font-semibold text-slate-900 dark:text-slate-50">
-              {formatPriceINR(product.price)}
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-300">
-            <CardDescription className="whitespace-normal break-words text-xs text-slate-600 dark:text-slate-300">
-              {artisan ? `${artisan.name} · ${artisan.region}` : "Rajasthan Atelier"}
-            </CardDescription>
-            {isInStock ? (
-              <span className="rounded-full border border-emerald-500/40 bg-emerald-50/80 px-2 py-0.5 text-[0.7rem] font-medium uppercase tracking-[0.12em] text-emerald-900 dark:border-emerald-400/50 dark:bg-emerald-500/15 dark:text-emerald-100">
-                {isLowStock ? "Limited" : "In Studio"}
-              </span>
-            ) : (
-              <span className="rounded-full border border-slate-400/60 bg-slate-100/80 px-2 py-0.5 text-[0.7rem] font-medium uppercase tracking-[0.12em] text-slate-700 dark:border-slate-500 dark:bg-slate-800/80 dark:text-slate-200">
-                Waitlist
-              </span>
-            )}
-          </div>
-        </CardHeader>
-
-        <CardContent className="flex flex-1 flex-col gap-3 px-4 pb-4 pt-1 md:px-5 md:pb-4">
-          {product.highlight && (
-            <p className="line-clamp-3 text-[0.8rem] leading-relaxed text-slate-700 dark:text-slate-200">
-              {product.highlight}
-            </p>
-          )}
-
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            {uniqueColors.slice(0, 3).map((colorKey) => {
-              const meta = COLOR_META[colorKey] ?? COLOR_META["sand-beige"];
-              return (
-                <Badge
-                  key={colorKey}
-                  variant="outline"
-                  className={cn(
-                    "flex items-center gap-1 rounded-full border px-2.5 py-1 text-[0.7rem] font-medium",
-                    meta.badgeClass,
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "inline-block h-3 w-3 rounded-full border border-white/60 shadow-sm",
-                      meta.swatchClass,
-                    )}
-                  />
-                  <span>{meta.label}</span>
-                </Badge>
-              );
-            })}
-            {uniqueColors.length > 3 && (
-              <span className="text-[0.7rem] text-slate-500 dark:text-slate-400">
-                +{uniqueColors.length - 3} more tones
-              </span>
-            )}
-          </div>
-
-          {product.tags.length > 0 && (
-            <div className="mt-1 flex flex-wrap gap-1.5">
-              {product.tags.slice(0, 4).map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full border border-slate-200/70 bg-white/80 px-2 py-0.5 text-[0.7rem] uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400"
-                >
-                  {tag}
-                </span>
-              ))}
+          ) : (
+            <div className="flex h-full min-h-64 flex-col items-center justify-center gap-4 p-8 text-center text-[#665748] dark:text-[#d8cbbb]">
+              <ShoppingBag className="h-9 w-9" strokeWidth={1} aria-hidden="true" />
+              <span className="font-serif text-2xl">{item.name}</span>
+              <span className="text-xs tracking-wide">Mojri imagery unavailable</span>
             </div>
           )}
-        </CardContent>
+        </div>
+      </Link>
 
-        <CardFooter className="flex items-center justify-between gap-3 border-t border-slate-100/90 bg-stone-50/70 px-4 py-3 md:px-5 dark:border-slate-800/80 dark:bg-slate-900/80">
-          <Button
-            type="button"
-            size="sm"
-            disabled={!isInStock}
-            onClick={handleQuickAdd}
-            className={cn(
-              "inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-stone-50 shadow-sm transition-[background-color,color,box-shadow] duration-200 hover:bg-slate-800 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 dark:bg-amber-400 dark:text-slate-950 dark:hover:bg-amber-300",
-              !isInStock &&
-                "cursor-not-allowed bg-slate-300 text-slate-600 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-400 dark:hover:bg-slate-700",
-            )}
-          >
-            <ShoppingBag className="h-3.5 w-3.5" />
-            <span>{isInStock ? "Add to Cart" : "Join Waitlist"}</span>
+      <div className="space-y-4 pb-3 pt-5 sm:pt-6">
+        <div className="flex w-full min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+          <span>Jodhpur · {item.material}</span>
+          <span>{!inStock ? 'Sold out' : item.isNew ? 'New study' : 'Mojri collection'}</span>
+        </div>
+
+        <div className="flex min-w-0 items-start justify-between gap-4">
+          <h3 id={`${fieldId}-title`} className="min-w-0 whitespace-normal break-words font-serif text-2xl leading-tight sm:text-3xl">
+            <Link
+              to={detailPath}
+              className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              {item.name}
+            </Link>
+          </h3>
+          <span className="shrink-0 pt-1 text-sm font-medium tabular-nums">
+            {formatCurrency(item.price)}
+          </span>
+        </div>
+
+        <div className="space-y-2">
+          <p className="whitespace-normal break-words text-sm leading-relaxed text-muted-foreground">
+            {item.subtitle}
+          </p>
+          <p className="whitespace-normal break-words text-xs leading-relaxed text-muted-foreground">
+            {item.craft}
+          </p>
+        </div>
+
+        <form onSubmit={handleAdd} className="space-y-2.5">
+          <label htmlFor={`${fieldId}-size`} className="block text-xs font-medium">
+            Choose EU size <span className="text-muted-foreground">(required)</span>
+          </label>
+          <div className="flex min-w-0 flex-wrap gap-2.5">
+            <div className="min-w-0 flex-[1_1_115px]">
+              <Select
+                name={`${item.id}-size`}
+                value={size === undefined ? '' : String(size)}
+                onValueChange={selectSize}
+                disabled={!inStock || !liveProduct}
+                required
+              >
+                <SelectTrigger
+                  id={`${fieldId}-size`}
+                  className="h-11 w-full rounded-none border-border bg-background"
+                  aria-describedby={`${fieldId}-stock`}
+                >
+                  <SelectValue placeholder="Select size" />
+                </SelectTrigger>
+                <SelectContent>
+                  {item.variants.map(variant => (
+                    <SelectItem
+                      key={variant.size}
+                      value={String(variant.size)}
+                      disabled={variant.stock <= 0}
+                    >
+                      EU {variant.size}{variant.stock <= 0 ? ' — unavailable' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              type="submit"
+              disabled={!canAdd}
+              className="h-11 min-w-0 flex-[1_1_145px] gap-2 rounded-none bg-[#a83e2d] px-4 text-white transition-colors hover:bg-[#873023] disabled:opacity-50 dark:bg-[#b34b38] dark:text-white dark:hover:bg-[#963c2d]"
+              aria-label={`Add ${item.name}${size === undefined ? '' : ` in EU ${size}`} to your demo bag`}
+            >
+              <motion.span
+                key={addCount}
+                className="inline-flex shrink-0"
+                initial={false}
+                animate={reducedMotion || addCount === 0 ? { scale: 1 } : { scale: [1, 1.2, 1] }}
+                transition={{ duration: 0.3 }}
+                aria-hidden="true"
+              >
+                {added ? <Check className="h-4 w-4" /> : <ShoppingBag className="h-4 w-4" />}
+              </motion.span>
+              <span>{added ? 'Add another pair' : 'Add to bag'}</span>
+            </Button>
+          </div>
+          <p id={`${fieldId}-stock`} role="status" className="text-xs leading-relaxed text-muted-foreground">
+            {stockMessage}
+          </p>
+        </form>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+          <span className="text-[11px] text-muted-foreground">Demo listing · simulated shopping</span>
+          <Button asChild variant="link" className="h-auto gap-1.5 rounded-sm p-0 text-xs text-foreground underline-offset-4">
+            <Link to={detailPath} aria-label={`Explore the story of ${item.name}`}>
+              Explore the craft <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
           </Button>
-
-          <Link
-            to={`/product/${product.id}`}
-            className="text-[0.75rem] font-medium uppercase tracking-[0.16em] text-slate-700 underline-offset-4 hover:text-amber-700 hover:underline dark:text-slate-200 dark:hover:text-amber-300"
-          >
-            View details
-          </Link>
-        </CardFooter>
-      </Card>
-    </motion.div>
+        </div>
+      </div>
+    </motion.article>
   );
-};
+}
 
 export default ProductCard;

@@ -1,745 +1,276 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useMemo, useRef, useState } from 'react';
+import type { FormEvent } from 'react';
+import { Link } from 'react-router-dom';
+import { motion, useReducedMotion } from 'framer-motion';
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, Info, Loader2, ShoppingBag } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button, Input, Separator, Switch } from '@/components/ui/shadcn';
 import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-  Button,
-  Input,
-  Separator,
-  Badge,
-} from "@/components/ui/shadcn";
-import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, Minus, Plus, ArrowLeft, ArrowRight } from "lucide-react";
-import { toast } from "sonner";
-import {
-  type Cart,
-  type CartItem,
-  type ShippingAddress,
-  getCart,
-  updateCartItem,
-  removeCartItem,
-  computeCartTotals,
-  getProducts,
-  getUser,
-  saveUser,
-  placeOrder,
-  subscribe,
-} from "@/mock";
+  useStore,
+  getCartLines,
+  getCartTotals,
+  formatCurrency,
+  formatDate,
+  MAX_CART_QUANTITY,
+} from '@/mock';
+import type { Address, CheckoutErrors, PaymentMethod } from '@/mock';
 
-// NOTE: This is a 100% frontend-only mocked checkout experience.
-// All cart, user, and order operations are simulated in-memory and via localStorage in src/mock.ts.
+export function CheckoutPage() {
+  const cart = useStore(state => state.cart);
+  const products = useStore(state => state.products);
+  const draft = useStore(state => state.checkoutDraft);
+  const checkoutKey = useStore(state => state.checkoutKey);
+  const orders = useStore(state => state.orders);
+  const lastOrderId = useStore(state => state.lastOrderId);
+  const isPlacingOrder = useStore(state => state.isPlacingOrder);
+  const storageStatus = useStore(state => state.storageStatus);
+  const updateDraft = useStore(state => state.updateCheckoutDraft);
+  const placeOrder = useStore(state => state.placeOrder);
+  const openCart = useStore(state => state.openCart);
+  const reducedMotion = useReducedMotion();
+  const formRef = useRef<HTMLFormElement>(null);
+  const submissionLock = useRef(false);
+  const [errors, setErrors] = useState<CheckoutErrors>({});
+  const [submissionMessage, setSubmissionMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-const accentColor = "#7a1f2a"; // deep burgundy accent for inline styles when needed
+  const lines = useMemo(() => getCartLines(cart, products), [cart, products]);
+  const totals = useMemo(() => getCartTotals(cart, products), [cart, products]);
+  const order = orders.find(entry => entry.id === lastOrderId);
+  const completedOrder = cart.length === 0 ? order : undefined;
+  const stockChanged = lines.length !== cart.length || lines.some(line =>
+    line.quantity > line.availableStock || line.quantity > MAX_CART_QUANTITY || line.quantity < 1,
+  );
+  const busy = submitting || isPlacingOrder;
+  const summaryItems = completedOrder ? completedOrder.items : lines.map(line => ({
+    productId: line.productId,
+    name: line.product.name,
+    size: line.size,
+    quantity: line.quantity,
+    unitPrice: line.unitPrice,
+    lineTotal: line.lineTotal,
+    image: line.product.images[0],
+  }));
+  const summaryTotals = completedOrder?.totals ?? totals;
 
-interface ShippingFormState {
-  fullName: string;
-  phone: string;
-  line1: string;
-  line2: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
-}
+  function clearError(key: keyof CheckoutErrors) {
+    setErrors(current => ({ ...current, [key]: undefined }));
+    setSubmissionMessage('');
+  }
 
-const emptyShipping: ShippingFormState = {
-  fullName: "",
-  phone: "",
-  line1: "",
-  line2: "",
-  city: "",
-  state: "",
-  postalCode: "",
-  country: "India",
-};
+  function updateAddress(key: keyof Omit<Address, 'country'>, value: string) {
+    updateDraft({ address: { [key]: value } });
+    clearError(key === 'line2' ? 'line1' : key);
+  }
 
-export const CheckoutPage: React.FC = () => {
-  const navigate = useNavigate();
+  function choosePayment(paymentMethod: PaymentMethod) {
+    updateDraft({ paymentMethod });
+    clearError('paymentMethod');
+  }
 
-  const [cart, setCart] = useState<Cart>(() => getCart());
-  const [shipping, setShipping] = useState<ShippingFormState>(() => {
-    const user = getUser();
-    if (user?.defaultShipping) {
-      const s = user.defaultShipping;
-      return {
-        fullName: s.fullName,
-        phone: s.phone,
-        line1: s.line1,
-        line2: s.line2 ?? "",
-        city: s.city,
-        state: s.state,
-        postalCode: s.postalCode,
-        country: s.country || "India",
-      };
-    }
-    return emptyShipping;
-  });
-  const [savingUser, setSavingUser] = useState(false);
-  const [placingOrder, setPlacingOrder] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [errors, setErrors] = useState<Partial<Record<keyof ShippingFormState, string>>>({});
-  const [lastOrderId, setLastOrderId] = useState<string | null>(null);
+  function addressField(
+    key: keyof Omit<Address, 'country'>,
+    label: string,
+    autoComplete: string,
+    options: { optional?: boolean; maxLength?: number; inputMode?: 'text' | 'tel' | 'numeric'; type?: string } = {},
+  ) {
+    const error = errors[key === 'line2' ? 'line1' : key];
+    return (
+      <div className="min-w-0 space-y-2">
+        <label htmlFor={`checkout-${key}`} className="text-sm font-medium">
+          {label}{options.optional && <span className="ml-2 font-normal text-muted-foreground">Optional</span>}
+        </label>
+        <Input
+          id={`checkout-${key}`}
+          name={key}
+          autoComplete={autoComplete}
+          type={options.type ?? 'text'}
+          inputMode={options.inputMode}
+          required={!options.optional}
+          maxLength={options.maxLength ?? 100}
+          value={draft.address[key]}
+          onChange={event => updateAddress(key, event.target.value)}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? `checkout-${key}-error` : undefined}
+          className="h-12 bg-background"
+        />
+        {error && <p id={`checkout-${key}-error`} className="text-sm text-destructive">{error}</p>}
+      </div>
+    );
+  }
 
-  // Subscribe to mock.ts pub/sub for live cart updates
-  useEffect(() => {
-    const unsubscribe = subscribe(() => {
-      setCart(getCart());
-    });
-    return unsubscribe;
-  }, []);
-
-  const productsById = useMemo(() => {
-    const map = new Map<string, ReturnType<typeof getProducts>[number]>();
-    getProducts().forEach((p) => map.set(p.id, p));
-    return map;
-  }, []);
-
-  const totals = useMemo(() => computeCartTotals(cart), [cart]);
-
-  const handleQtyChange = (item: CartItem, delta: number) => {
-    const nextQty = item.qty + delta;
-    if (nextQty < 1) return;
-    updateCartItem(item.productId, item.size, nextQty);
-  };
-
-  const handleRemove = (item: CartItem) => {
-    removeCartItem(item.productId, item.size);
-    toast("Removed from cart", {
-      description: "That pair of mojris has slipped out of your cart.",
-    });
-  };
-
-  const handleShippingChange = (
-    field: keyof ShippingFormState,
-    value: string
-  ) => {
-    setShipping((prev) => ({ ...prev, [field]: value }));
-    if (submitted) {
-      // re-validate on change after submit
-      setErrors((prev) => ({ ...prev, [field]: undefined }));
-    }
-  };
-
-  const persistShippingToUser = async () => {
-    setSavingUser(true);
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (submissionLock.current || busy) return;
+    submissionLock.current = true;
+    setSubmitting(true);
+    setErrors({});
+    setSubmissionMessage('');
     try {
-      const address: ShippingAddress = {
-        fullName: shipping.fullName.trim(),
-        phone: shipping.phone.trim(),
-        line1: shipping.line1.trim(),
-        line2: shipping.line2.trim() || undefined,
-        city: shipping.city.trim(),
-        state: shipping.state.trim(),
-        postalCode: shipping.postalCode.trim(),
-        country: shipping.country.trim() || "India",
-      };
-      saveUser({ defaultShipping: address });
+      // The centralized action validates the latest inventory and atomically creates the demo order.
+      const result = placeOrder(draft, checkoutKey);
+      if (!result.ok || !result.order) {
+        setErrors(result.errors ?? {});
+        setSubmissionMessage(result.message);
+        toast.error(result.message);
+        requestAnimationFrame(() => {
+          const target = formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
+          (target ?? formRef.current?.querySelector<HTMLElement>('[data-checkout-error]'))?.focus();
+        });
+        return;
+      }
+      toast.success(result.message);
+      window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' });
+    } catch {
+      const message = 'The simulated checkout could not finish. Review your bag before trying again.';
+      setSubmissionMessage(message);
+      toast.error(message);
     } finally {
-      setSavingUser(false);
+      submissionLock.current = false;
+      setSubmitting(false);
     }
-  };
+  }
 
-  const validateShipping = (): boolean => {
-    const nextErrors: Partial<Record<keyof ShippingFormState, string>> = {};
-    if (!shipping.fullName.trim()) nextErrors.fullName = "Please add a full recipient name.";
-    if (!shipping.phone.trim()) nextErrors.phone = "A contact number helps artisans reach you.";
-    if (!shipping.line1.trim()) nextErrors.line1 = "Street address is required.";
-    if (!shipping.city.trim()) nextErrors.city = "City is required.";
-    if (!shipping.state.trim()) nextErrors.state = "State is required.";
-    if (!shipping.postalCode.trim()) nextErrors.postalCode = "Postal code is required.";
-    if (!shipping.country.trim()) nextErrors.country = "Country is required.";
-
-    setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
-  };
-
-  const handlePlaceOrder = async () => {
-    setSubmitted(true);
-    if (!cart.items.length) {
-      toast.error("Your cart is empty", {
-        description: "Add a pair of Jodhpur mojris before you check out.",
-      });
-      return;
-    }
-    if (!validateShipping()) {
-      toast.error("Shipping details incomplete", {
-        description: "Please complete the highlighted fields.",
-      });
-      return;
-    }
-
-    setPlacingOrder(true);
-    try {
-      const address: ShippingAddress = {
-        fullName: shipping.fullName.trim(),
-        phone: shipping.phone.trim(),
-        line1: shipping.line1.trim(),
-        line2: shipping.line2.trim() || undefined,
-        city: shipping.city.trim(),
-        state: shipping.state.trim(),
-        postalCode: shipping.postalCode.trim(),
-        country: shipping.country.trim() || "India",
-      };
-
-      const order = placeOrder(address);
-      setLastOrderId(order.id);
-      await persistShippingToUser();
-
-      toast.success("Order confirmed — Mojris are being prepared in Jodhpur.", {
-        description: `Order #${order.id} is now with the atelier.`,
-      });
-
-      // After a short pause, navigate back home
-      setTimeout(() => {
-        navigate("/");
-      }, 2000);
-    } catch (err) {
-      console.error(err);
-      toast.error("Something went wrong", {
-        description: "The order could not be completed. Please try once more.",
-      });
-    } finally {
-      setPlacingOrder(false);
-    }
-  };
-
-  const hasItems = cart.items.length > 0;
+  if (!cart.length && !completedOrder) {
+    return (
+      <main className="w-full bg-background text-foreground">
+        <div className="mx-auto flex min-h-[65vh] w-full max-w-[1600px] flex-col items-start justify-center gap-6 px-6 py-20 lg:px-12">
+          <ShoppingBag className="h-9 w-9 text-muted-foreground" aria-hidden="true" />
+          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Your next chapter</p>
+          <h1 className="font-serif text-4xl md:text-6xl">A little room for tradition.</h1>
+          <p className="text-muted-foreground">Your bag is empty. Discover the Mojri collection before checking out.</p>
+          <Button asChild className="h-12 bg-[#a83d29] px-6 text-white hover:bg-[#87301f]"><Link to="/catalog">Explore Mojris <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <div className="w-full min-h-screen bg-gradient-to-b from-stone-100 via-stone-50 to-stone-100 dark:from-stone-900 dark:via-stone-950 dark:to-stone-900 text-stone-900 dark:text-stone-50 pt-6 pb-16 px-6 lg:px-12">
-      <div className="w-full max-w-[1600px] mx-auto flex flex-col gap-8">
-        {/* Top bar */}
-        <div className="flex items-center justify-between gap-4">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="inline-flex items-center gap-2 text-sm text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-50 transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to browsing
-          </button>
-          <Badge className="rounded-full bg-amber-100 text-amber-900 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-200 dark:border-amber-700 text-xs tracking-wide uppercase">
-            Handcrafted checkout — mock, no real payments
-          </Badge>
-        </div>
+    <motion.main
+      initial={reducedMotion ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="w-full bg-background text-foreground"
+    >
+      <div className="mx-auto w-full max-w-[1600px] px-6 py-10 lg:px-12 lg:py-16">
+        <Link to="/catalog" className="inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"><ArrowLeft className="h-4 w-4" />Back to the collection</Link>
+        <header className="mb-10 mt-6 space-y-4 lg:mb-14">
+          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Jootiya · The final stitch</p>
+          <h1 className="break-words font-serif text-4xl md:text-6xl">{completedOrder ? 'A story, beautifully begun.' : 'Make it yours.'}</h1>
+          <p className="text-muted-foreground">Simulated checkout. No real payment, shipment or backend request is made.</p>
+        </header>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[2fr_minmax(380px,1.15fr)] gap-8 items-start">
-          {/* Order Summary */}
-          <motion.section
-            layout
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, ease: "easeOut" }}
-            className="space-y-4"
-          >
-            <div className="flex items-baseline justify-between gap-4">
-              <div>
-                <h1 className="text-2xl md:text-3xl font-semibold tracking-tight font-serif">
-                  Your Mojri Curation
-                </h1>
-                <p className="text-sm md:text-base text-stone-600 dark:text-stone-300 mt-1">
-                  Review each pair before our artisans begin.
-                </p>
+        {storageStatus === 'memory-only' && (
+          <div role="status" className="mb-8 flex items-start gap-3 rounded-md border border-border bg-muted p-4 text-sm">
+            <Info className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+            <p>Browser storage is unavailable. Your bag and demo order remain available while this page stays open, but may be lost on refresh.</p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:gap-12">
+          <section className="min-w-0 lg:col-span-7" aria-label={completedOrder ? 'Order confirmation' : 'Checkout details'}>
+            {completedOrder ? (
+              <div role="status" className="space-y-7 border-t border-border py-8">
+                <CheckCircle2 className="h-10 w-10 text-[#a83d29] dark:text-[#edaa91]" aria-hidden="true" />
+                <h2 className="font-serif text-3xl">Your demo order is confirmed.</h2>
+                <div className="space-y-2">
+                  <p className="text-sm uppercase tracking-widest text-muted-foreground">Order reference</p>
+                  <p className="break-words text-2xl font-medium">{completedOrder.reference}</p>
+                  <p className="text-sm text-muted-foreground">{formatDate(completedOrder.createdAt)} · Simulated order</p>
+                </div>
+                <p className="leading-relaxed text-muted-foreground">No money was collected and nothing will be shipped. Your contact and address details have been cleared. This confirmation remains available when you return during this session; save the reference for your own records.</p>
+                <Button asChild className="h-12 bg-[#a83d29] px-6 text-white hover:bg-[#87301f]"><Link to="/catalog">Continue exploring <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
               </div>
-              {hasItems && (
-                <div className="text-right text-xs md:text-sm text-stone-600 dark:text-stone-300">
-                  <p>
-                    {totals.itemCount} {totals.itemCount === 1 ? "pair" : "pairs"} in cart
-                  </p>
-                  <p className="mt-0.5 font-medium" style={{ color: accentColor }}>
-                    ~ {totals.total.toLocaleString("en-IN", { style: "currency", currency: "INR" })}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <Card className="border-stone-200/70 dark:border-stone-700/70 bg-stone-50/70 dark:bg-stone-900/60 shadow-sm">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-                <div>
-                  <CardTitle className="text-base md:text-lg font-medium tracking-tight">
-                    Order summary
-                  </CardTitle>
-                  <CardDescription className="text-xs md:text-sm">
-                    Mojris are made in small batches. Adjust quantities with care.
-                  </CardDescription>
-                </div>
-              </CardHeader>
-              <Separator className="bg-stone-200 dark:bg-stone-800" />
-              <CardContent className="pt-4 pb-2">
-                <AnimatePresence initial={false}>
-                  {cart.items.length === 0 && (
-                    <motion.div
-                      key="empty-state"
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8 }}
-                      className="py-10 flex flex-col items-center justify-center text-center gap-3"
-                    >
-                      <p className="text-sm md:text-base text-stone-600 dark:text-stone-300 max-w-md">
-                        Your cart is currently empty. Begin with a pair that feels like Jodhpur in your hands.
-                      </p>
-                      <Button
-                        variant="outline"
-                        className="border-stone-300 dark:border-stone-700 hover:border-stone-500 dark:hover:border-stone-500 rounded-full px-6"
-                        onClick={() => navigate("/catalog")}
-                      >
-                        <ArrowRight className="h-4 w-4 mr-2" />
-                        Explore the catalog
-                      </Button>
-                    </motion.div>
-                  )}
-
-                  {cart.items.length > 0 && (
-                    <motion.ul
-                      key="items-list"
-                      layout
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="flex flex-col gap-4"
-                    >
-                      {cart.items.map((item) => {
-                        const product = productsById.get(item.productId);
-                        if (!product) return null;
-                        const lineTotal = item.qty * item.unitPrice;
-                        return (
-                          <motion.li
-                            key={`${item.productId}-${item.size}`}
-                            layout
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -8 }}
-                            transition={{ duration: 0.2 }}
-                            className="flex gap-4 md:gap-5"
-                          >
-                            <div className="relative h-20 w-24 md:h-24 md:w-28 overflow-hidden rounded-md bg-stone-200/70 dark:bg-stone-800/70">
-                              {product.heroImage && (
-                                <img
-                                  src={product.heroImage}
-                                  alt={product.name}
-                                  className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
-                                />
-                              )}
-                            </div>
-                            <div className="flex-1 flex flex-col justify-between gap-2">
-                              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-1.5">
-                                <div>
-                                  <p className="text-sm md:text-base font-medium leading-snug">
-                                    {product.name}
-                                  </p>
-                                  <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-stone-600 dark:text-stone-300">
-                                    <span>
-                                      Size <span className="font-medium">{item.size}</span>
-                                    </span>
-                                    <span className="h-1 w-1 rounded-full bg-stone-400 dark:bg-stone-500" />
-                                    <span>{product.style} • {product.color}</span>
-                                    <Badge className="rounded-full bg-amber-100 text-amber-900 border-amber-200 dark:bg-amber-900/20 dark:text-amber-100 dark:border-amber-700 text-[10px] tracking-wide">
-                                      Jodhpur atelier
-                                    </Badge>
-                                  </div>
-                                </div>
-                                <div className="text-right text-sm md:text-base">
-                                  <p className="font-medium">
-                                    {item.unitPrice.toLocaleString("en-IN", {
-                                      style: "currency",
-                                      currency: "INR",
-                                    })}
-                                  </p>
-                                  <p className="text-xs text-stone-600 dark:text-stone-400 mt-0.5">
-                                    Line total: {lineTotal.toLocaleString("en-IN", {
-                                      style: "currency",
-                                      currency: "INR",
-                                    })}
-                                  </p>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="inline-flex items-center rounded-full border border-stone-300/80 dark:border-stone-700/80 bg-white/70 dark:bg-stone-900/60 px-1.5 py-1 text-xs md:text-sm">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleQtyChange(item, -1)}
-                                    className="inline-flex h-6 w-6 items-center justify-center rounded-full hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                    aria-label="Decrease quantity"
-                                    disabled={item.qty <= 1}
-                                  >
-                                    <Minus className="h-3 w-3" />
-                                  </button>
-                                  <span className="px-2 min-w-[2rem] text-center font-medium">
-                                    {item.qty}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleQtyChange(item, 1)}
-                                    className="inline-flex h-6 w-6 items-center justify-center rounded-full hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-200 transition-colors"
-                                    aria-label="Increase quantity"
-                                  >
-                                    <Plus className="h-3 w-3" />
-                                  </button>
-                                </div>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemove(item)}
-                                  className="inline-flex items-center gap-1 text-xs md:text-sm text-stone-500 dark:text-stone-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                  Remove
-                                </button>
-                              </div>
-                            </div>
-                          </motion.li>
-                        );
-                      })}
-                    </motion.ul>
-                  )}
-                </AnimatePresence>
-              </CardContent>
-
-              {hasItems && (
-                <CardFooter className="border-t border-stone-200/80 dark:border-stone-800/80 pt-4 flex flex-col gap-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-stone-600 dark:text-stone-300">Subtotal</span>
-                    <span className="font-medium">
-                      {totals.subtotal.toLocaleString("en-IN", {
-                        style: "currency",
-                        currency: "INR",
-                      })}
-                    </span>
+            ) : (
+              <form ref={formRef} onSubmit={submit} noValidate className="space-y-10" aria-busy={busy}>
+                <fieldset disabled={busy} className="min-w-0 space-y-6">
+                  <legend className="mb-6 font-serif text-2xl">01 — Contact</legend>
+                  <p className="text-sm leading-relaxed text-muted-foreground">Required fields are marked by their labels; only address line 2 is optional. Personal details stay in memory for this session only, are not saved with orders, and are never sent anywhere.</p>
+                  <div className="space-y-2">
+                    <label htmlFor="checkout-email" className="text-sm font-medium">Email address</label>
+                    <Input id="checkout-email" name="email" type="email" autoComplete="email" required maxLength={254} value={draft.email} onChange={event => { updateDraft({ email: event.target.value }); clearError('email'); }} aria-invalid={Boolean(errors.email)} aria-describedby={errors.email ? 'checkout-email-error' : undefined} className="h-12 bg-background" />
+                    {errors.email && <p id="checkout-email-error" className="text-sm text-destructive">{errors.email}</p>}
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-stone-600 dark:text-stone-300">Estimated shipping</span>
-                    <span className="font-medium">
-                      {totals.estimatedShipping.toLocaleString("en-IN", {
-                        style: "currency",
-                        currency: "INR",
-                      })}
-                    </span>
+                  {addressField('phone', 'Indian mobile number', 'tel', { type: 'tel', inputMode: 'tel', maxLength: 20 })}
+                </fieldset>
+                <Separator />
+                <fieldset disabled={busy} className="min-w-0 space-y-6">
+                  <legend className="mb-6 font-serif text-2xl">02 — Shipping address</legend>
+                  {addressField('fullName', 'Full name', 'shipping name')}
+                  {addressField('line1', 'House / flat and street', 'shipping address-line1', { maxLength: 200 })}
+                  {addressField('line2', 'Area / landmark', 'shipping address-line2', { optional: true, maxLength: 200 })}
+                  <div className="grid min-w-0 gap-6 sm:grid-cols-2">
+                    {addressField('city', 'City', 'shipping address-level2', { maxLength: 80 })}
+                    {addressField('state', 'State / union territory', 'shipping address-level1', { maxLength: 80 })}
+                    {addressField('postalCode', 'PIN code', 'shipping postal-code', { inputMode: 'numeric', maxLength: 6 })}
+                    <div className="space-y-2"><label htmlFor="checkout-country" className="text-sm font-medium">Country</label><Input id="checkout-country" name="country" value="India" readOnly autoComplete="shipping country-name" className="h-12 bg-muted" /><p className="text-xs text-muted-foreground">Indian addresses only for this demo.</p></div>
                   </div>
-                  <Separator className="bg-stone-200 dark:bg-stone-800" />
-                  <div className="flex items-center justify-between text-base md:text-lg">
-                    <span className="font-medium">Total</span>
-                    <span
-                      className="font-semibold"
-                      style={{ color: accentColor }}
-                    >
-                      {totals.total.toLocaleString("en-IN", {
-                        style: "currency",
-                        currency: "INR",
-                      })}
-                    </span>
+                </fieldset>
+                <Separator />
+                <fieldset disabled={busy} className="min-w-0 space-y-5" aria-describedby="payment-description">
+                  <legend className="mb-5 font-serif text-2xl">03 — A payment rehearsal</legend>
+                  <p id="payment-description" className="text-sm text-muted-foreground">Choose a demo option. Do not enter card, bank or UPI details. No payment is processed.</p>
+                  <div className="flex flex-wrap gap-3" role="group" aria-label="Simulated payment method">
+                    <Button type="button" variant={draft.paymentMethod === 'demo-upi' ? 'default' : 'outline'} aria-pressed={draft.paymentMethod === 'demo-upi'} onClick={() => choosePayment('demo-upi')} className="h-auto min-h-11 whitespace-normal rounded-full px-5 py-3">{draft.paymentMethod === 'demo-upi' && <Check className="mr-2 h-4 w-4" />}Demo UPI</Button>
+                    <Button type="button" variant={draft.paymentMethod === 'demo-card' ? 'default' : 'outline'} aria-pressed={draft.paymentMethod === 'demo-card'} onClick={() => choosePayment('demo-card')} className="h-auto min-h-11 whitespace-normal rounded-full px-5 py-3">{draft.paymentMethod === 'demo-card' && <Check className="mr-2 h-4 w-4" />}Demo card</Button>
+                    <Button type="button" variant={draft.paymentMethod === 'demo-cod' ? 'default' : 'outline'} aria-pressed={draft.paymentMethod === 'demo-cod'} onClick={() => choosePayment('demo-cod')} className="h-auto min-h-11 whitespace-normal rounded-full px-5 py-3">{draft.paymentMethod === 'demo-cod' && <Check className="mr-2 h-4 w-4" />}Demo cash on delivery</Button>
                   </div>
-                  <p className="text-[11px] text-stone-500 dark:text-stone-400 pt-1">
-                    Taxes are indicative. This is a fully mocked checkout; no payment will be processed.
-                  </p>
-                </CardFooter>
-              )}
-            </Card>
-          </motion.section>
-
-          {/* Shipping + Payment */}
-          <motion.section
-            layout
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: "easeOut", delay: 0.05 }}
-            className="space-y-4"
-          >
-            <Card className="border-stone-200/70 dark:border-stone-700/70 bg-white/80 dark:bg-stone-950/70 shadow-sm">
-              <CardHeader className="space-y-1 pb-4">
-                <CardTitle className="text-base md:text-lg font-medium tracking-tight">
-                  Shipping details
-                </CardTitle>
-                <CardDescription className="text-xs md:text-sm">
-                  We ship from Jodhpur. Share where your mojris are travelling to.
-                </CardDescription>
-              </CardHeader>
-              <Separator className="bg-stone-200 dark:bg-stone-800" />
-              <CardContent className="pt-4 space-y-3">
-                <div className="grid grid-cols-1 gap-3">
-                  <div className="space-y-1.5">
-                    <label
-                      htmlFor="fullName"
-                      className="text-xs font-medium uppercase tracking-[0.16em] text-stone-600 dark:text-stone-300"
-                    >
-                      Full name
-                    </label>
-                    <Input
-                      id="fullName"
-                      value={shipping.fullName}
-                      onChange={(e) => handleShippingChange("fullName", e.target.value)}
-                      onBlur={persistShippingToUser}
-                      className="bg-stone-50/70 dark:bg-stone-900/70 border-stone-300/80 dark:border-stone-700/80 focus-visible:ring-stone-400 dark:focus-visible:ring-stone-500"
-                      aria-invalid={!!errors.fullName}
-                      aria-describedby={errors.fullName ? "fullName-error" : undefined}
-                    />
-                    {errors.fullName && (
-                      <p
-                        id="fullName-error"
-                        className="text-xs text-red-600 dark:text-red-400"
-                      >
-                        {errors.fullName}
-                      </p>
-                    )}
+                  {errors.paymentMethod && <p role="alert" className="text-sm text-destructive">{errors.paymentMethod}</p>}
+                  <div className="flex items-start gap-3 rounded-md border border-border p-4">
+                    <Switch id="checkout-acknowledgement" checked={draft.acceptedDemo} onCheckedChange={checked => { updateDraft({ acceptedDemo: checked }); clearError('acceptedDemo'); }} aria-invalid={Boolean(errors.acceptedDemo)} aria-describedby={errors.acceptedDemo ? 'checkout-acknowledgement-error' : undefined} className="mt-0.5 shrink-0" />
+                    <label htmlFor="checkout-acknowledgement" className="cursor-pointer text-sm leading-relaxed">I understand this is a fictional browser-only order. No payment is collected and no goods will be delivered.</label>
                   </div>
-
-                  <div className="space-y-1.5">
-                    <label
-                      htmlFor="phone"
-                      className="text-xs font-medium uppercase tracking-[0.16em] text-stone-600 dark:text-stone-300"
-                    >
-                      Phone
-                    </label>
-                    <Input
-                      id="phone"
-                      value={shipping.phone}
-                      onChange={(e) => handleShippingChange("phone", e.target.value)}
-                      onBlur={persistShippingToUser}
-                      className="bg-stone-50/70 dark:bg-stone-900/70 border-stone-300/80 dark:border-stone-700/80 focus-visible:ring-stone-400 dark:focus-visible:ring-stone-500"
-                      aria-invalid={!!errors.phone}
-                      aria-describedby={errors.phone ? "phone-error" : undefined}
-                    />
-                    {errors.phone && (
-                      <p
-                        id="phone-error"
-                        className="text-xs text-red-600 dark:text-red-400"
-                      >
-                        {errors.phone}
-                      </p>
-                    )}
+                  {errors.acceptedDemo && <p id="checkout-acknowledgement-error" className="text-sm text-destructive">{errors.acceptedDemo}</p>}
+                </fieldset>
+                {(stockChanged || errors.cart || submissionMessage) && (
+                  <div role="alert" tabIndex={-1} data-checkout-error className="space-y-3 rounded-md border border-destructive/40 p-4 text-sm">
+                    <p>{errors.cart || (stockChanged ? 'Availability has changed. Review your bag and adjust quantities before continuing.' : submissionMessage)}</p>
+                    {(stockChanged || errors.cart) && <Button type="button" variant="outline" onClick={openCart}>Review your bag</Button>}
                   </div>
-
-                  <div className="space-y-1.5">
-                    <label
-                      htmlFor="line1"
-                      className="text-xs font-medium uppercase tracking-[0.16em] text-stone-600 dark:text-stone-300"
-                    >
-                      Address line 1
-                    </label>
-                    <Input
-                      id="line1"
-                      value={shipping.line1}
-                      onChange={(e) => handleShippingChange("line1", e.target.value)}
-                      onBlur={persistShippingToUser}
-                      className="bg-stone-50/70 dark:bg-stone-900/70 border-stone-300/80 dark:border-stone-700/80 focus-visible:ring-stone-400 dark:focus-visible:ring-stone-500"
-                      aria-invalid={!!errors.line1}
-                      aria-describedby={errors.line1 ? "line1-error" : undefined}
-                    />
-                    {errors.line1 && (
-                      <p
-                        id="line1-error"
-                        className="text-xs text-red-600 dark:text-red-400"
-                      >
-                        {errors.line1}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label
-                      htmlFor="line2"
-                      className="text-xs font-medium uppercase tracking-[0.16em] text-stone-600 dark:text-stone-300"
-                    >
-                      Address line 2 <span className="normal-case text-[11px] text-stone-500">(optional)</span>
-                    </label>
-                    <Input
-                      id="line2"
-                      value={shipping.line2}
-                      onChange={(e) => handleShippingChange("line2", e.target.value)}
-                      onBlur={persistShippingToUser}
-                      className="bg-stone-50/70 dark:bg-stone-900/70 border-stone-300/80 dark:border-stone-700/80 focus-visible:ring-stone-400 dark:focus-visible:ring-stone-500"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label
-                        htmlFor="city"
-                        className="text-xs font-medium uppercase tracking-[0.16em] text-stone-600 dark:text-stone-300"
-                      >
-                        City
-                      </label>
-                      <Input
-                        id="city"
-                        value={shipping.city}
-                        onChange={(e) => handleShippingChange("city", e.target.value)}
-                        onBlur={persistShippingToUser}
-                        className="bg-stone-50/70 dark:bg-stone-900/70 border-stone-300/80 dark:border-stone-700/80 focus-visible:ring-stone-400 dark:focus-visible:ring-stone-500"
-                        aria-invalid={!!errors.city}
-                        aria-describedby={errors.city ? "city-error" : undefined}
-                      />
-                      {errors.city && (
-                        <p
-                          id="city-error"
-                          className="text-xs text-red-600 dark:text-red-400"
-                        >
-                          {errors.city}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label
-                        htmlFor="state"
-                        className="text-xs font-medium uppercase tracking-[0.16em] text-stone-600 dark:text-stone-300"
-                      >
-                        State
-                      </label>
-                      <Input
-                        id="state"
-                        value={shipping.state}
-                        onChange={(e) => handleShippingChange("state", e.target.value)}
-                        onBlur={persistShippingToUser}
-                        className="bg-stone-50/70 dark:bg-stone-900/70 border-stone-300/80 dark:border-stone-700/80 focus-visible:ring-stone-400 dark:focus-visible:ring-stone-500"
-                        aria-invalid={!!errors.state}
-                        aria-describedby={errors.state ? "state-error" : undefined}
-                      />
-                      {errors.state && (
-                        <p
-                          id="state-error"
-                          className="text-xs text-red-600 dark:text-red-400"
-                        >
-                          {errors.state}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label
-                        htmlFor="postalCode"
-                        className="text-xs font-medium uppercase tracking-[0.16em] text-stone-600 dark:text-stone-300"
-                      >
-                        Postal code
-                      </label>
-                      <Input
-                        id="postalCode"
-                        value={shipping.postalCode}
-                        onChange={(e) => handleShippingChange("postalCode", e.target.value)}
-                        onBlur={persistShippingToUser}
-                        className="bg-stone-50/70 dark:bg-stone-900/70 border-stone-300/80 dark:border-stone-700/80 focus-visible:ring-stone-400 dark:focus-visible:ring-stone-500"
-                        aria-invalid={!!errors.postalCode}
-                        aria-describedby={errors.postalCode ? "postalCode-error" : undefined}
-                      />
-                      {errors.postalCode && (
-                        <p
-                          id="postalCode-error"
-                          className="text-xs text-red-600 dark:text-red-400"
-                        >
-                          {errors.postalCode}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label
-                        htmlFor="country"
-                        className="text-xs font-medium uppercase tracking-[0.16em] text-stone-600 dark:text-stone-300"
-                      >
-                        Country
-                      </label>
-                      <Input
-                        id="country"
-                        value={shipping.country}
-                        onChange={(e) => handleShippingChange("country", e.target.value)}
-                        onBlur={persistShippingToUser}
-                        className="bg-stone-50/70 dark:bg-stone-900/70 border-stone-300/80 dark:border-stone-700/80 focus-visible:ring-stone-400 dark:focus-visible:ring-stone-500"
-                        aria-invalid={!!errors.country}
-                        aria-describedby={errors.country ? "country-error" : undefined}
-                      />
-                      {errors.country && (
-                        <p
-                          id="country-error"
-                          className="text-xs text-red-600 dark:text-red-400"
-                        >
-                          {errors.country}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-
-              <CardFooter className="flex flex-col gap-3 border-t border-stone-200/80 dark:border-stone-800/80 pt-4">
-                <div className="flex items-center justify-between text-xs md:text-sm text-stone-600 dark:text-stone-300">
-                  <span>
-                    Details are stored only in your browser as part of this mock experience.
-                  </span>
-                  {savingUser && (
-                    <span className="italic text-[11px] text-stone-500">
-                      Saving…
-                    </span>
-                  )}
-                </div>
-              </CardFooter>
-            </Card>
-
-            <motion.div
-              layout
-              className="flex flex-col gap-3"
-            >
-              <Button
-                size="lg"
-                className="w-full rounded-full bg-[--accent-burgundy] hover:bg-[--accent-burgundy-hover] text-sm md:text-base font-medium tracking-wide py-3 shadow-md shadow-stone-700/20 border-none"
-                style={{
-                  // Using CSS variables to keep Tailwind happy while avoiding too-similar colors with backgrounds
-                  // Values chosen to contrast against the light stone background.
-                  // @ts-expect-error CSS custom properties
-                  "--accent-burgundy": "#7a1f2a",
-                  // @ts-expect-error CSS custom properties
-                  "--accent-burgundy-hover": "#681925",
-                }}
-                disabled={!hasItems || placingOrder}
-                onClick={handlePlaceOrder}
-              >
-                <span className="inline-flex items-center justify-center gap-2">
-                  {placingOrder ? (
-                    <span className="h-4 w-4 rounded-full border-2 border-amber-200 border-t-amber-700 animate-spin" />
-                  ) : (
-                    <ArrowRight className="h-4 w-4" />
-                  )}
-                  {placingOrder
-                    ? "Placing your mock order..."
-                    : hasItems
-                    ? "Place mock order"
-                    : "Add a pair to continue"}
-                </span>
-              </Button>
-
-              {submitted && !hasItems && (
-                <p className="text-xs text-red-600 dark:text-red-400">
-                  Your cart is empty. Return to the catalog to choose at least one pair before placing an order.
-                </p>
-              )}
-
-              <AnimatePresence>
-                {lastOrderId && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    className="mt-1 rounded-xl border border-emerald-200/80 dark:border-emerald-800/80 bg-emerald-50/80 dark:bg-emerald-900/20 px-4 py-3 text-xs md:text-sm text-emerald-900 dark:text-emerald-100"
-                  >
-                    <p className="font-medium mb-0.5">
-                      Order #{lastOrderId} is confirmed.
-                    </p>
-                    <p>
-                      This is a fully mocked confirmation. In a live atelier workflow, this is where your mojris would begin their journey in Jodhpur.
-                    </p>
-                  </motion.div>
                 )}
-              </AnimatePresence>
-            </motion.div>
-          </motion.section>
+                <Button type="submit" disabled={busy || stockChanged} className="h-auto min-h-14 w-full whitespace-normal bg-[#a83d29] px-6 py-4 text-white hover:bg-[#87301f]">
+                  {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <ShoppingBag className="mr-2 h-4 w-4" aria-hidden="true" />}
+                  {busy ? 'Placing simulated order…' : `Place demo order · ${formatCurrency(totals.total)}`}
+                </Button>
+                <p className="text-center text-xs leading-relaxed text-muted-foreground">No payment details. No account required. No real transaction.</p>
+              </form>
+            )}
+          </section>
+
+          <aside className="min-w-0 lg:col-span-5" aria-labelledby="checkout-summary-title">
+            <div className="rounded-sm border border-border bg-muted/40 p-5 sm:p-8 lg:sticky lg:top-8">
+              <div className="flex w-full flex-wrap items-center justify-between gap-3">
+                <h2 id="checkout-summary-title" className="font-serif text-2xl">{completedOrder ? 'Your order' : 'In your bag'}</h2>
+                <span className="text-sm text-muted-foreground">{summaryTotals.itemCount} {summaryTotals.itemCount === 1 ? 'pair' : 'pairs'}</span>
+              </div>
+              <ul className="my-7 space-y-6" aria-label="Order items">
+                {summaryItems.map(item => (
+                  <li key={`${item.productId}:${item.size}`} className="flex min-w-0 items-start gap-4">
+                    <img src={item.image.src} alt={item.image.alt} onError={event => { if (event.currentTarget.getAttribute('src') !== item.image.fallback) event.currentTarget.src = item.image.fallback; }} className="h-28 w-20 shrink-0 rounded-sm bg-muted object-cover" loading="lazy" />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <h3 className="break-words font-serif text-lg">{item.name}</h3>
+                      <p className="text-xs text-muted-foreground">EU {item.size} · Quantity {item.quantity}</p>
+                      <p className="text-xs text-muted-foreground">{formatCurrency(item.unitPrice)} / pair</p>
+                      <p className="text-sm font-medium">{formatCurrency(item.lineTotal)}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {!completedOrder && <Button type="button" variant="outline" className="mb-6 min-h-11 w-full" onClick={openCart}>Edit your bag</Button>}
+              <Separator />
+              <dl className="space-y-4 py-6 text-sm">
+                <div className="flex justify-between gap-4"><dt>Subtotal</dt><dd>{formatCurrency(summaryTotals.subtotal)}</dd></div>
+                <div className="flex justify-between gap-4"><dt>Demo shipping</dt><dd>{summaryTotals.shipping === 0 ? 'Complimentary' : formatCurrency(summaryTotals.shipping)}</dd></div>
+                <div className="flex justify-between gap-4 border-t border-border pt-5 text-lg font-medium"><dt>Total <span className="text-xs font-normal text-muted-foreground">INR</span></dt><dd>{formatCurrency(summaryTotals.total)}</dd></div>
+              </dl>
+              {!completedOrder && totals.freeShippingRemaining > 0 && <p className="mb-5 text-xs leading-relaxed text-muted-foreground">Add {formatCurrency(totals.freeShippingRemaining)} for complimentary demo shipping.</p>}
+              <div className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground"><Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><p>Illustrative products and pricing. The total is a simulation, not an amount charged.</p></div>
+            </div>
+          </aside>
         </div>
       </div>
-    </div>
+    </motion.main>
   );
-};
+}
 
 export default CheckoutPage;

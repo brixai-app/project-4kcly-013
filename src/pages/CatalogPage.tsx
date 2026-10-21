@@ -1,438 +1,272 @@
-import React, { useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { Filter, RotateCcw } from "lucide-react";
-import { Button, Badge, Card, CardHeader, CardTitle, CardDescription, CardContent, Separator, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/shadcn";
-import { cn } from "@/lib/utils";
-import { ColorOption, useCatalog, CatalogFilters, MOCK_ARTISANS } from "@/mock";
-import ProductCard from "@/components/ProductCard";
+import { useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { motion, useReducedMotion } from 'framer-motion';
+import { ArrowUpRight, Search, SlidersHorizontal, X } from 'lucide-react';
+import {
+  Button, Checkbox, Input, Select, SelectContent, SelectItem,
+  SelectTrigger, SelectValue, Sheet, SheetContent, SheetDescription,
+  SheetHeader, SheetTitle, SheetTrigger, Slider,
+} from '@/components/ui/shadcn';
+import { ProductCard } from '@/components/ProductCard';
+import {
+  categories, materials, SIZES, DEFAULT_FILTERS, filterProducts,
+  filtersFromSearchParams, filtersToSearchParams, formatCurrency, useStore,
+  type CatalogFilters, type CategoryId, type SortOption,
+} from '@/mock';
 
-// NOTE: This page uses fully mocked catalog data and client-side filtering
-// from src/mock.ts only. There is no backend. All interactions are
-// purely frontend.
-
-const COLOR_LABELS: Record<ColorOption, string> = {
-  "deep-indigo": "Deep Indigo",
-  "warm-ochre": "Warm Ochre",
-  "sand-beige": "Sand Beige",
-  marigold: "Marigold",
-};
-
-interface LocalFilters {
-  size?: string;
-  color?: ColorOption;
-  artisanId?: string;
-}
-
-const CatalogPage: React.FC = () => {
-  const [filters, setFilters] = useState<LocalFilters>({});
-
-  const { products: filteredProducts, artisans, allSizes, allColors } = useCatalog(
-    filters as CatalogFilters,
-  );
-
-  const hasActiveFilters = useMemo(
-    () => Boolean(filters.size || filters.color || filters.artisanId),
-    [filters],
-  );
-
-  const activeArtisan = useMemo(
-    () => MOCK_ARTISANS.find((a) => a.id === filters.artisanId),
-    [filters.artisanId],
-  );
-
-  const handleReset = () => {
-    setFilters({});
-  };
-
-  const handleSizeChange = (value?: string) => {
-    setFilters((prev) => ({ ...prev, size: value || undefined }));
-  };
-
-  const handleColorChange = (value?: ColorOption) => {
-    setFilters((prev) => ({ ...prev, color: value || undefined }));
-  };
-
-  const handleArtisanChange = (value?: string) => {
-    setFilters((prev) => ({ ...prev, artisanId: value || undefined }));
-  };
-
-  // Split products into a staggered three-column layout for desktop,
-  // collapsing to one/two columns on smaller screens.
-  const { col1, col2, col3 } = useMemo(() => {
-    const c1: typeof filteredProducts = [];
-    const c2: typeof filteredProducts = [];
-    const c3: typeof filteredProducts = [];
-    filteredProducts.forEach((p, index) => {
-      if (index % 3 === 0) c1.push(p);
-      else if (index % 3 === 1) c2.push(p);
-      else c3.push(p);
-    });
-    return { col1: c1, col2: c2, col3: c3 };
-  }, [filteredProducts]);
+function FilterControls({ filters, onChange, scope }: {
+  filters: CatalogFilters;
+  onChange: (patch: Partial<CatalogFilters>, replace?: boolean) => void;
+  scope: string;
+}) {
+  const priceCeiling = Math.max(DEFAULT_FILTERS.maxPrice, filters.maxPrice);
 
   return (
-    <div className="w-full min-h-screen bg-[#f5f0e8] text-slate-900">
-      {/* Page header / intro */}
-      <section className="w-full border-b border-slate-200/70 bg-gradient-to-b from-[#f5f0e8] to-[#f0e6d9]">
-        <div className="w-full max-w-[1600px] mx-auto px-6 lg:px-12 py-10 lg:py-14 flex flex-col gap-6">
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 min-w-0">
-            <div className="min-w-0">
-              <p className="uppercase tracking-[0.25em] text-xs text-slate-500 mb-3">
-                Catalog
-              </p>
-              <h1 className="font-['Playfair_Display'] text-3xl sm:text-4xl lg:text-5xl leading-tight text-slate-900 whitespace-normal break-words">
-                Rajasthani Mojris, Curated for the Modern Mehfil
-              </h1>
-              <p className="mt-4 max-w-2xl text-sm sm:text-base text-slate-700 leading-relaxed">
-                An intimate edit of handcrafted mojris shaped in Jaipur and Jodhpur ateliers.
-                Filter by size, color and artisan to find the pair that feels written just for you.
-              </p>
-            </div>
+    <div className="space-y-9">
+      <div className="space-y-3">
+        <label htmlFor={`${scope}-collection`} className="text-sm font-medium">Collection</label>
+        <Select value={filters.category} onValueChange={value => onChange({ category: value as CategoryId | 'all' })}>
+          <SelectTrigger id={`${scope}-collection`} className="h-12 w-full bg-background">
+            <SelectValue placeholder="All collections" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All collections</SelectItem>
+            {categories.map(category => <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
 
-            {/* Filter panel */}
-            <Card className="lg:max-w-md bg-white/70 backdrop-blur-sm border-slate-200 shadow-sm">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between w-full gap-2">
-                  <div className="flex items-center gap-2">
-                    <Filter className="w-4 h-4 text-slate-500" />
-                    <CardTitle className="text-sm font-semibold tracking-wide text-slate-900 uppercase">
-                      Refine Selection
-                    </CardTitle>
-                  </div>
-                  {hasActiveFilters && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                      onClick={handleReset}
-                      aria-label="Reset filters"
-                    >
-                      <RotateCcw className="w-4 h-4" />
-                    </Button>
-                  )}
-                </div>
-                <CardDescription className="text-xs text-slate-600 mt-1">
-                  These filters work fully on the client using mocked catalog data.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Size filter */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between w-full">
-                    <span className="text-xs font-medium tracking-wide text-slate-700 uppercase">
-                      Size
-                    </span>
-                    {filters.size && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-[11px] text-slate-600 hover:text-slate-900"
-                        onClick={() => handleSizeChange(undefined)}
-                      >
-                        Clear
-                      </Button>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-2.5">
-                    {allSizes.map((size) => {
-                      const active = filters.size === size;
-                      return (
-                        <button
-                          key={size}
-                          type="button"
-                          onClick={() => handleSizeChange(active ? undefined : size)}
-                          className={cn(
-                            "rounded-full px-4 py-1.5 border text-xs font-medium flex items-center gap-1.5 transition-colors",
-                            "border-slate-300 text-slate-700 bg-white/80 hover:bg-slate-900/5",
-                            active &&
-                              "border-indigo-700 bg-indigo-800/10 text-indigo-900",
-                          )}
-                        >
-                          <span>{size}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <Separator className="bg-slate-200/80" />
-
-                {/* Color filter */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between w-full">
-                    <span className="text-xs font-medium tracking-wide text-slate-700 uppercase">
-                      Color Story
-                    </span>
-                    {filters.color && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-[11px] text-slate-600 hover:text-slate-900"
-                        onClick={() => handleColorChange(undefined)}
-                      >
-                        Clear
-                      </Button>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-2.5">
-                    {allColors.map((color) => {
-                      const active = filters.color === color;
-                      return (
-                        <button
-                          key={color}
-                          type="button"
-                          onClick={() => handleColorChange(active ? undefined : color)}
-                          className={cn(
-                            "rounded-full px-4 py-1.5 border text-xs font-medium flex items-center gap-2 transition-colors",
-                            "border-slate-300 text-slate-700 bg-white/80 hover:bg-slate-900/5",
-                            active &&
-                              "border-amber-700 bg-amber-700/10 text-amber-900",
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              "w-3 h-3 rounded-full border border-white shadow-sm",
-                              color === "deep-indigo" && "bg-indigo-900",
-                              color === "warm-ochre" && "bg-amber-700",
-                              color === "sand-beige" && "bg-amber-200",
-                              color === "marigold" && "bg-orange-500",
-                            )}
-                          />
-                          <span>{COLOR_LABELS[color]}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <Separator className="bg-slate-200/80" />
-
-                {/* Artisan filter */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between w-full">
-                    <span className="text-xs font-medium tracking-wide text-slate-700 uppercase">
-                      Artisan Atelier
-                    </span>
-                    {filters.artisanId && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-[11px] text-slate-600 hover:text-slate-900"
-                        onClick={() => handleArtisanChange(undefined)}
-                      >
-                        Clear
-                      </Button>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-2.5 items-center">
-                    {artisans.map((artisan) => {
-                      const active = filters.artisanId === artisan.id;
-                      return (
-                        <button
-                          key={artisan.id}
-                          type="button"
-                          onClick={() =>
-                            handleArtisanChange(active ? undefined : artisan.id)
-                          }
-                          className={cn(
-                            "rounded-full px-4 py-1.5 border text-xs font-medium flex items-center gap-2 transition-colors",
-                            "border-slate-300 text-slate-700 bg-white/80 hover:bg-slate-900/5",
-                            active &&
-                              "border-slate-900 bg-slate-900 text-amber-100",
-                          )}
-                        >
-                          <span className="inline-flex h-6 w-6 rounded-full bg-slate-900/90 text-[10px] font-semibold text-amber-100 items-center justify-center">
-                            {artisan.name
-                              .split(" ")
-                              .map((p) => p[0])
-                              .join("")}
-                          </span>
-                          <span>{artisan.name}</span>
-                          <span className="text-[10px] uppercase tracking-wide text-slate-500">
-                            {artisan.region.split(",")[0]}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {hasActiveFilters && activeArtisan && (
-                  <div className="pt-3 border-t border-dashed border-slate-200/80 mt-1 space-y-1">
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
-                      Viewing edit from
-                    </p>
-                    <p className="font-['Playfair_Display'] text-sm text-slate-900">
-                      {activeArtisan.name}
-                    </p>
-                    <p className="text-[11px] text-slate-600">
-                      {activeArtisan.craftNotes}
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* Active filters summary & sort (sort is illustrative only, client-side) */}
-      <section className="w-full border-b border-slate-200/70 bg-[#f5f0e8]/90">
-        <div className="w-full max-w-[1600px] mx-auto px-6 lg:px-12 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3 min-w-0">
-          <div className="flex flex-wrap items-center gap-2 min-w-0">
-            <span className="text-xs font-medium tracking-wide text-slate-700 uppercase">
-              {filteredProducts.length} styles curated
-            </span>
-            {hasActiveFilters && (
-              <>
-                <Separator orientation="vertical" className="h-5 bg-slate-300/80" />
-                <div className="flex flex-wrap gap-2">
-                  {filters.size && (
-                    <Badge
-                      variant="outline"
-                      className="rounded-full border-slate-300 text-xs px-3 py-1 bg-white/80"
-                    >
-                      Size: {filters.size}
-                    </Badge>
-                  )}
-                  {filters.color && (
-                    <Badge
-                      variant="outline"
-                      className="rounded-full border-slate-300 text-xs px-3 py-1 bg-white/80 flex items-center gap-1.5"
-                    >
-                      <span
-                        className={cn(
-                          "w-2.5 h-2.5 rounded-full border border-white shadow-sm",
-                          filters.color === "deep-indigo" && "bg-indigo-900",
-                          filters.color === "warm-ochre" && "bg-amber-700",
-                          filters.color === "sand-beige" && "bg-amber-200",
-                          filters.color === "marigold" && "bg-orange-500",
-                        )}
-                      />
-                      <span>{COLOR_LABELS[filters.color]}</span>
-                    </Badge>
-                  )}
-                  {filters.artisanId && activeArtisan && (
-                    <Badge
-                      variant="outline"
-                      className="rounded-full border-slate-300 text-xs px-3 py-1 bg-white/80"
-                    >
-                      Artisan: {activeArtisan.name}
-                    </Badge>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 justify-end">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9 rounded-full border-slate-300 bg-white/80 text-xs font-medium text-slate-700 hover:bg-slate-100"
-                >
-                  Sort: Featured
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[180px]">
-                <DropdownMenuItem className="text-xs text-slate-800">
-                  Featured (default)
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-xs text-slate-700">
-                  Price: Low to High (mock)
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-xs text-slate-700">
-                  Price: High to Low (mock)
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </section>
-
-      {/* Catalog grid section */}
-      <section className="w-full bg-[#f5f0e8] pb-16 pt-8">
-        <div className="w-full max-w-[1600px] mx-auto px-6 lg:px-12">
-          {filteredProducts.length === 0 ? (
-            <div className="py-16 flex flex-col items-center justify-center text-center gap-4">
-              <p className="font-['Playfair_Display'] text-2xl text-slate-900">
-                This edit is momentarily empty.
-              </p>
-              <p className="max-w-md text-sm text-slate-700 leading-relaxed">
-                We couldn't find mojris matching this exact combination. Try easing one of the
-                filters or explore the full catalog to discover more silhouettes.
-              </p>
+      <fieldset className="space-y-4">
+        <legend className="text-sm font-medium">Your size <span className="font-normal text-muted-foreground">/ EU</span></legend>
+        <div className="flex flex-wrap gap-2.5">
+          {SIZES.map(size => {
+            const selected = filters.sizes.includes(size);
+            return (
               <Button
-                variant="outline"
-                className="mt-2 rounded-full border-slate-400 bg-white px-6 text-xs font-semibold tracking-wide text-slate-800 hover:bg-slate-900 hover:text-amber-50"
-                onClick={handleReset}
+                key={size}
+                type="button"
+                variant={selected ? 'default' : 'outline'}
+                aria-pressed={selected}
+                aria-label={`EU size ${size}`}
+                className="h-10 rounded-full px-4 transition-colors"
+                onClick={() => onChange({ sizes: selected ? filters.sizes.filter(value => value !== size) : [...filters.sizes, size] })}
               >
-                Clear all filters
+                {size}
               </Button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 lg:gap-8 items-start">
-              {/* For smaller screens, a simple grid; for desktop we use staggered vertical rhythm
-                  via varied motion/spacing per column. */}
-
-              {/* Column 1 */}
-              <div className="flex flex-col gap-6 min-w-0">
-                {col1.map((product, index) => (
-                  <motion.div
-                    key={product.id}
-                    initial={{ opacity: 0, y: 24 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: index * 0.06 }}
-                    className={cn(
-                      index % 2 === 0 ? "mt-0" : "mt-4 md:mt-6 xl:mt-8",
-                    )}
-                  >
-                    <ProductCard product={product} featured={index === 0} />
-                  </motion.div>
-                ))}
-              </div>
-
-              {/* Column 2 */}
-              <div className="flex flex-col gap-6 min-w-0">
-                {col2.map((product, index) => (
-                  <motion.div
-                    key={product.id}
-                    initial={{ opacity: 0, y: 24 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: 0.12 + index * 0.06 }}
-                    className={cn(
-                      index % 2 === 0 ? "mt-3 md:mt-6" : "mt-0",
-                    )}
-                  >
-                    <ProductCard product={product} />
-                  </motion.div>
-                ))}
-              </div>
-
-              {/* Column 3 */}
-              <div className="flex flex-col gap-6 min-w-0">
-                {col3.map((product, index) => (
-                  <motion.div
-                    key={product.id}
-                    initial={{ opacity: 0, y: 24 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: 0.18 + index * 0.06 }}
-                    className={cn(
-                      index % 2 === 0 ? "mt-6 xl:mt-10" : "mt-1 md:mt-4",
-                    )}
-                  >
-                    <ProductCard product={product} />
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-          )}
+            );
+          })}
         </div>
-      </section>
+        <p className="text-xs leading-relaxed text-muted-foreground">Shows Mojris with stock in any of your selected sizes.</p>
+      </fieldset>
+
+      <fieldset className="space-y-4">
+        <legend className="text-sm font-medium">Material</legend>
+        {materials.map(material => (
+          <div key={material} className="flex min-h-8 items-center gap-3">
+            <Checkbox
+              id={`${scope}-${material}`}
+              checked={filters.materials.includes(material)}
+              onCheckedChange={checked => onChange({
+                materials: checked === true
+                  ? [...filters.materials, material]
+                  : filters.materials.filter(value => value !== material),
+              })}
+            />
+            <label htmlFor={`${scope}-${material}`} className="cursor-pointer text-sm">{material}</label>
+          </div>
+        ))}
+      </fieldset>
+
+      <fieldset className="space-y-5">
+        <legend className="text-sm font-medium">Price range</legend>
+        <div className="flex flex-wrap justify-between gap-2 text-sm tabular-nums text-muted-foreground">
+          <span>{formatCurrency(filters.minPrice)}</span>
+          <span>{formatCurrency(filters.maxPrice)}</span>
+        </div>
+        <div className="px-2 py-2">
+          <Slider
+            aria-label="Price range in Indian rupees"
+            min={0}
+            max={priceCeiling}
+            step={50}
+            value={[filters.minPrice, filters.maxPrice]}
+            onValueChange={values => {
+              if (values.length === 2) onChange({ minPrice: values[0], maxPrice: values[1] }, true);
+            }}
+          />
+        </div>
+        <p className="text-xs leading-relaxed text-muted-foreground">Use the arrow keys to fine-tune either price handle.</p>
+      </fieldset>
+
+      <div className="flex items-center gap-3 border-t border-border pt-6">
+        <Checkbox
+          id={`${scope}-stock`}
+          checked={filters.inStockOnly}
+          onCheckedChange={checked => onChange({ inStockOnly: checked === true })}
+        />
+        <label htmlFor={`${scope}-stock`} className="cursor-pointer text-sm">In demo stock only</label>
+      </div>
     </div>
   );
-};
+}
+
+export function CatalogPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const products = useStore(state => state.products);
+  const reviews = useStore(state => state.reviews);
+  const reducedMotion = useReducedMotion();
+  const filters = useMemo(() => filtersFromSearchParams(searchParams), [searchParams]);
+  const results = useMemo(() => filterProducts(products, filters, reviews), [products, filters, reviews]);
+
+  function updateFilters(patch: Partial<CatalogFilters>, replace = false) {
+    setSearchParams(previous => filtersToSearchParams({ ...filtersFromSearchParams(previous), ...patch }), { replace });
+  }
+
+  function clearAll() {
+    setSearchParams(filtersToSearchParams({ ...DEFAULT_FILTERS, sizes: [], materials: [] }));
+  }
+
+  const chips = [
+    ...(filters.search ? [{ key: 'search', label: `Search: ${filters.search}`, remove: () => updateFilters({ search: '' }) }] : []),
+    ...(filters.category !== 'all' ? [{ key: 'category', label: categories.find(category => category.id === filters.category)?.name ?? 'Collection', remove: () => updateFilters({ category: 'all' }) }] : []),
+    ...filters.sizes.map(size => ({ key: `size-${size}`, label: `EU ${size}`, remove: () => updateFilters({ sizes: filters.sizes.filter(value => value !== size) }) })),
+    ...filters.materials.map(material => ({ key: `material-${material}`, label: material, remove: () => updateFilters({ materials: filters.materials.filter(value => value !== material) }) })),
+    ...(filters.minPrice !== DEFAULT_FILTERS.minPrice || filters.maxPrice !== DEFAULT_FILTERS.maxPrice
+      ? [{ key: 'price', label: `${formatCurrency(filters.minPrice)} – ${formatCurrency(filters.maxPrice)}`, remove: () => updateFilters({ minPrice: DEFAULT_FILTERS.minPrice, maxPrice: DEFAULT_FILTERS.maxPrice }) }]
+      : []),
+    ...(filters.inStockOnly ? [{ key: 'stock', label: 'In demo stock', remove: () => updateFilters({ inStockOnly: false }) }] : []),
+  ];
+  const activeCount = chips.length;
+  const collection = categories.find(category => category.id === filters.category);
+
+  return (
+    <motion.main
+      className="w-full bg-background text-foreground"
+      initial={reducedMotion ? false : { opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+    >
+      <section className="w-full border-b border-border bg-[#eee7dd] dark:bg-[#29241f]" aria-labelledby="catalog-title">
+        <div className="mx-auto w-full max-w-[1600px] px-6 py-14 lg:px-12 lg:py-20">
+          <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end">
+            <div className="min-w-0 space-y-5">
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">The Mojri collection / Jodhpur</p>
+              <h1 id="catalog-title" className="whitespace-normal break-words font-serif text-5xl leading-[1.1] sm:text-6xl lg:text-7xl">
+                {collection ? collection.name : 'Tradition, in every step.'}
+              </h1>
+            </div>
+            <div className="min-w-0 space-y-4 md:max-w-sm">
+              <p className="text-sm leading-7 text-muted-foreground">
+                {collection ? collection.description : 'Sculpted toes. Patient stitchwork. Explore our imagined edit of Rajasthani Mojris, rooted in the craft of Jodhpur.'}
+              </p>
+              <p className="flex items-center gap-2 text-xs uppercase tracking-[0.16em]">A living craft, thoughtfully reimagined <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" /></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto w-full max-w-[1600px] px-6 pb-20 pt-8 lg:px-12 lg:pt-12" aria-label="Shop the collection">
+        <div className="flex flex-col gap-5 border-b border-border pb-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full min-w-0 sm:max-w-md">
+            <label htmlFor="catalog-search" className="sr-only">Search Mojris by name, material, colour or craft</label>
+            <Search className="pointer-events-none absolute left-4 top-4 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <Input
+              id="catalog-search"
+              type="search"
+              maxLength={160}
+              value={filters.search}
+              placeholder="Find your Mojri…"
+              className="h-12 bg-background pl-11"
+              onChange={event => updateFilters({ search: event.target.value }, true)}
+            />
+          </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" className="h-12 gap-2 lg:hidden">
+                  <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+                  Filters{activeCount > 0 ? ` (${activeCount})` : ''}
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-full overflow-y-auto sm:max-w-md">
+                <SheetHeader className="text-left">
+                  <SheetTitle className="font-serif text-3xl">Find your pair</SheetTitle>
+                  <SheetDescription>Filters apply immediately. Close this panel to explore your selection.</SheetDescription>
+                </SheetHeader>
+                <div className="py-8">
+                  <FilterControls filters={filters} onChange={updateFilters} scope="mobile" />
+                </div>
+                <div className="flex items-center justify-between gap-3 border-t border-border py-5">
+                  <span className="text-sm" role="status">{results.length} {results.length === 1 ? 'design' : 'designs'}</span>
+                  <Button variant="ghost" onClick={clearAll} disabled={!activeCount && filters.sort === 'featured'}>Clear all</Button>
+                </div>
+              </SheetContent>
+            </Sheet>
+            <label htmlFor="catalog-sort" className="sr-only">Sort products</label>
+            <Select value={filters.sort} onValueChange={value => updateFilters({ sort: value as SortOption })}>
+              <SelectTrigger id="catalog-sort" className="h-12 w-[190px] bg-background"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="featured">Our edit</SelectItem>
+                <SelectItem value="price-asc">Price: low to high</SelectItem>
+                <SelectItem value="price-desc">Price: high to low</SelectItem>
+                <SelectItem value="newest">Newest first</SelectItem>
+                <SelectItem value="rating">Highest rated</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-4 py-5">
+          <p role="status" aria-live="polite" aria-atomic="true" className="text-sm text-muted-foreground">
+            {results.length} {results.length === 1 ? 'design' : 'designs'}{activeCount ? ' in your selection' : ' in the collection'}
+          </p>
+          {(activeCount > 0 || filters.sort !== 'featured') && <Button variant="ghost" size="sm" onClick={clearAll} className="underline underline-offset-4">Clear all</Button>}
+        </div>
+
+        {activeCount > 0 && (
+          <div className="mb-8 flex flex-wrap gap-2.5" aria-label="Applied filters">
+            {chips.map(chip => (
+              <Button key={chip.key} variant="outline" onClick={chip.remove} aria-label={`Remove filter: ${chip.label}`} className="h-auto max-w-full gap-2 rounded-full px-4 py-2 text-left text-xs">
+                <span className="min-w-0 whitespace-normal break-words">{chip.label}</span>
+                <X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              </Button>
+            ))}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 items-start gap-10 lg:grid-cols-[220px_minmax(0,1fr)] xl:gap-14">
+          <aside className="hidden min-w-0 lg:block" aria-label="Filter products">
+            <h2 className="mb-7 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em]"><SlidersHorizontal className="h-4 w-4" aria-hidden="true" /> Refine the edit</h2>
+            <FilterControls filters={filters} onChange={updateFilters} scope="desktop" />
+          </aside>
+
+          <div className="min-w-0">
+            {results.length > 0 ? (
+              <ul className="grid grid-cols-1 items-start gap-x-6 gap-y-12 sm:grid-cols-2 xl:grid-cols-3" aria-label="Mojri designs">
+                {results.map((product, index) => (
+                  <li key={product.id} className="min-w-0">
+                    <ProductCard
+                      product={product}
+                      priority={index < 2}
+                      imageClassName={index % 3 === 1 ? '!aspect-[4/5] !h-auto' : index % 3 === 2 ? '!aspect-[5/6] !h-auto' : '!aspect-[3/4] !h-auto'}
+                    />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="flex min-h-[420px] flex-col items-start justify-center border-y border-border py-16">
+                <Search className="mb-6 h-7 w-7 text-muted-foreground" aria-hidden="true" />
+                <h2 className="whitespace-normal break-words font-serif text-3xl sm:text-4xl">A different path to your perfect pair.</h2>
+                <p className="mt-4 max-w-lg text-sm leading-7 text-muted-foreground">No Mojris match this selection. Try another material, widen your price range, or start again with the complete collection.</p>
+                <Button onClick={clearAll} className="mt-7">Explore all Mojris <ArrowUpRight className="ml-2 h-4 w-4" aria-hidden="true" /></Button>
+              </div>
+            )}
+            <p className="mt-12 border-t border-border pt-6 text-xs leading-6 text-muted-foreground">An illustrative, browser-only collection. Product listings and reviews are demo content; orders and payments are simulated. Reference photographs may show related traditional footwear; illustrations appear when images are unavailable.</p>
+          </div>
+        </div>
+      </section>
+    </motion.main>
+  );
+}
 
 export default CatalogPage;
