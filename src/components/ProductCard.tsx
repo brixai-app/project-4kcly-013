@@ -1,303 +1,261 @@
-import React, { useState, useMemo } from 'react';
-import { motion } from 'framer-motion';
-import { ArrowRight, ShoppingBag, Eye } from 'lucide-react';
-import { toast } from 'sonner';
-import { Link } from 'react-router-dom';
-import { cn } from '@/lib/utils';
-import type { Product } from '@/types';
-import { useCart } from '@/context/CartContext';
-import ProductDetailModal from './ProductDetailModal';
+import React from "react";
+import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
+import { ShoppingBag, Sparkles } from "lucide-react";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+  Badge,
+  Button,
+} from "@/components/ui/shadcn";
+import { cn } from "@/lib/utils";
+import { Product, artisans, formatPriceINR, useCart } from "@/mock";
+import { toast } from "sonner";
 
 export interface ProductCardProps {
-  product?: Product;
-  index?: number;
-  enableHoverLift?: boolean;
-  showCollection?: boolean;
+  product: Product;
   className?: string;
+  /**
+   * When true, renders a slightly more prominent treatment (used for hero/featured rows)
+   */
+  featured?: boolean;
 }
 
-export function ProductCard({
+// Map internal color tokens to display labels and swatch classes
+const COLOR_META: Record<
+  string,
+  { label: string; swatchClass: string; badgeClass: string }
+> = {
+  "deep-indigo": {
+    label: "Deep Indigo",
+    swatchClass: "bg-[#1f2341]",
+    badgeClass:
+      "border-indigo-500/40 text-indigo-900 dark:text-indigo-100 bg-indigo-50/80 dark:bg-indigo-500/20",
+  },
+  "warm-ochre": {
+    label: "Warm Ochre",
+    swatchClass: "bg-[#c27a32]",
+    badgeClass:
+      "border-amber-500/40 text-amber-900 dark:text-amber-100 bg-amber-50/80 dark:bg-amber-500/20",
+  },
+  "sand-beige": {
+    label: "Sand Beige",
+    swatchClass: "bg-[#d0b89f]",
+    badgeClass:
+      "border-amber-300/50 text-stone-900 dark:text-stone-50 bg-amber-50/70 dark:bg-amber-500/10",
+  },
+  marigold: {
+    label: "Marigold",
+    swatchClass: "bg-[#e09a28]",
+    badgeClass:
+      "border-orange-400/60 text-orange-900 dark:text-orange-50 bg-orange-50/80 dark:bg-orange-500/20",
+  },
+};
+
+const cardMotion = {
+  initial: { y: 0, opacity: 0.92, boxShadow: "0 0 0 rgba(0,0,0,0)" },
+  whileHover: {
+    y: -6,
+    boxShadow: "0 18px 45px rgba(15, 23, 42, 0.18)",
+  },
+  transition: {
+    type: "spring",
+    stiffness: 230,
+    damping: 22,
+    mass: 0.9,
+  },
+};
+
+const imageMotion = {
+  whileHover: { scale: 1.03 },
+  transition: { type: "spring", stiffness: 220, damping: 24 },
+};
+
+export const ProductCard: React.FC<ProductCardProps> = ({
   product,
-  index = 0,
-  enableHoverLift = true,
-  showCollection = true,
-  className = '',
-}: ProductCardProps) {
-  const [isHovered, setIsHovered] = useState(false);
-  const [quickViewOpen, setQuickViewOpen] = useState(false);
-  const { addItem } = useCart();
+  className,
+  featured,
+}) => {
+  const { addToCart, cart } = useCart();
 
-  const resolvedProduct: Product | null = product ?? null;
+  const artisan = artisans.find((a) => a.id === product.artisanId);
 
-  const primaryImage = useMemo(() => {
-    if (!resolvedProduct) return null;
-    const priorityImage = resolvedProduct.images?.find(img => img?.priority);
-    return priorityImage ?? resolvedProduct.images?.[0] ?? null;
-  }, [resolvedProduct]);
-
-  const fallbackSlug = useMemo(() => {
-    if (resolvedProduct?.slug) return resolvedProduct.slug;
-    const safeName = resolvedProduct?.name ?? 'jootiya-footwear';
-    return safeName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  }, [resolvedProduct]);
-
-  const displayPrice = useMemo(() => {
-    if (!resolvedProduct) return '';
-    const formatter = new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: resolvedProduct.currency ?? 'INR',
-      maximumFractionDigits: 0,
-    });
-    return formatter.format(resolvedProduct.price ?? 0);
-  }, [resolvedProduct]);
-
-  const hasCompareAt = useMemo(() => {
-    if (!resolvedProduct) return false;
-    return (
-      typeof resolvedProduct.compareAtPrice === 'number' &&
-      resolvedProduct.compareAtPrice > (resolvedProduct.price ?? 0)
-    );
-  }, [resolvedProduct]);
-
-  const discountPercent = useMemo(() => {
-    if (!resolvedProduct || !hasCompareAt) return null;
-    const diff = (resolvedProduct.compareAtPrice ?? 0) - (resolvedProduct.price ?? 0);
-    if (diff <= 0) return null;
-    const pct = Math.round((diff / (resolvedProduct.compareAtPrice ?? 1)) * 100);
-    return pct > 0 ? pct : null;
-  }, [resolvedProduct, hasCompareAt]);
-
-  const primaryAvailableSizeId = useMemo(() => {
-    if (!resolvedProduct) return null;
-    const inStock = resolvedProduct.sizes?.filter(s => (s?.stock ?? 0) > 0) ?? [];
-    if (inStock.length === 0) return null;
-    const defaultSize = inStock.find(s => s?.isDefault);
-    return defaultSize?.id ?? inStock[0]?.id ?? null;
-  }, [resolvedProduct]);
-
-  const isSoldOut = useMemo(() => {
-    if (!resolvedProduct) return false;
-    const totalStock =
-      resolvedProduct.sizes?.reduce((acc, s) => acc + (s?.stock ?? 0), 0) ?? 0;
-    return totalStock <= 0;
-  }, [resolvedProduct]);
+  const uniqueColors = Array.from(
+    new Set(product.variants.map((v) => v.color)),
+  );
 
   const handleQuickAdd = () => {
-    if (!resolvedProduct) {
-      toast.error('Unable to add item at the moment.');
-      return;
-    }
-    if (!primaryAvailableSizeId) {
-      toast.error('All sizes are currently out of stock.');
-      return;
-    }
-    addItem(resolvedProduct, primaryAvailableSizeId, 1);
-    toast.success('Added to cart', {
-      description: `${resolvedProduct.name} · Size ${
-        resolvedProduct.sizes.find(s => s.id === primaryAvailableSizeId)?.sizeLabel ?? ''
-      }`,
+    // Choose first available variant for quick-add
+    const variant = product.variants[0];
+    if (!variant) return;
+
+    addToCart(product.id, { size: variant.size, color: variant.color }, 1);
+
+    const existingLine = cart.find(
+      (item) =>
+        item.productId === product.id &&
+        item.variant.size === variant.size &&
+        item.variant.color === variant.color,
+    );
+
+    const actionLabel = existingLine ? "Updated cart" : "Added to cart";
+
+    toast.success(actionLabel, {
+      description: `${product.name} · ${variant.size} · ${COLOR_META[variant.color]?.label ?? variant.color}`,
     });
   };
 
-  const handleQuickView = () => {
-    if (!resolvedProduct) return;
-    setQuickViewOpen(true);
-  };
-
-  const motionDelay = (index ?? 0) * 0.04;
+  const isLowStock = product.variants.some((v) => v.stock > 0 && v.stock <= 2);
+  const isInStock = product.variants.some((v) => v.stock > 0);
 
   return (
-    <>
-      <motion.article
-        initial={{ opacity: 0, y: 18 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.22, 0.61, 0.36, 1], delay: motionDelay }}
-        whileHover={enableHoverLift ? { y: -4 } : undefined}
+    <motion.div
+      className={cn("h-full", className)}
+      initial={cardMotion.initial}
+      whileHover={cardMotion.withinHover}
+    >
+      <Card
         className={cn(
-          'group relative flex flex-col overflow-hidden rounded-2xl border border-[#D9D1C7] bg-white/90 shadow-[0_18px_45px_rgba(15,14,11,0.08)] transition-transform duration-500',
-          className
+          "group flex h-full flex-col overflow-hidden border border-slate-200/70 bg-gradient-to-b from-stone-50/90 via-white to-stone-50/60 shadow-sm transition-[box-shadow,transform,border-color,background] duration-200 dark:border-slate-800/80 dark:from-slate-900/60 dark:via-slate-950 dark:to-slate-900/60",
+          featured &&
+            "border-amber-300/70 bg-gradient-to-b from-amber-50/80 via-white to-stone-50/80 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900",
         )}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
       >
-        <div className="relative overflow-hidden border-b border-[#D9D1C7]/80 bg-[#F9F6F2]">
-          <div className="aspect-[3/4] w-full overflow-hidden">
-            <Link
-              to={`/product/${fallbackSlug}`}
-              className="block h-full w-full overflow-hidden"
-            >
-              <motion.img
-                crossOrigin="anonymous"
-                src={
-                  primaryImage?.url ??
-                  'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?auto=format&fit=crop&w=800&q=80'
-                }
-                alt={primaryImage?.alt ?? resolvedProduct?.name ?? 'Jootiya style'}
-                className={cn(
-                  'h-full w-full object-cover transition-transform duration-700 ease-out',
-                  'group-hover:scale-105'
-                )}
-                whileHover={{ scale: 1.05 }}
-                transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-              />
-            </Link>
-          </div>
+        <Link to={`/product/${product.id}`} className="block">
+          <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-200/60 dark:bg-slate-800/60">
+            <motion.img
+              src={product.primaryImage}
+              alt={product.name}
+              className="h-full w-full object-cover transition-[filter] duration-300 group-hover:brightness-110"
+              whileHover={imageMotion.withinHover}
+            />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/45 via-transparent to-slate-950/10 opacity-70 mix-blend-multiply" />
 
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/18 via-black/0 to-black/30 opacity-75 mix-blend-soft-light" />
-
-          {discountPercent !== null && (
-            <div className="pointer-events-none absolute left-4 top-4 flex flex-col gap-1">
-              <div className="inline-flex items-center border border-white/40 bg-black/55 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur-sm">
-                <span>{discountPercent}% off</span>
+            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-3 text-xs font-medium text-stone-50">
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="font-['Playfair_Display'] text-[0.8rem] tracking-[0.08em] uppercase text-amber-100">
+                  Jootiya · {artisan?.region ?? "Rajasthan"}
+                </span>
+                <span className="whitespace-normal break-words text-[0.85rem] font-semibold">
+                  {product.name}
+                </span>
               </div>
-              {resolvedProduct?.isLimited && (
-                <div className="inline-flex items-center border border-[#8B0000]/60 bg-[#8B0000] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white shadow-sm">
-                  Limited run
+              {featured && (
+                <div className="flex items-center gap-1 rounded-full bg-amber-100/90 px-2 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-amber-900 shadow-sm dark:bg-amber-400/90 dark:text-amber-950">
+                  <Sparkles className="h-3 w-3" />
+                  <span>Featured</span>
                 </div>
               )}
             </div>
-          )}
+          </div>
+        </Link>
 
-          {isSoldOut && (
-            <div className="pointer-events-none absolute right-4 top-4">
-              <span className="inline-flex items-center border border-white/50 bg-black/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur">
-                Sold out
-              </span>
-            </div>
-          )}
-
-          <motion.div
-            initial={false}
-            animate={{ opacity: isHovered ? 1 : 0, y: isHovered ? 0 : 16 }}
-            transition={{ duration: 0.32, ease: [0.22, 0.61, 0.36, 1] }}
-            className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-3 pb-3"
-          >
-            <div className="pointer-events-auto flex w-full max-w-xs items-center gap-2 rounded-full bg-white/90 px-2 py-1.5 text-[11px] font-medium tracking-[0.16em] text-[#2E2B28] shadow-lg ring-1 ring-black/5 backdrop-blur">
-              <button
-                type="button"
-                onClick={handleQuickView}
-                className="inline-flex flex-1 items-center justify-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#2E2B28] transition-colors hover:bg-[#F9F6F2]"
-              >
-                <Eye className="h-3 w-3" />
-                <span>Quick view</span>
-              </button>
-              <span className="h-5 w-px bg-[#D9D1C7]" />
-              <button
-                type="button"
-                onClick={handleQuickAdd}
-                disabled={isSoldOut}
-                className={cn(
-                  'inline-flex flex-1 items-center justify-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors',
-                  isSoldOut
-                    ? 'cursor-not-allowed bg-[#E5DED3] text-[#A79D93]'
-                    : 'bg-[#8B0000] text-white hover:bg-[#6F0000]'
-                )}
-              >
-                <ShoppingBag className="h-3 w-3" />
-                <span>{isSoldOut ? 'Waitlist' : 'Quick add'}</span>
-              </button>
-            </div>
-          </motion.div>
-        </div>
-
-        <div className="flex flex-1 flex-col bg-white px-4 pb-4 pt-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {showCollection && resolvedProduct?.collection && (
-                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#6F675E]">
-                  {resolvedProduct.collection}
-                </span>
-              )}
-              {resolvedProduct?.category && (
-                <span className="rounded-sm border border-[#D9D1C7] bg-[#F9F6F2] px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.18em] text-[#6F675E]">
-                  {resolvedProduct.category}
-                </span>
-              )}
-            </div>
+        <CardHeader className="flex flex-col gap-2 px-4 pt-4 md:px-5 md:pt-5">
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="whitespace-normal break-words text-base font-semibold tracking-tight text-slate-900 dark:text-slate-50">
+              {product.name}
+            </CardTitle>
+            <span className="shrink-0 text-sm font-semibold text-slate-900 dark:text-slate-50">
+              {formatPriceINR(product.price)}
+            </span>
           </div>
 
-          <Link to={`/product/${fallbackSlug}`} className="block">
-            <h3 className="line-clamp-2 font-[400] text-[15px] tracking-tight text-[#2E2B28]">
-              {resolvedProduct?.name ?? 'Untitled silhouette'}
-            </h3>
-          </Link>
+          <div className="flex items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-300">
+            <CardDescription className="whitespace-normal break-words text-xs text-slate-600 dark:text-slate-300">
+              {artisan ? `${artisan.name} · ${artisan.region}` : "Rajasthan Atelier"}
+            </CardDescription>
+            {isInStock ? (
+              <span className="rounded-full border border-emerald-500/40 bg-emerald-50/80 px-2 py-0.5 text-[0.7rem] font-medium uppercase tracking-[0.12em] text-emerald-900 dark:border-emerald-400/50 dark:bg-emerald-500/15 dark:text-emerald-100">
+                {isLowStock ? "Limited" : "In Studio"}
+              </span>
+            ) : (
+              <span className="rounded-full border border-slate-400/60 bg-slate-100/80 px-2 py-0.5 text-[0.7rem] font-medium uppercase tracking-[0.12em] text-slate-700 dark:border-slate-500 dark:bg-slate-800/80 dark:text-slate-200">
+                Waitlist
+              </span>
+            )}
+          </div>
+        </CardHeader>
 
-          {resolvedProduct?.subtitle && (
-            <p className="mt-1 line-clamp-1 text-xs text-[#6F675E]">
-              {resolvedProduct.subtitle}
+        <CardContent className="flex flex-1 flex-col gap-3 px-4 pb-4 pt-1 md:px-5 md:pb-4">
+          {product.highlight && (
+            <p className="line-clamp-3 text-[0.8rem] leading-relaxed text-slate-700 dark:text-slate-200">
+              {product.highlight}
             </p>
           )}
 
-          <div className="mt-3 flex items-end justify-between gap-2">
-            <div className="flex flex-col">
-              <div className="flex items-baseline gap-1.5">
-                <span className="font-semibold text-[15px] text-[#2E2B28]">
-                  {displayPrice || '—'}
-                </span>
-                {hasCompareAt && resolvedProduct?.compareAtPrice && (
-                  <span className="text-xs text-[#A79D93] line-through">
-                    {new Intl.NumberFormat('en-IN', {
-                      style: 'currency',
-                      currency: resolvedProduct?.currency ?? 'INR',
-                      maximumFractionDigits: 0,
-                    }).format(resolvedProduct.compareAtPrice)}
-                  </span>
-                )}
-              </div>
-              {discountPercent !== null && (
-                <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-[#8B0000]">
-                  Save {discountPercent}%
-                </span>
-              )}
-            </div>
-
-            <button
-              type="button"
-              onClick={handleQuickView}
-              className="inline-flex items-center gap-1 rounded-full border border-transparent bg-transparent px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#6F675E] transition-colors hover:border-[#D9D1C7] hover:bg-[#F9F6F2] hover:text-[#2E2B28]"
-            >
-              <span>Details</span>
-              <ArrowRight className="h-3 w-3" />
-            </button>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            {uniqueColors.slice(0, 3).map((colorKey) => {
+              const meta = COLOR_META[colorKey] ?? COLOR_META["sand-beige"];
+              return (
+                <Badge
+                  key={colorKey}
+                  variant="outline"
+                  className={cn(
+                    "flex items-center gap-1 rounded-full border px-2.5 py-1 text-[0.7rem] font-medium",
+                    meta.badgeClass,
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "inline-block h-3 w-3 rounded-full border border-white/60 shadow-sm",
+                      meta.swatchClass,
+                    )}
+                  />
+                  <span>{meta.label}</span>
+                </Badge>
+              );
+            })}
+            {uniqueColors.length > 3 && (
+              <span className="text-[0.7rem] text-slate-500 dark:text-slate-400">
+                +{uniqueColors.length - 3} more tones
+              </span>
+            )}
           </div>
 
-          {resolvedProduct?.colors?.length ? (
-            <div className="mt-3 flex items-center gap-1.5">
-              {resolvedProduct.colors.slice(0, 4).map(colorToken => (
+          {product.tags.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {product.tags.slice(0, 4).map((tag) => (
                 <span
-                  key={colorToken}
-                  className={cn(
-                    'h-3 w-3 rounded-full border border-black/5',
-                    colorToken === 'ivory' && 'bg-[#F4EEE3]',
-                    colorToken === 'sand' && 'bg-[#E4D5C2]',
-                    colorToken === 'taupe' && 'bg-[#B8A99A]',
-                    colorToken === 'charcoal' && 'bg-[#2F2A26]',
-                    colorToken === 'black' && 'bg-black',
-                    colorToken === 'white' && 'bg-white',
-                    colorToken === 'crimson' && 'bg-[#8B0000]',
-                    colorToken === 'olive' && 'bg-[#556B2F]',
-                    colorToken === 'navy' && 'bg-[#001F3F]',
-                    colorToken === 'cognac' && 'bg-[#8B4513]'
-                  )}
-                />
-              ))}
-              {resolvedProduct.colors.length > 4 && (
-                <span className="text-[10px] text-[#6F675E]">
-                  +{resolvedProduct.colors.length - 4}
+                  key={tag}
+                  className="rounded-full border border-slate-200/70 bg-white/80 px-2 py-0.5 text-[0.7rem] uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400"
+                >
+                  {tag}
                 </span>
-              )}
+              ))}
             </div>
-          ) : null}
-        </div>
-      </motion.article>
+          )}
+        </CardContent>
 
-      <ProductDetailModal
-        productId={resolvedProduct?.id ?? null}
-        open={quickViewOpen}
-        onOpenChange={setQuickViewOpen}
-      />
-    </>
+        <CardFooter className="flex items-center justify-between gap-3 border-t border-slate-100/90 bg-stone-50/70 px-4 py-3 md:px-5 dark:border-slate-800/80 dark:bg-slate-900/80">
+          <Button
+            type="button"
+            size="sm"
+            disabled={!isInStock}
+            onClick={handleQuickAdd}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-stone-50 shadow-sm transition-[background-color,color,box-shadow] duration-200 hover:bg-slate-800 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 dark:bg-amber-400 dark:text-slate-950 dark:hover:bg-amber-300",
+              !isInStock &&
+                "cursor-not-allowed bg-slate-300 text-slate-600 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-400 dark:hover:bg-slate-700",
+            )}
+          >
+            <ShoppingBag className="h-3.5 w-3.5" />
+            <span>{isInStock ? "Add to Cart" : "Join Waitlist"}</span>
+          </Button>
+
+          <Link
+            to={`/product/${product.id}`}
+            className="text-[0.75rem] font-medium uppercase tracking-[0.16em] text-slate-700 underline-offset-4 hover:text-amber-700 hover:underline dark:text-slate-200 dark:hover:text-amber-300"
+          >
+            View details
+          </Link>
+        </CardFooter>
+      </Card>
+    </motion.div>
   );
-}
+};
 
 export default ProductCard;

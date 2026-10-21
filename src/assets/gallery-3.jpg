@@ -1,0 +1,22 @@
+/**
+ * Binary image assets like JPGs cannot be faithfully represented as TypeScript/JSON text.
+ * In this frontend-only mock implementation, we document the intended role of this file.
+ *
+ * Expected asset path at runtime: `/src/assets/gallery-3.jpg`
+ * Usage: Imported or referenced directly by components/pages and by src/mock.ts
+ * for editorial product photography in masonry galleries and product imagery.
+ *
+ * To make this production-ready, place a high-resolution (but optimized) JPG
+ * photograph at this exact path in your real filesystem. Suggested characteristics:
+ * - Orientation: Portrait or slightly off-square to support asymmetric masonry
+ * - Subject: Close-up of a single Rajasthani mojri on a handwoven textile
+ * - Palette: Warm beige background, deep indigo leather, subtle ochre accents
+ * - Style: Soft natural light, shallow depth of field, editorial composition
+ * - Dimensions: ~1600x2000px (desktop friendly), compressed to ~250–400KB
+ *
+ * Important: The rest of the app treats this as a real static asset and will
+ * reference it via the string path `/src/assets/gallery-3.jpg` (see src/mock.ts).
+ * No backend is involved; everything is mock/frontend-only.
+ */
+
+export {};

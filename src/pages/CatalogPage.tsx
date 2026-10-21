@@ -1,371 +1,437 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, Filter, X } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import { Filter, RotateCcw } from "lucide-react";
+import { Button, Badge, Card, CardHeader, CardTitle, CardDescription, CardContent, Separator, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/shadcn";
+import { cn } from "@/lib/utils";
+import { ColorOption, useCatalog, CatalogFilters, MOCK_ARTISANS } from "@/mock";
+import ProductCard from "@/components/ProductCard";
 
-import mockStore, { MojriProduct, MojriStyle } from "@/mock";
-import {
-  Button,
-  Card,
-  CardContent,
-  Badge,
-  Input,
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  Separator,
-} from "@/components/ui/shadcn";
+// NOTE: This page uses fully mocked catalog data and client-side filtering
+// from src/mock.ts only. There is no backend. All interactions are
+// purely frontend.
 
-// NOTE: This page is fully frontend-only and talks to the mocked client store in src/mock.ts.
-// There is NO backend. All filtering/searching is done in-memory with localStorage persistence
-// handled by the mock store.
-
-const pageVariants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: { opacity: 1, y: 0 },
+const COLOR_LABELS: Record<ColorOption, string> = {
+  "deep-indigo": "Deep Indigo",
+  "warm-ochre": "Warm Ochre",
+  "sand-beige": "Sand Beige",
+  marigold: "Marigold",
 };
 
-const cardVariants = {
-  hidden: { opacity: 0, y: 16 },
-  visible: { opacity: 1, y: 0 },
-};
+interface LocalFilters {
+  size?: string;
+  color?: ColorOption;
+  artisanId?: string;
+}
 
 const CatalogPage: React.FC = () => {
-  const navigate = useNavigate();
+  const [filters, setFilters] = useState<LocalFilters>({});
 
-  // Subscribe to mock store. In App we likely use useSyncExternalStore, but here
-  // we can keep it simple with a manual subscription hook to respect the central store.
-  const [state, setState] = React.useState(mockStore.getSnapshot());
-
-  React.useEffect(() => {
-    const unsubscribe = mockStore.subscribe((next) => {
-      setState(next);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  const artisans = state.artisans;
-  const search = state.search;
-  const allProducts = mockStore.getFilteredProducts();
-
-  const handleSearchChange = (value: string) => {
-    mockStore.setSearchTerm(value);
-  };
-
-  const handleArtisanFilter = (artisanId: string | null) => {
-    mockStore.setSearchArtisan(artisanId);
-  };
-
-  const handleStyleFilter = (style: MojriStyle | "All") => {
-    mockStore.setSearchStyle(style);
-  };
-
-  const clearFilters = () => {
-    mockStore.clearSearchFilters();
-  };
-
-  const styleOptions: Array<MojriStyle | "All"> = [
-    "All",
-    "Classic",
-    "Contemporary",
-    "Bridal",
-    "Everyday",
-    "Heritage",
-  ];
-
-  const activeArtisan = search.artisanId
-    ? artisans.find((a) => a.id === search.artisanId)
-    : null;
-
-  const styleLabel = search.style === "All" ? "Style" : search.style;
-  const artisanLabel = activeArtisan ? activeArtisan.name : "Artisan";
-
-  const hasFilters = Boolean(
-    search.term.trim() || search.artisanId || search.style !== "All",
+  const { products: filteredProducts, artisans, allSizes, allColors } = useCatalog(
+    filters as CatalogFilters,
   );
 
-  // Simple asymmetric masonry by mapping index to span variants
-  const getCardLayoutClasses = (index: number) => {
-    const mod = index % 6;
-    switch (mod) {
-      case 0:
-        return "md:col-span-2 md:row-span-2";
-      case 1:
-        return "md:col-span-1 md:row-span-1";
-      case 2:
-        return "md:col-span-1 md:row-span-2";
-      case 3:
-        return "md:col-span-2 md:row-span-1";
-      case 4:
-        return "md:col-span-1 md:row-span-1";
-      case 5:
-      default:
-        return "md:col-span-1 md:row-span-2";
-    }
+  const hasActiveFilters = useMemo(
+    () => Boolean(filters.size || filters.color || filters.artisanId),
+    [filters],
+  );
+
+  const activeArtisan = useMemo(
+    () => MOCK_ARTISANS.find((a) => a.id === filters.artisanId),
+    [filters.artisanId],
+  );
+
+  const handleReset = () => {
+    setFilters({});
   };
 
-  const onViewDetails = (product: MojriProduct) => {
-    navigate(`/product/${product.id}`);
+  const handleSizeChange = (value?: string) => {
+    setFilters((prev) => ({ ...prev, size: value || undefined }));
   };
+
+  const handleColorChange = (value?: ColorOption) => {
+    setFilters((prev) => ({ ...prev, color: value || undefined }));
+  };
+
+  const handleArtisanChange = (value?: string) => {
+    setFilters((prev) => ({ ...prev, artisanId: value || undefined }));
+  };
+
+  // Split products into a staggered three-column layout for desktop,
+  // collapsing to one/two columns on smaller screens.
+  const { col1, col2, col3 } = useMemo(() => {
+    const c1: typeof filteredProducts = [];
+    const c2: typeof filteredProducts = [];
+    const c3: typeof filteredProducts = [];
+    filteredProducts.forEach((p, index) => {
+      if (index % 3 === 0) c1.push(p);
+      else if (index % 3 === 1) c2.push(p);
+      else c3.push(p);
+    });
+    return { col1: c1, col2: c2, col3: c3 };
+  }, [filteredProducts]);
 
   return (
-    <motion.main
-      className="min-h-screen w-full bg-[#f5efe8] text-slate-900 dark:bg-[#100f10] dark:text-slate-100"
-      initial="hidden"
-      animate="visible"
-      exit="hidden"
-      variants={pageVariants}
-      transition={{ duration: 0.45, ease: "easeOut" }}
-    >
-      {/* Top intro + filters */}
-      <section className="w-full pt-20 pb-10 lg:pt-24 lg:pb-12">
-        <div className="w-full max-w-[1600px] mx-auto px-6 lg:px-12">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-xl space-y-3">
-              <p className="uppercase tracking-[0.28em] text-xs text-amber-700/70 dark:text-amber-200/70">
-                The Jodhpur Edit
+    <div className="w-full min-h-screen bg-[#f5f0e8] text-slate-900">
+      {/* Page header / intro */}
+      <section className="w-full border-b border-slate-200/70 bg-gradient-to-b from-[#f5f0e8] to-[#f0e6d9]">
+        <div className="w-full max-w-[1600px] mx-auto px-6 lg:px-12 py-10 lg:py-14 flex flex-col gap-6">
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 min-w-0">
+            <div className="min-w-0">
+              <p className="uppercase tracking-[0.25em] text-xs text-slate-500 mb-3">
+                Catalog
               </p>
-              <h1 className="font-serif text-3xl sm:text-4xl lg:text-5xl leading-tight">
-                Curated Mojris from
-                <span className="block text-amber-900 dark:text-amber-200"> the blue city ateliers</span>
+              <h1 className="font-['Playfair_Display'] text-3xl sm:text-4xl lg:text-5xl leading-tight text-slate-900 whitespace-normal break-words">
+                Rajasthani Mojris, Curated for the Modern Mehfil
               </h1>
-              <p className="text-sm sm:text-base text-slate-700/80 dark:text-slate-200/80">
-                Browse an intentionally small catalog of hand-finished mojris, each pair
-                traced back to a named artisan in Jodhpur. Filter by house style or by the
-                hands that stitched them.
+              <p className="mt-4 max-w-2xl text-sm sm:text-base text-slate-700 leading-relaxed">
+                An intimate edit of handcrafted mojris shaped in Jaipur and Jodhpur ateliers.
+                Filter by size, color and artisan to find the pair that feels written just for you.
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 w-full max-w-xl lg:max-w-md">
-              <div className="flex gap-3 items-center w-full">
-                <div className="flex-1 relative">
-                  <Input
-                    value={search.term}
-                    onChange={(e) => handleSearchChange(e.target.value)}
-                    placeholder="Search by mojri or artisan"
-                    className="h-11 rounded-none border-amber-900/10 bg-white/60 text-sm tracking-wide placeholder:text-slate-400 focus-visible:ring-amber-700/40 dark:bg-[#161516] dark:border-amber-100/10"
-                  />
-                  {search.term && (
-                    <button
-                      type="button"
-                      onClick={() => handleSearchChange("")}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-100 transition-colors"
-                      aria-label="Clear search"
+            {/* Filter panel */}
+            <Card className="lg:max-w-md bg-white/70 backdrop-blur-sm border-slate-200 shadow-sm">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between w-full gap-2">
+                  <div className="flex items-center gap-2">
+                    <Filter className="w-4 h-4 text-slate-500" />
+                    <CardTitle className="text-sm font-semibold tracking-wide text-slate-900 uppercase">
+                      Refine Selection
+                    </CardTitle>
+                  </div>
+                  {hasActiveFilters && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                      onClick={handleReset}
+                      aria-label="Reset filters"
                     >
-                      <X className="h-4 w-4" />
-                    </button>
+                      <RotateCcw className="w-4 h-4" />
+                    </Button>
                   )}
                 </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-none border-amber-900/20 bg-white/70 px-3 h-9 text-xs uppercase tracking-[0.19em] flex items-center gap-2 hover:bg-amber-50/80 dark:bg-[#161516] dark:border-amber-50/20 dark:hover:bg-[#1c1b1d]"
-                    >
-                      <Filter className="h-3 w-3" />
-                      <span>{styleLabel}</span>
-                      <ChevronDown className="h-3 w-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="rounded-none border-amber-900/15 bg-[#f9f3ec] dark:bg-[#181719]">
-                    {styleOptions.map((opt) => (
-                      <DropdownMenuItem
-                        key={opt}
-                        onClick={() => handleStyleFilter(opt)}
-                        className="cursor-pointer text-xs font-medium tracking-[0.16em] uppercase text-slate-800 dark:text-slate-100"
+                <CardDescription className="text-xs text-slate-600 mt-1">
+                  These filters work fully on the client using mocked catalog data.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Size filter */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-xs font-medium tracking-wide text-slate-700 uppercase">
+                      Size
+                    </span>
+                    {filters.size && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-[11px] text-slate-600 hover:text-slate-900"
+                        onClick={() => handleSizeChange(undefined)}
                       >
-                        {opt === "All" ? "All styles" : opt}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-none border-amber-900/20 bg-white/70 px-3 h-9 text-xs uppercase tracking-[0.19em] flex items-center gap-2 hover:bg-amber-50/80 dark:bg-[#161516] dark:border-amber-50/20 dark:hover:bg-[#1c1b1d]"
-                    >
-                      <span>{artisanLabel}</span>
-                      <ChevronDown className="h-3 w-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="rounded-none border-amber-900/15 bg-[#f9f3ec] dark:bg-[#181719]">
-                    <DropdownMenuItem
-                      onClick={() => handleArtisanFilter(null)}
-                      className="cursor-pointer text-xs font-medium tracking-[0.16em] uppercase text-slate-800 dark:text-slate-100"
-                    >
-                      All artisans
-                    </DropdownMenuItem>
-                    <Separator className="my-1 bg-amber-900/10 dark:bg-amber-50/15" />
-                    {artisans.map((artisan) => (
-                      <DropdownMenuItem
-                        key={artisan.id}
-                        onClick={() => handleArtisanFilter(artisan.id)}
-                        className="cursor-pointer text-xs font-medium tracking-[0.12em] uppercase text-slate-700 dark:text-slate-100"
-                      >
-                        {artisan.name}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                {hasFilters && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={clearFilters}
-                    className="rounded-none h-9 px-3 text-[11px] uppercase tracking-[0.18em] text-amber-900 hover:text-amber-950 hover:bg-amber-100/60 dark:text-amber-200 dark:hover:bg-amber-50/10"
-                  >
-                    Clear
-                  </Button>
-                )}
-
-                <div className="ml-auto flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                  <span>{allProducts.length.toString().padStart(2, "0")} pairs</span>
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2.5">
+                    {allSizes.map((size) => {
+                      const active = filters.size === size;
+                      return (
+                        <button
+                          key={size}
+                          type="button"
+                          onClick={() => handleSizeChange(active ? undefined : size)}
+                          className={cn(
+                            "rounded-full px-4 py-1.5 border text-xs font-medium flex items-center gap-1.5 transition-colors",
+                            "border-slate-300 text-slate-700 bg-white/80 hover:bg-slate-900/5",
+                            active &&
+                              "border-indigo-700 bg-indigo-800/10 text-indigo-900",
+                          )}
+                        >
+                          <span>{size}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            </div>
+
+                <Separator className="bg-slate-200/80" />
+
+                {/* Color filter */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-xs font-medium tracking-wide text-slate-700 uppercase">
+                      Color Story
+                    </span>
+                    {filters.color && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-[11px] text-slate-600 hover:text-slate-900"
+                        onClick={() => handleColorChange(undefined)}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2.5">
+                    {allColors.map((color) => {
+                      const active = filters.color === color;
+                      return (
+                        <button
+                          key={color}
+                          type="button"
+                          onClick={() => handleColorChange(active ? undefined : color)}
+                          className={cn(
+                            "rounded-full px-4 py-1.5 border text-xs font-medium flex items-center gap-2 transition-colors",
+                            "border-slate-300 text-slate-700 bg-white/80 hover:bg-slate-900/5",
+                            active &&
+                              "border-amber-700 bg-amber-700/10 text-amber-900",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "w-3 h-3 rounded-full border border-white shadow-sm",
+                              color === "deep-indigo" && "bg-indigo-900",
+                              color === "warm-ochre" && "bg-amber-700",
+                              color === "sand-beige" && "bg-amber-200",
+                              color === "marigold" && "bg-orange-500",
+                            )}
+                          />
+                          <span>{COLOR_LABELS[color]}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <Separator className="bg-slate-200/80" />
+
+                {/* Artisan filter */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-xs font-medium tracking-wide text-slate-700 uppercase">
+                      Artisan Atelier
+                    </span>
+                    {filters.artisanId && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-[11px] text-slate-600 hover:text-slate-900"
+                        onClick={() => handleArtisanChange(undefined)}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2.5 items-center">
+                    {artisans.map((artisan) => {
+                      const active = filters.artisanId === artisan.id;
+                      return (
+                        <button
+                          key={artisan.id}
+                          type="button"
+                          onClick={() =>
+                            handleArtisanChange(active ? undefined : artisan.id)
+                          }
+                          className={cn(
+                            "rounded-full px-4 py-1.5 border text-xs font-medium flex items-center gap-2 transition-colors",
+                            "border-slate-300 text-slate-700 bg-white/80 hover:bg-slate-900/5",
+                            active &&
+                              "border-slate-900 bg-slate-900 text-amber-100",
+                          )}
+                        >
+                          <span className="inline-flex h-6 w-6 rounded-full bg-slate-900/90 text-[10px] font-semibold text-amber-100 items-center justify-center">
+                            {artisan.name
+                              .split(" ")
+                              .map((p) => p[0])
+                              .join("")}
+                          </span>
+                          <span>{artisan.name}</span>
+                          <span className="text-[10px] uppercase tracking-wide text-slate-500">
+                            {artisan.region.split(",")[0]}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {hasActiveFilters && activeArtisan && (
+                  <div className="pt-3 border-t border-dashed border-slate-200/80 mt-1 space-y-1">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                      Viewing edit from
+                    </p>
+                    <p className="font-['Playfair_Display'] text-sm text-slate-900">
+                      {activeArtisan.name}
+                    </p>
+                    <p className="text-[11px] text-slate-600">
+                      {activeArtisan.craftNotes}
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </div>
       </section>
 
-      {/* Catalog grid */}
-      <section className="w-full pb-16 lg:pb-24">
-        <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-12">
-          {allProducts.length === 0 ? (
-            <div className="py-20 flex flex-col items-center justify-center text-center gap-4">
-              <p className="font-serif text-2xl sm:text-3xl text-slate-800 dark:text-slate-100">
-                Nothing matches this composition yet.
+      {/* Active filters summary & sort (sort is illustrative only, client-side) */}
+      <section className="w-full border-b border-slate-200/70 bg-[#f5f0e8]/90">
+        <div className="w-full max-w-[1600px] mx-auto px-6 lg:px-12 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
+            <span className="text-xs font-medium tracking-wide text-slate-700 uppercase">
+              {filteredProducts.length} styles curated
+            </span>
+            {hasActiveFilters && (
+              <>
+                <Separator orientation="vertical" className="h-5 bg-slate-300/80" />
+                <div className="flex flex-wrap gap-2">
+                  {filters.size && (
+                    <Badge
+                      variant="outline"
+                      className="rounded-full border-slate-300 text-xs px-3 py-1 bg-white/80"
+                    >
+                      Size: {filters.size}
+                    </Badge>
+                  )}
+                  {filters.color && (
+                    <Badge
+                      variant="outline"
+                      className="rounded-full border-slate-300 text-xs px-3 py-1 bg-white/80 flex items-center gap-1.5"
+                    >
+                      <span
+                        className={cn(
+                          "w-2.5 h-2.5 rounded-full border border-white shadow-sm",
+                          filters.color === "deep-indigo" && "bg-indigo-900",
+                          filters.color === "warm-ochre" && "bg-amber-700",
+                          filters.color === "sand-beige" && "bg-amber-200",
+                          filters.color === "marigold" && "bg-orange-500",
+                        )}
+                      />
+                      <span>{COLOR_LABELS[filters.color]}</span>
+                    </Badge>
+                  )}
+                  {filters.artisanId && activeArtisan && (
+                    <Badge
+                      variant="outline"
+                      className="rounded-full border-slate-300 text-xs px-3 py-1 bg-white/80"
+                    >
+                      Artisan: {activeArtisan.name}
+                    </Badge>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 justify-end">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 rounded-full border-slate-300 bg-white/80 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  Sort: Featured
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[180px]">
+                <DropdownMenuItem className="text-xs text-slate-800">
+                  Featured (default)
+                </DropdownMenuItem>
+                <DropdownMenuItem className="text-xs text-slate-700">
+                  Price: Low to High (mock)
+                </DropdownMenuItem>
+                <DropdownMenuItem className="text-xs text-slate-700">
+                  Price: High to Low (mock)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </section>
+
+      {/* Catalog grid section */}
+      <section className="w-full bg-[#f5f0e8] pb-16 pt-8">
+        <div className="w-full max-w-[1600px] mx-auto px-6 lg:px-12">
+          {filteredProducts.length === 0 ? (
+            <div className="py-16 flex flex-col items-center justify-center text-center gap-4">
+              <p className="font-['Playfair_Display'] text-2xl text-slate-900">
+                This edit is momentarily empty.
               </p>
-              <p className="max-w-md text-sm text-slate-600 dark:text-slate-300">
-                Try softening your filters or exploring all artisans – our Jodhpur edit is
-                intentionally small and intimate.
+              <p className="max-w-md text-sm text-slate-700 leading-relaxed">
+                We couldn't find mojris matching this exact combination. Try easing one of the
+                filters or explore the full catalog to discover more silhouettes.
               </p>
               <Button
                 variant="outline"
-                size="sm"
-                onClick={clearFilters}
-                className="rounded-none border-amber-900/20 bg-white/70 h-9 px-4 text-[11px] uppercase tracking-[0.18em] hover:bg-amber-50/80 dark:bg-[#161516] dark:border-amber-50/20 dark:hover:bg-[#1c1b1d]"
+                className="mt-2 rounded-full border-slate-400 bg-white px-6 text-xs font-semibold tracking-wide text-slate-800 hover:bg-slate-900 hover:text-amber-50"
+                onClick={handleReset}
               >
-                Reset filters
+                Clear all filters
               </Button>
             </div>
           ) : (
-            <AnimatePresence mode="sync">
-              <motion.div
-                layout
-                className="grid grid-cols-1 md:grid-cols-3 auto-rows-[260px] md:auto-rows-[260px] gap-4 sm:gap-5 lg:gap-6"
-              >
-                {allProducts.map((product, index) => {
-                  const artisan = artisans.find(
-                    (a) => a.id === product.artisanId,
-                  );
-                  const layoutClasses = getCardLayoutClasses(index);
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 lg:gap-8 items-start">
+              {/* For smaller screens, a simple grid; for desktop we use staggered vertical rhythm
+                  via varied motion/spacing per column. */}
 
-                  return (
-                    <motion.article
-                      key={product.id}
-                      layout
-                      variants={cardVariants}
-                      initial="hidden"
-                      animate="visible"
-                      exit="hidden"
-                      transition={{
-                        duration: 0.35,
-                        ease: "easeOut",
-                      }}
-                      whileHover={{
-                        y: -4,
-                        boxShadow:
-                          "0 18px 45px rgba(15, 14, 12, 0.18)",
-                      }}
-                      className={`${layoutClasses} group cursor-pointer`}
-                      onClick={() => onViewDetails(product)}
-                    >
-                      <Card className="h-full w-full overflow-hidden rounded-none border-amber-900/15 bg-[#f9f3ec]/90 backdrop-blur-sm dark:bg-[#171618]/90 dark:border-amber-50/15">
-                        <CardContent className="p-0 h-full flex flex-col">
-                          <div className="relative flex-1 overflow-hidden">
-                            <motion.img
-                              src={product.heroImage}
-                              alt={product.name}
-                              className="h-full w-full object-cover object-center transition-opacity duration-500 group-hover:opacity-95"
-                              loading="lazy"
-                              whileHover={{ scale: 1.02 }}
-                              transition={{ duration: 0.4, ease: "easeOut" }}
-                            />
-                            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#15120f]/60 via-transparent to-transparent" />
+              {/* Column 1 */}
+              <div className="flex flex-col gap-6 min-w-0">
+                {col1.map((product, index) => (
+                  <motion.div
+                    key={product.id}
+                    initial={{ opacity: 0, y: 24 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: index * 0.06 }}
+                    className={cn(
+                      index % 2 === 0 ? "mt-0" : "mt-4 md:mt-6 xl:mt-8",
+                    )}
+                  >
+                    <ProductCard product={product} featured={index === 0} />
+                  </motion.div>
+                ))}
+              </div>
 
-                            <div className="absolute left-4 right-4 bottom-4 flex flex-col gap-2">
-                              <div className="flex items-center justify-between">
-                                <Badge
-                                  className="rounded-none border border-amber-50/40 bg-black/50 px-2 py-1 text-[10px] font-medium tracking-[0.19em] uppercase text-amber-50 backdrop-blur-sm"
-                                  variant="outline"
-                                >
-                                  {product.style}
-                                </Badge>
+              {/* Column 2 */}
+              <div className="flex flex-col gap-6 min-w-0">
+                {col2.map((product, index) => (
+                  <motion.div
+                    key={product.id}
+                    initial={{ opacity: 0, y: 24 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.12 + index * 0.06 }}
+                    className={cn(
+                      index % 2 === 0 ? "mt-3 md:mt-6" : "mt-0",
+                    )}
+                  >
+                    <ProductCard product={product} />
+                  </motion.div>
+                ))}
+              </div>
 
-                                {product.isLimitedEdition && (
-                                  <Badge
-                                    variant="outline"
-                                    className="rounded-none border-amber-200/80 bg-amber-50/80 px-2 py-1 text-[10px] font-semibold tracking-[0.18em] uppercase text-amber-900"
-                                  >
-                                    Limited run
-                                  </Badge>
-                                )}
-                              </div>
-
-                              <div className="space-y-1">
-                                <h2 className="font-serif text-lg sm:text-xl text-amber-50 leading-snug">
-                                  {product.name}
-                                </h2>
-                                <p className="text-[11px] uppercase tracking-[0.19em] text-amber-100/80">
-                                  {artisan ? artisan.name : "Unknown artisan"}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between px-4 py-3 border-t border-amber-900/10 dark:border-amber-50/10 bg-[#f2e8dc]/80 dark:bg-[#141316]">
-                            <div className="space-y-0.5">
-                              <p className="text-xs tracking-[0.13em] uppercase text-slate-600 dark:text-slate-300">
-                                ₹ {product.priceINR.toLocaleString("en-IN")} INR
-                              </p>
-                              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                                Sizes {product.sizes[0]}–{
-                                  product.sizes[product.sizes.length - 1]
-                                }
-                              </p>
-                            </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="rounded-none border-amber-900/40 bg-transparent px-4 h-8 text-[11px] uppercase tracking-[0.18em] text-amber-950 hover:bg-amber-900 hover:text-amber-50 dark:border-amber-50/40 dark:text-amber-50"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onViewDetails(product);
-                              }}
-                            >
-                              View details
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.article>
-                  );
-                })}
-              </motion.div>
-            </AnimatePresence>
+              {/* Column 3 */}
+              <div className="flex flex-col gap-6 min-w-0">
+                {col3.map((product, index) => (
+                  <motion.div
+                    key={product.id}
+                    initial={{ opacity: 0, y: 24 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.18 + index * 0.06 }}
+                    className={cn(
+                      index % 2 === 0 ? "mt-6 xl:mt-10" : "mt-1 md:mt-4",
+                    )}
+                  >
+                    <ProductCard product={product} />
+                  </motion.div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       </section>
-    </motion.main>
+    </div>
   );
 };
 

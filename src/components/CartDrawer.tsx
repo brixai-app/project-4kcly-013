@@ -1,422 +1,291 @@
-import React from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
-import { useNavigate } from 'react-router-dom';
-import { ShoppingBag, X, Trash2, ArrowRight, Truck, Percent, Info } from 'lucide-react';
-import { toast } from 'sonner';
-import { motion, AnimatePresence } from 'framer-motion';
-import { cn } from '@/lib/utils';
-import { useCart } from '@/context/CartContext';
-import { products } from '@/data/mockData';
-import type { CartItemResolved, ShippingMethod } from '@/types';
-import QuantityStepper from './QuantityStepper';
+import React from "react";
+import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { X, ShoppingBag, Minus, Plus } from "lucide-react";
+import { toast } from "sonner";
+
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/shadcn";
+import { Button } from "@/components/ui/shadcn/button";
+import { Separator } from "@/components/ui/shadcn/separator";
+import { ScrollArea } from "@/components/ui/shadcn/scroll-area";
+
+import { useCart, formatPriceINR } from "@/mock";
+import { cn } from "@/lib/utils";
 
 export interface CartDrawerProps {
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
+  /**
+   * Controls the sheet open state. Header owns the trigger and passes state down.
+   */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
-const FREE_SHIPPING_THRESHOLD = 12000;
+// NOTE: This CartDrawer is fully FRONTEND-ONLY and uses mocked cart state
+// from src/mock.ts persisted in localStorage. There is NO backend.
 
-const defaultShipping: ShippingMethod = {
-  id: 'standard',
-  label: 'Standard',
-  description: '3–5 business days',
-  amount: 0,
-  estimatedDaysMin: 3,
-  estimatedDaysMax: 5,
+const itemMotion = {
+  initial: { opacity: 0, x: 24 },
+  animate: { opacity: 1, x: 0 },
+  exit: { opacity: 0, x: 24 },
 };
 
-function resolveCartItems(getResolvedItems: (p: typeof products) => CartItemResolved[]): CartItemResolved[] {
-  try {
-    return getResolvedItems(products) ?? [];
-  } catch {
-    return [];
-  }
-}
-
-function formatCurrency(value: number, currency = 'INR') {
-  try {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 0,
-    }).format(value);
-  } catch {
-    return `₹${value.toFixed(0)}`;
-  }
-}
-
-export function CartDrawer({ open = false, onOpenChange }: CartDrawerProps) {
+const CartDrawer: React.FC<CartDrawerProps> = ({ open, onOpenChange }) => {
   const navigate = useNavigate();
-  const { state, removeItem, updateQuantity, getResolvedItems, getTotals } = useCart();
-  const [internalOpen, setInternalOpen] = React.useState<boolean>(open);
+  const { cart, cartSubtotal, updateCartQuantity, removeFromCart } = useCart();
 
-  const isControlled = typeof onOpenChange === 'function';
-  const actualOpen = isControlled ? open : internalOpen;
-  const handleOpenChange = (next: boolean) => {
-    if (isControlled) {
-      onOpenChange?.(next);
-    } else {
-      setInternalOpen(next);
-    }
-  };
+  const subtotal = cartSubtotal;
+  const shippingFee = subtotal >= 6000 || subtotal === 0 ? 0 : 250;
+  const total = subtotal + shippingFee;
 
-  const items = resolveCartItems(getResolvedItems);
-  const totals = getTotals(products, defaultShipping);
-  const subtotal = totals?.subtotal ?? 0;
-  const currency = totals?.currency ?? state?.currency ?? 'INR';
-  const remainingForFree = Math.max(0, FREE_SHIPPING_THRESHOLD - subtotal);
-  const freeProgress =
-    FREE_SHIPPING_THRESHOLD === 0 ? 0 : Math.min(1, subtotal / FREE_SHIPPING_THRESHOLD);
-
-  const handleRemove = (id: string) => {
-    removeItem(id);
-    toast('Removed from cart', {
-      description: 'The pair has been released back to the atelier.',
-    });
-  };
-
-  const handleQuantityChange = (item: CartItemResolved, nextQty: number) => {
-    const stock = item?.size?.stock ?? 0;
-    const clamped = Math.max(1, Math.min(stock, nextQty));
-    if (clamped !== nextQty) {
-      toast('Limited stock', {
-        description: `Only ${stock} in this size are available.`,
-      });
-    }
-    updateQuantity(item.id, clamped);
-  };
-
-  const handleCheckout = () => {
-    if (!items.length) {
-      toast.error('Your cart is empty', {
-        description: 'Curate at least one pair before proceeding to checkout.',
+  const handleIncrement = (id: string, currentQty: number, maxQty: number) => {
+    if (currentQty >= maxQty) {
+      toast("Available pair limit reached", {
+        description: "This size and color combination is currently at full capacity.",
       });
       return;
     }
-    handleOpenChange(false);
-    navigate('/checkout');
+    const nextQty = currentQty + 1;
+    updateCartQuantity(id, nextQty);
+    toast.success("Cart updated", {
+      description: `Quantity adjusted to ${nextQty}.`,
+    });
   };
 
-  const handleGoToShop = () => {
-    handleOpenChange(false);
-    navigate('/shop');
+  const handleDecrement = (id: string, currentQty: number) => {
+    if (currentQty <= 1) {
+      removeFromCart(id);
+      toast("Pair removed", {
+        description: "This mojri has been taken out of your curation.",
+      });
+      return;
+    }
+    const nextQty = currentQty - 1;
+    updateCartQuantity(id, nextQty);
+    toast.success("Cart updated", {
+      description: `Quantity adjusted to ${nextQty}.`,
+    });
+  };
+
+  const handleRemove = (id: string) => {
+    removeFromCart(id);
+    toast("Pair removed", {
+      description: "We have gently unpinned this mojri from your selection.",
+    });
+  };
+
+  const handleCheckout = () => {
+    if (!cart.length) {
+      toast("Your curation is empty", {
+        description: "Add a pair that feels like you before proceeding to checkout.",
+      });
+      return;
+    }
+    onOpenChange(false);
+    navigate("/checkout");
   };
 
   return (
-    <Dialog.Root open={actualOpen} onOpenChange={handleOpenChange}>
-      <Dialog.Trigger asChild>
-        <button
-          type="button"
-          className="relative inline-flex items-center justify-center rounded-md border border-[#D9D1C7] bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#2E2B28] hover:bg-[#F9F6F2] transition-colors"
-        >
-          <ShoppingBag className="mr-2 h-4 w-4" />
-          Cart
-          {state?.items?.length ? (
-            <span className="ml-2 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-sm bg-[#8B0000] px-1 text-[0.65rem] font-semibold text-white">
-              {state.items.length}
-            </span>
-          ) : null}
-        </button>
-      </Dialog.Trigger>
-
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0" />
-        <Dialog.Content className="fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col border-l border-[#D9D1C7] bg-[#F9F6F2] shadow-2xl focus:outline-none">
-          <header className="flex items-center justify-between border-b border-[#D9D1C7] bg-[#F9F6F2]/90 px-6 py-5 backdrop-blur">
-            <div className="flex flex-col">
-              <span className="text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-[#6F675E]">
-                Jootiya Cart
-              </span>
-              <Dialog.Title className="font-['Playfair_Display'] text-xl font-light tracking-tight text-[#2E2B28]">
-                Your curation
-              </Dialog.Title>
-            </div>
-            <Dialog.Close asChild>
-              <button
-                type="button"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#D9D1C7] bg-white text-[#2E2B28] hover:bg-[#F9F6F2] transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </Dialog.Close>
-          </header>
-
-          <div className="flex-1 overflow-y-auto px-6 py-4">
-            {!items.length ? (
-              <div className="flex h-full flex-col items-start justify-center space-y-6">
-                <div>
-                  <p className="font-['Playfair_Display'] text-2xl font-light text-[#2E2B28]">
-                    The atelier is waiting.
-                  </p>
-                  <p className="mt-2 text-sm text-[#6F675E]">
-                    No pairs have been reserved yet. Discover sculpted silhouettes and archival
-                    sneakers in the shop.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleGoToShop}
-                  className="inline-flex items-center justify-center rounded-[16px] border border-[#8B0000] bg-[#8B0000] px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-white hover:bg-[#6F0000] transition-colors"
-                >
-                  Explore collection
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <ShippingProgressBar
-                  subtotal={subtotal}
-                  currency={currency}
-                  remaining={remainingForFree}
-                  progress={freeProgress}
-                />
-
-                <ul className="space-y-4">
-                  <AnimatePresence initial={false}>
-                    {items.map((item) => (
-                      <motion.li
-                        key={item.id}
-                        initial={{ opacity: 0, x: 40 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 40 }}
-                        transition={{ duration: 0.25, ease: 'easeOut' }}
-                        className="rounded-[16px] border border-[#D9D1C7] bg-white p-3"
-                      >
-                        <CartLineItem
-                          item={item}
-                          onQuantityChange={(qty) => handleQuantityChange(item, qty)}
-                          onRemove={() => handleRemove(item.id)}
-                        />
-                      </motion.li>
-                    ))}
-                  </AnimatePresence>
-                </ul>
-              </div>
-            )}
-          </div>
-
-          <footer className="border-t border-[#D9D1C7] bg-[#F9F6F2]/95 px-6 py-4 backdrop-blur">
-            <CartSummary
-              hasItems={!!items.length}
-              totals={totals}
-              remainingForFree={remainingForFree}
-              currency={currency}
-              onCheckout={handleCheckout}
-            />
-          </footer>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
-  );
-}
-
-interface CartLineItemProps {
-  item: CartItemResolved;
-  onQuantityChange: (qty: number) => void;
-  onRemove: () => void;
-}
-
-function CartLineItem({ item, onQuantityChange, onRemove }: CartLineItemProps) {
-  const product = item.product;
-  const sizeLabel = item.size?.sizeLabel ?? '';
-  const stock = item.size?.stock ?? 0;
-  const primaryImage = product?.images?.[0];
-
-  const isLowStock = stock > 0 && stock <= 3;
-
-  return (
-    <div className="grid grid-cols-[96px,1fr] gap-3">
-      <div className="relative overflow-hidden rounded-[14px] border border-[#D9D1C7] bg-[#F9F6F2]">
-        {primaryImage?.url ? (
-          <img
-            crossOrigin="anonymous"
-            src={primaryImage.url}
-            alt={primaryImage.alt ?? product?.name ?? 'Product image'}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-[0.7rem] text-[#6F675E]">
-            Jootiya
-          </div>
-        )}
-        <div className="pointer-events-none absolute inset-0 border border-black/5" />
-      </div>
-      <div className="flex flex-col justify-between">
-        <div>
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="font-['Playfair_Display'] text-sm font-medium tracking-tight text-[#2E2B28]">
-                {product?.name}
-              </p>
-              {product?.collection ? (
-                <p className="mt-0.5 text-[0.7rem] uppercase tracking-[0.2em] text-[#6F675E]">
-                  {product.collection}
-                </p>
-              ) : null}
-              <p className="mt-1 text-xs text-[#6F675E]">
-                Size {sizeLabel}
-                {stock > 0 ? ` • ${stock} in studio` : ' • Made to order'}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={onRemove}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#D9D1C7] bg-white text-[#6F675E] hover:text-[#2E2B28] hover:bg-[#F9F6F2] transition-colors"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
-          <div className="mt-2 flex items-center justify-between">
-            <QuantityStepper
-              value={item.quantity}
-              min={1}
-              max={stock || 99}
-              onChange={onQuantityChange}
-            />
-            <div className="text-right">
-              <p className="text-sm font-semibold text-[#2E2B28]">
-                {formatCurrency(item.lineTotal, item.currency)}
-            </p>
-              {isLowStock ? (
-                <p className="mt-0.5 text-[0.7rem] text-[#8B0000]">
-                  Almost gone in this size
-                </p>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-interface ShippingProgressBarProps {
-  subtotal: number;
-  currency: string;
-  remaining: number;
-  progress: number;
-}
-
-function ShippingProgressBar({
-  subtotal,
-  currency,
-  remaining,
-  progress,
-}: ShippingProgressBarProps) {
-  const reached = subtotal >= FREE_SHIPPING_THRESHOLD;
-  return (
-    <div className="rounded-[16px] border border-[#D9D1C7] bg-white px-4 py-3">
-      <div className="flex items-center gap-2">
-        <Truck className="h-4 w-4 text-[#8B0000]" />
-        <p className="text-xs text-[#2E2B28]">
-          {reached ? (
-            <span className="font-medium">Complimentary delivery unlocked.</span>
-          ) : (
-            <>
-              <span className="font-medium">Complimentary delivery at</span>{' '}
-              {formatCurrency(FREE_SHIPPING_THRESHOLD, currency)}.
-            </>
-          )}
-        </p>
-      </div>
-      <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-[#F0E8DD]">
-        <div
-          className={cn(
-            'h-full rounded-full bg-[#8B0000] transition-all',
-            reached ? 'bg-[#8B0000]' : 'bg-[#8B0000]'
-          )}
-          style={{ width: `${progress * 100}%` }}
-        />
-      </div>
-      {!reached ? (
-        <p className="mt-1 text-[0.7rem] text-[#6F675E]">
-          Add {formatCurrency(remaining, currency)} to enjoy complimentary standard shipping.
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-interface CartSummaryProps {
-  hasItems: boolean;
-  totals: ReturnType<typeof getTotals>;
-  remainingForFree: number;
-  currency: string;
-  onCheckout: () => void;
-}
-
-function CartSummary({
-  hasItems,
-  totals,
-  remainingForFree,
-  currency,
-  onCheckout,
-}: CartSummaryProps) {
-  const breakdown = [
-    { label: 'Subtotal', value: totals?.subtotal ?? 0 },
-    { label: 'Shipping', value: totals?.shipping ?? 0 },
-    { label: 'Tax', value: totals?.tax ?? 0 },
-  ];
-
-  const showSavings = (totals?.discount ?? 0) > 0;
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between text-xs text-[#6F675E]">
-        <div className="flex items-center gap-1">
-          <Percent className="h-3.5 w-3.5" />
-          <span>
-            {remainingForFree <= 0
-              ? 'You are eligible for atelier-standard complimentary shipping.'
-              : 'Tax and duties calculated at checkout.'}
-          </span>
-        </div>
-        <div className="flex items-center gap-1 text-[0.7rem]">
-          <Info className="h-3.5 w-3.5" />
-          <span>Secure checkout</span>
-        </div>
-      </div>
-
-      <div className="rounded-[16px] border border-[#D9D1C7] bg-white p-3">
-        <dl className="space-y-1.5 text-sm text-[#2E2B28]">
-          {breakdown.map((row) => (
-            <div key={row.label} className="flex items-center justify-between">
-              <dt className="text-xs text-[#6F675E]">{row.label}</dt>
-              <dd className="text-xs">{formatCurrency(row.value, currency)}</dd>
-            </div>
-          ))}
-          {showSavings ? (
-            <div className="flex items-center justify-between text-xs text-[#8B0000]">
-              <dt>Savings</dt>
-              <dd>-{formatCurrency(totals?.discount ?? 0, currency)}</dd>
-            </div>
-          ) : null}
-          <div className="mt-2 flex items-center justify-between border-t border-dashed border-[#D9D1C7] pt-2">
-            <dt className="text-[0.8rem] font-semibold text-[#2E2B28]">Total</dt>
-            <dd className="font-['Playfair_Display'] text-lg font-medium tracking-tight text-[#2E2B28]">
-              {formatCurrency(totals?.grandTotal ?? 0, currency)}
-            </dd>
-          </div>
-        </dl>
-      </div>
-
-      <button
-        type="button"
-        disabled={!hasItems}
-        onClick={onCheckout}
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
         className={cn(
-          'flex w-full items-center justify-center rounded-[16px] px-5 py-3 text-xs font-semibold uppercase tracking-[0.22em] transition-colors',
-          hasItems
-            ? 'bg-[#8B0000] text-white hover:bg-[#6F0000]'
-            : 'cursor-not-allowed border border-[#D9D1C7] bg-[#F0E8DD] text-[#AFA79D]'
+          "flex h-full w-full flex-col border-l border-border/60 bg-background/95/",
+          "sm:max-w-md backdrop-blur-md px-0"
         )}
       >
-        Proceed to checkout
-        <ArrowRight className="ml-2 h-4 w-4" />
-      </button>
-    </div>
+        <SheetHeader className="px-6 pt-6 pb-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col gap-1 text-left">
+              <SheetTitle className="font-['Playfair_Display'] text-xl tracking-wide text-foreground">
+                Your curation
+              </SheetTitle>
+              <SheetDescription className="text-xs text-muted-foreground">
+                A preview of pairs handpicked from our Rajasthani ateliers.
+              </SheetDescription>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full border border-border/60 bg-background/80 hover:bg-accent"
+              onClick={() => onOpenChange(false)}
+              aria-label="Close cart drawer"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </SheetHeader>
+
+        <Separator className="mb-2" />
+
+        <div className="flex min-h-0 flex-1 flex-col">
+          <ScrollArea className="flex-1 px-6 pb-4 pt-2">
+            {cart.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center gap-4 py-12 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-dashed border-border/70 bg-muted/60">
+                  <ShoppingBag className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div className="space-y-1">
+                  <p className="font-['Playfair_Display'] text-base text-foreground">
+                    Your curation is waiting.
+                  </p>
+                  <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+                    Explore the catalog to begin pairing silhouettes, colors, and stories that feel like you.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-amber-900/40 bg-amber-50/70 text-amber-900 hover:bg-amber-100"
+                  onClick={() => {
+                    onOpenChange(false);
+                    navigate("/catalog");
+                  }}
+                >
+                  Browse mojris
+                </Button>
+              </div>
+            ) : (
+              <AnimatePresence initial={false}>
+                <div className="space-y-4">
+                  {cart.map((item) => (
+                    <motion.div
+                      key={item.id}
+                      {...itemMotion}
+                      transition={{ duration: 0.18, ease: "easeOut" }}
+                      className="flex gap-3 rounded-xl border border-border/70 bg-background/70 p-3 shadow-sm"
+                    >
+                      <div className="relative h-20 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-muted">
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+
+                      <div className="flex min-w-0 flex-1 flex-col gap-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 space-y-0.5">
+                            <p className="text-xs font-medium text-foreground whitespace-normal break-words">
+                              {item.name}
+                            </p>
+                            <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                              Size {item.variant.size} • {formatColorLabel(item.variant.color)}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemove(item.id)}
+                            className="ml-1 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground hover:text-foreground"
+                          >
+                            Remove
+                          </button>
+                        </div>
+
+                        <div className="mt-1 flex items-center justify-between gap-3">
+                          <div className="inline-flex items-center rounded-full border border-border/70 bg-background px-2 py-1 text-[11px] text-foreground">
+                            {formatPriceINR(item.price)}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 rounded-full border border-border/70 bg-background px-1 py-0.5">
+                              <button
+                                type="button"
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] text-foreground hover:bg-muted/80"
+                                onClick={() => handleDecrement(item.id, item.quantity)}
+                                aria-label="Decrease quantity"
+                              >
+                                <Minus className="h-3 w-3" />
+                              </button>
+                              <span className="min-w-[1.5rem] text-center text-[11px] font-medium text-foreground">
+                                {item.quantity}
+                              </span>
+                              <button
+                                type="button"
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] text-foreground hover:bg-muted/80"
+                                onClick={() => handleIncrement(item.id, item.quantity, item.maxQuantity)}
+                                aria-label="Increase quantity"
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </div>
+                            {item.quantity >= item.maxQuantity && (
+                              <span className="text-[10px] text-amber-800">
+                                Atelier limit reached
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </AnimatePresence>
+            )}
+          </ScrollArea>
+
+          <div className="border-t border-border/70 bg-background/95 px-6 pb-6 pt-4">
+            <div className="space-y-2 text-xs text-muted-foreground">
+              <div className="flex items-center justify-between">
+                <span>Subtotal</span>
+                <span className="font-medium text-foreground">{formatPriceINR(subtotal)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Shipping</span>
+                <span>
+                  {shippingFee === 0
+                    ? subtotal === 0
+                      ? "—"
+                      : "Complimentary"
+                    : formatPriceINR(shippingFee)}
+                </span>
+              </div>
+              <Separator className="my-2" />
+              <div className="flex items-center justify-between text-[13px]">
+                <span className="font-medium text-foreground">Estimated total</span>
+                <span className="font-semibold text-foreground">{formatPriceINR(total)}</span>
+              </div>
+              <p className="pt-1 text-[10px] leading-relaxed text-muted-foreground">
+                Taxes and duties are indicative and calculated at checkout. This is a fully mocked
+                client-side experience – no real payments are processed.
+              </p>
+            </div>
+
+            <Button
+              size="sm"
+              className={cn(
+                "mt-4 h-10 w-full rounded-full bg-indigo-950 text-[12px] font-medium tracking-[0.18em] uppercase",
+                "text-amber-50 hover:bg-indigo-900"
+              )}
+              onClick={handleCheckout}
+            >
+              Proceed to checkout
+            </Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
+};
+
+function formatColorLabel(color: string): string {
+  switch (color) {
+    case "deep-indigo":
+      return "Deep indigo";
+    case "warm-ochre":
+      return "Warm ochre";
+    case "sand-beige":
+      return "Sand beige";
+    case "marigold":
+      return "Marigold";
+    default:
+      return color;
+  }
 }
 
 export default CartDrawer;

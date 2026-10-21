@@ -1,22 +1,43 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="scroll-smooth">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <title>Jootiya</title>
-    <script>
-      window.global = window;
-      window.process = { env: { NODE_ENV: 'production' } };
-      window.require = function(pkg) {
-        console.warn('[shim] require("' + pkg + '") called in browser. Returning mock.');
-        return {};
-      };
-    </script>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Jootiya — Curated Rajasthani Mojris</title>
+    <meta
+      name="description"
+      content="Jootiya is a luxury, editorial e-commerce experience for curated Rajasthani Mojris, celebrating craftsmanship, culture, and slow luxury. 100% frontend, no backend."
+    />
+    <meta name="theme-color" content="#f5eee6" />
+
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Jootiya — Curated Rajasthani Mojris" />
+    <meta
+      property="og:description"
+      content="Discover hand-crafted Rajasthani Mojris in an immersive editorial storefront that celebrates artisans and cultural heritage."
+    />
+    <meta property="og:url" content="/" />
+
+    <!-- Fonts: Playfair Display for headings/brand, Inter for body -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Favicon minimal placeholder -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Note: All data & state in this app are mocked on the client (no backend). -->
   </head>
-  <body>
+  <body
+    class="min-h-screen w-full bg-[#f5eee6] text-slate-900 antialiased selection:bg-[#d4b48c] selection:text-slate-900"
+  >
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

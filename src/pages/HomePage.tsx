@@ -1,431 +1,454 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, Sparkles } from "lucide-react";
-import { Button, Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/shadcn";
-import mockStore from "@/mock";
+import { ArrowRight } from "lucide-react";
 
-// NOTE: This page consumes a purely frontend mock store from src/mock.ts.
-// There is intentionally NO backend – all data is mocked in-browser with
-// localStorage persistence for a rich demo experience.
+import { Button, Badge, Card, CardContent } from "@/components/ui/shadcn";
+import { useHomeFeatured, useCatalog, formatPriceINR } from "@/mock";
+import ArtisanStory from "@/components/ArtisanStory";
+import ProductCard from "@/components/ProductCard";
+import { cn } from "@/lib/utils";
 
-const heroImageUrl =
-  "https://images.pexels.com/photos/5875132/pexels-photo-5875132.jpeg?auto=compress&cs=tinysrgb&w=1920";
-
-const pageVariants = {
-  hidden: { opacity: 0, y: 24 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.7, ease: [0.22, 0.61, 0.36, 1] },
-  },
-};
+// NOTE: This entire page is FRONTEND-ONLY and FULLY MOCKED.
+// All products, artisans, and cart interactions are powered by the mock store in src/mock.ts
+// with browser localStorage persistence. There is NO backend.
 
 const heroTextVariants = {
   hidden: { opacity: 0, y: 32 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { delay: 0.15, duration: 0.8, ease: [0.19, 1, 0.22, 1] },
-  },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.7, ease: "easeOut" } },
 };
 
-const heroSubVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { delay: 0.35, duration: 0.7, ease: "easeOut" },
-  },
-};
-
-const heroCtaVariants = {
+const heroSubtleVariants = {
   hidden: { opacity: 0, y: 16 },
-  visible: {
+  visible: { opacity: 1, y: 0, transition: { delay: 0.15, duration: 0.7, ease: "easeOut" } },
+};
+
+const fadeInUp = {
+  hidden: { opacity: 0, y: 24 },
+  visible: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: 0.55, duration: 0.6, ease: "easeOut" },
-  },
-};
-
-const cardHover = {
-  rest: { y: 0, opacity: 1 },
-  hover: {
-    y: -4,
-    opacity: 1,
-    transition: { duration: 0.28, ease: "easeOut" },
-  },
-};
-
-const imageHover = {
-  rest: { scale: 1 },
-  hover: { scale: 1.03, transition: { duration: 0.4, ease: "easeOut" } },
-};
-
-const overlayHover = {
-  rest: { opacity: 0 },
-  hover: { opacity: 1, transition: { duration: 0.25, ease: "easeOut" } },
+    transition: { delay: 0.1 * i, duration: 0.6, ease: "easeOut" },
+  }),
 };
 
 const HomePage: React.FC = () => {
-  const navigate = useNavigate();
+  const { featuredProducts, artisans } = useHomeFeatured();
+  const { products } = useCatalog();
 
-  // Direct snapshot reads – components will be kept in sync by App via
-  // useSyncExternalStore; this page itself only needs a static read.
-  const featured = mockStore.getFeaturedProducts();
-  const artisans = mockStore.getArtisans().slice(0, 3);
+  const primaryArtisan = artisans[0];
+  const secondaryArtisan = artisans[1];
 
-  const handleExploreCatalog = () => {
-    navigate("/catalog");
-  };
-
-  const handleArtisanExplore = (artisanId: string) => {
-    mockStore.setSearchArtisan(artisanId);
-    navigate("/catalog");
-  };
-
-  const handleProductClick = (id: string) => {
-    navigate(`/product/${id}`);
-  };
-
-  // Split featured into asymmetric masonry-style columns
-  const leftColumn = featured.filter((_, idx) => idx % 2 === 0);
-  const rightColumn = featured.filter((_, idx) => idx % 2 === 1);
+  const heroFeatured = featuredProducts[0];
+  const galleryFeatured = featuredProducts.slice(0, 3);
 
   return (
-    <motion.main
-      className="w-full min-h-screen bg-[#0f0d0a] text-neutral-100 flex flex-col"
-      variants={pageVariants}
-      initial="hidden"
-      animate="visible"
-    >
+    <div className="w-full min-h-screen bg-[color:var(--sand)] text-[color:var(--ink-soft)]">
       {/* HERO SECTION */}
-      <section className="relative w-full min-h-[75vh] overflow-hidden">
-        <motion.div
-          className="absolute inset-0"
-          initial={{ scale: 1.05, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }}
-        >
-          <div
-            className="absolute inset-0 bg-cover bg-center"
-            style={{ backgroundImage: `url(${heroImageUrl})` }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#0b0906] via-[#0b0906]/90 to-[#3b2714]/70" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0b0906] via-transparent" />
-        </motion.div>
-
-        <div className="relative w-full max-w-[1600px] mx-auto px-6 lg:px-12 pt-28 pb-20 flex flex-col justify-center gap-10">
-          <motion.div
-            className="inline-flex items-center gap-3 rounded-full border border-white/10 bg-black/30 px-4 py-2 backdrop-blur-sm w-max"
-            variants={heroSubVariants}
-            initial="hidden"
-            animate="visible"
-          >
-            <span className="h-7 w-7 flex items-center justify-center rounded-full bg-[#d98f5f] text-xs font-semibold tracking-[0.18em] uppercase text-[#1c120a]">
-              New
-            </span>
-            <p className="text-xs sm:text-sm tracking-[0.26em] uppercase text-neutral-200/80">
-              Rajasthani mojris from the blue city of Jodhpur
-            </p>
-          </motion.div>
-
-          <motion.div
-            className="max-w-3xl space-y-6"
-            variants={heroTextVariants}
-            initial="hidden"
-            animate="visible"
-          >
-            <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl lg:text-7xl leading-[1.02] tracking-tight text-neutral-50">
-              Jootiya — quiet luxury
-              <br className="hidden sm:block" />
-              carved in leather.
-            </h1>
-            <p className="text-sm sm:text-base md:text-lg text-neutral-200/90 max-w-xl leading-relaxed">
-              An editorial portrait of Jodhpur&apos;s mojri craft — hand-cut leather, meticulous
-              stitch-lines, and silhouettes that move from sandstone courtyards to city terraces
-              with effortless grace.
-            </p>
-          </motion.div>
-
-          <motion.div
-            className="flex flex-wrap items-center gap-4"
-            variants={heroCtaVariants}
-            initial="hidden"
-            animate="visible"
-          >
-            <Button
-              variant="default"
-              className="group relative overflow-hidden rounded-full bg-[#d98f5f] px-7 py-2.5 text-sm font-medium tracking-[0.18em] uppercase text-[#1a1009] shadow-[0_18px_45px_rgba(0,0,0,0.35)] transition-colors hover:bg-[#f3a770]"
-              onClick={handleExploreCatalog}
-            >
-              <span className="relative z-10 flex items-center gap-3">
-                Explore catalog
-                <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
-              </span>
-              <span className="pointer-events-none absolute inset-0 bg-gradient-to-r from-white/10 via-transparent to-white/5 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-            </Button>
-
-            <button
-              type="button"
-              onClick={() => {
-                const section = document.getElementById("artisan-stories");
-                if (section) {
-                  section.scrollIntoView({ behavior: "smooth", block: "start" });
-                }
-              }}
-              className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium tracking-[0.22em] uppercase text-neutral-200/80 hover:text-neutral-50 transition-colors"
-            >
-              <span className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200/20 bg-black/40">
-                <Sparkles className="h-4 w-4 text-[#f0a15f]" />
-              </span>
-              Meet the artisans
-            </button>
-          </motion.div>
+      <section className="w-full min-h-[80vh] relative overflow-hidden bg-[color:var(--ink-deep)] text-sand">
+        {/* Background image & overlay */}
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute inset-0 bg-[url('/src/assets/hero-mojri.jpg')] bg-cover bg-center opacity-80 mix-blend-normal" />
+          <div className="absolute inset-0 bg-gradient-to-br from-[rgba(8,21,48,0.85)] via-[rgba(8,21,48,0.9)] to-[rgba(63,43,27,0.9)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,214,170,0.12),_transparent_55%)]" />
         </div>
-      </section>
 
-      {/* FEATURED MOJRIS MASONRY GRID */}
-      <section className="w-full bg-[#0f0d0a] py-16 sm:py-20 lg:py-24 border-t border-white/5">
-        <div className="w-full max-w-[1600px] mx-auto px-6 lg:px-12">
-          <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-10 sm:mb-14">
-            <div className="space-y-3 max-w-xl">
-              <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl tracking-tight text-neutral-50">
-                Featured edits from Jodhpur workshops
-              </h2>
-              <p className="text-sm sm:text-base text-neutral-300/80 leading-relaxed">
-                A rotating curation of limited-edition mojris — each pair stitched within a few
-                streets of the Mehrangarh fort, each silhouette carrying the memory of a
-                sandstone threshold.
+        <div className="relative w-full max-w-[1600px] mx-auto px-6 lg:px-12 py-16 lg:py-24 flex flex-col gap-12 lg:gap-16">
+          <div className="flex flex-col lg:flex-row gap-10 lg:gap-16 items-start lg:items-end">
+            <motion.div
+              className="flex-1 min-w-0 max-w-3xl"
+              initial="hidden"
+              animate="visible"
+              variants={heroTextVariants}
+            >
+              <p className="uppercase tracking-[0.35em] text-[0.78rem] lg:text-xs text-[color:var(--sand-soft)] mb-4">
+                Jootiya • Rajasthani Mojris Curated
               </p>
-            </div>
-            <div className="text-xs sm:text-sm tracking-[0.22em] uppercase text-neutral-400 flex items-center gap-3">
-              <span className="h-px w-10 bg-neutral-700" />
-              Hand-numbered drops, no algorithmic shopping carts.
-            </div>
-          </header>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 items-start">
-            {/* Left column */}
-            <div className="space-y-6 lg:space-y-8">
-              {leftColumn.map((product, index) => (
-                <motion.article
-                  key={product.id}
-                  variants={cardHover}
-                  initial="rest"
-                  whileHover="hover"
-                  animate="rest"
-                  className={
-                    index === 0
-                      ? "md:h-[420px] lg:h-[460px]"
-                      : "md:h-[360px] lg:h-[380px]"
-                  }
-                >
-                  <Card
-                    className="relative h-full overflow-hidden border-neutral-800/80 bg-[#171310]/95 backdrop-blur-sm shadow-[0_22px_60px_rgba(0,0,0,0.7)] cursor-pointer group"
-                    onClick={() => handleProductClick(product.id)}
-                  >
-                    <CardContent className="p-0 h-full flex flex-col">
-                      <motion.div
-                        variants={imageHover}
-                        className="relative flex-1 overflow-hidden"
-                      >
-                        <img
-                          src={product.heroImage}
-                          alt={product.name}
-                          className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
-                          loading="lazy"
-                        />
-                        <motion.div
-                          variants={overlayHover}
-                          className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent"
-                        />
-                        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.08),_transparent_60%)]" />
-                        <div className="absolute left-5 right-5 bottom-5 flex items-end justify-between gap-4">
-                          <div className="space-y-1">
-                            <p className="inline-flex items-center gap-2 text-[10px] font-medium tracking-[0.24em] uppercase text-neutral-300/80">
-                              {product.style} mojri
-                              {product.isLimitedEdition && (
-                                <span className="inline-flex items-center rounded-full bg-[#d98f5f]/90 px-2 py-0.5 text-[10px] font-semibold tracking-[0.18em] text-[#1c120a]">
-                                  Limited
-                                </span>
-                              )}
-                            </p>
-                            <h3 className="font-serif text-lg sm:text-xl md:text-2xl text-neutral-50">
-                              {product.name}
-                            </h3>
-                          </div>
-                          <div className="text-right space-y-1">
-                            <p className="text-xs text-neutral-300/80 tracking-[0.22em] uppercase">
-                              ₹ {product.priceINR.toLocaleString("en-IN")}
-                            </p>
-                            <span className="inline-flex items-center gap-1 rounded-full bg-black/60 px-3 py-1 text-[10px] font-medium tracking-[0.22em] uppercase text-neutral-200 border border-white/10">
-                              View story
-                              <ArrowRight className="h-3 w-3" />
-                            </span>
-                          </div>
-                        </div>
-                      </motion.div>
-                    </CardContent>
-                  </Card>
-                </motion.article>
-              ))}
-            </div>
-
-            {/* Right column */}
-            <div className="space-y-6 lg:space-y-8 md:pt-10">
-              {rightColumn.map((product, index) => (
-                <motion.article
-                  key={product.id}
-                  variants={cardHover}
-                  initial="rest"
-                  whileHover="hover"
-                  animate="rest"
-                  className={
-                    index === 0
-                      ? "md:h-[360px] lg:h-[380px]"
-                      : "md:h-[420px] lg:h-[460px]"
-                  }
-                >
-                  <Card
-                    className="relative h-full overflow-hidden border-neutral-800/80 bg-[#171310]/95 backdrop-blur-sm shadow-[0_22px_60px_rgba(0,0,0,0.7)] cursor-pointer group"
-                    onClick={() => handleProductClick(product.id)}
-                  >
-                    <CardContent className="p-0 h-full flex flex-col">
-                      <motion.div
-                        variants={imageHover}
-                        className="relative flex-1 overflow-hidden"
-                      >
-                        <img
-                          src={product.heroImage}
-                          alt={product.name}
-                          className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
-                          loading="lazy"
-                        />
-                        <motion.div
-                          variants={overlayHover}
-                          className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent"
-                        />
-                        <div className="absolute inset-x-5 bottom-5 flex items-end justify-between gap-4">
-                          <div className="space-y-1 max-w-xs">
-                            <p className="text-[10px] font-medium tracking-[0.24em] uppercase text-neutral-300/80">
-                              Jodhpur workshop edit
-                            </p>
-                            <h3 className="font-serif text-lg sm:text-xl text-neutral-50">
-                              {product.name}
-                            </h3>
-                          </div>
-                          <div className="text-right space-y-1">
-                            <p className="text-xs text-neutral-300/80 tracking-[0.22em] uppercase">
-                              ₹ {product.priceINR.toLocaleString("en-IN")}
-                            </p>
-                            <span className="inline-flex items-center gap-1 rounded-full border border-white/25 bg-black/40 px-3 py-1 text-[10px] font-medium tracking-[0.22em] uppercase text-neutral-50">
-                              Discover
-                              <ArrowRight className="h-3 w-3" />
-                            </span>
-                          </div>
-                        </div>
-                      </motion.div>
-                    </CardContent>
-                  </Card>
-                </motion.article>
-              ))}
-
-              {featured.length === 0 && (
-                <p className="text-sm text-neutral-400 max-w-sm">
-                  Our current edit is quietly in the making. Refresh in a moment to step into
-                  the world of Jodhpur mojris.
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ARTISAN STORIES STRIP */}
-      <section
-        id="artisan-stories"
-        className="w-full border-t border-white/5 bg-gradient-to-r from-[#18100b] via-[#130d09] to-[#1c130b] py-16 sm:py-20 lg:py-24"
-      >
-        <div className="w-full max-w-[1600px] mx-auto px-6 lg:px-12">
-          <div className="flex flex-col lg:flex-row lg:items-start gap-10 lg:gap-16 mb-10 sm:mb-14">
-            <div className="max-w-md space-y-4">
-              <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl tracking-tight text-neutral-50">
-                Artisan stories from the blue lanes.
-              </h2>
-              <p className="text-sm sm:text-base text-neutral-300/90 leading-relaxed">
-                Each pair of Jootiya carries the signature of a Jodhpur karigar. Follow the
-                stitch-lines back to the workshops — from Clock Tower bazaar to the quiet
-                courtyards of Rai Ka Bagh.
+              <h1 className="font-['Playfair_Display'] text-[2.5rem] sm:text-[3rem] lg:text-[3.75rem] leading-tight text-sand whitespace-normal break-words">
+                Quietly opulent mojris, 
+                <span className="text-[color:var(--ochre-rich)]"> hand-finished</span> in the old cities
+                of Rajasthan.
+              </h1>
+              <p className="mt-6 text-sm sm:text-base lg:text-lg text-[color:var(--sand-soft)] max-w-2xl leading-relaxed">
+                Jootiya curates limited runs from independent ateliers across Jaipur and Jodhpur —
+                slip-on silhouettes, archival embroideries and leather that softens with every mehfil.
               </p>
-              <p className="text-xs sm:text-sm tracking-[0.22em] uppercase text-neutral-400 flex items-center gap-3">
-                <span className="h-px w-10 bg-neutral-600" />
-                No algorithms. Just human hands and inherited motifs.
-              </p>
-            </div>
 
-            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
-              {artisans.map((artisan, index) => (
-                <motion.button
-                  key={artisan.id}
-                  type="button"
-                  variants={cardHover}
-                  initial="rest"
-                  whileHover="hover"
-                  animate="rest"
-                  onClick={() => handleArtisanExplore(artisan.id)}
-                  className="group flex flex-col text-left rounded-3xl border border-white/10 bg-black/20 px-4 py-5 sm:px-5 sm:py-6 shadow-[0_16px_40px_rgba(0,0,0,0.65)] backdrop-blur-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f0a15f]/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#18100b] transition-colors hover:border-[#f0a15f]/70"
+              <div className="mt-8 flex flex-wrap items-center gap-4">
+                <Button
+                  asChild
+                  className="rounded-full bg-[color:var(--ochre-rich)] hover:bg-[color:var(--ochre-deep)] text-[color:var(--ink-deep)] px-7 py-2.5 text-sm font-medium tracking-wide shadow-md shadow-[rgba(0,0,0,0.22)] transition-colors"
                 >
-                  <div className="flex items-center gap-3 mb-3">
-                    <div
-                      className="h-9 w-9 rounded-full border border-white/40 shadow-inner"
-                      style={{ backgroundColor: artisan.avatarColor }}
-                    />
-                    <div className="space-y-0.5">
-                      <p className="font-serif text-sm sm:text-base text-neutral-50">
-                        {artisan.name}
-                      </p>
-                      <p className="text-[11px] tracking-[0.22em] uppercase text-neutral-300/80">
-                        {artisan.region}
+                  <Link to="/catalog" aria-label="Browse the curated mojri catalog">
+                    <span className="flex items-center gap-2">
+                      Browse the catalog
+                      <ArrowRight className="w-4 h-4" />
+                    </span>
+                  </Link>
+                </Button>
+
+                <Link
+                  to="#artisans"
+                  className="text-sm font-medium text-[color:var(--sand-soft)] hover:text-[color:var(--sand)] underline-offset-4 decoration-[rgba(255,214,170,0.45)] hover:decoration-[rgba(255,214,170,0.9)] transition-colors"
+                >
+                  Meet the artisans
+                </Link>
+              </div>
+
+              <motion.div
+                className="mt-10 flex flex-wrap gap-6 text-xs sm:text-sm text-[color:var(--sand-soft)]"
+                variants={heroSubtleVariants}
+                initial="hidden"
+                animate="visible"
+              >
+                <div className="flex flex-col gap-1 min-w-[140px]">
+                  <span className="uppercase tracking-[0.24em] text-[0.68rem] text-[color:var(--sand-muted)]">
+                    Edited drops
+                  </span>
+                  <span>Under 50 pairs per style — once gone, they aren&apos;t restocked.</span>
+                </div>
+                <div className="flex flex-col gap-1 min-w-[160px]">
+                  <span className="uppercase tracking-[0.24em] text-[0.68rem] text-[color:var(--sand-muted)]">
+                    Jaipur &amp; Jodhpur
+                  </span>
+                  <span>Each pair tagged with its originating atelier and story.</span>
+                </div>
+              </motion.div>
+            </motion.div>
+
+            {/* Hero highlight card */}
+            {heroFeatured && (
+              <motion.div
+                className="w-full max-w-md lg:max-w-sm xl:max-w-md flex-shrink-0"
+                initial={{ opacity: 0, x: 40 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2, duration: 0.7, ease: "easeOut" }}
+              >
+                <Card className="bg-[rgba(9,18,40,0.88)]/90 border-[rgba(255,214,170,0.24)]/80 backdrop-blur-md text-sand shadow-xl">
+                  <CardContent className="p-4 sm:p-5 flex flex-col gap-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <Badge className="rounded-full bg-[color:var(--ochre-soft)] text-[color:var(--ink-deep)] text-[0.7rem] uppercase tracking-[0.2em] px-3 py-1 border-0">
+                        Featured drop
+                      </Badge>
+                      <span className="text-xs text-[color:var(--sand-muted)]">
+                        {formatPriceINR(heroFeatured.price)}
+                      </span>
+                    </div>
+
+                    <div className="aspect-[4/3] w-full overflow-hidden rounded-[1.25rem] bg-[rgba(19,27,52,0.9)] border border-[rgba(255,214,170,0.18)]">
+                      <div
+                        className="w-full h-full bg-cover bg-center scale-105 hover:scale-[1.08] transition-transform duration-500 ease-out"
+                        style={{ backgroundImage: `url(${heroFeatured.primaryImage})` }}
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <h2 className="font-['Playfair_Display'] text-lg sm:text-xl text-sand whitespace-normal break-words">
+                        {heroFeatured.name}
+                      </h2>
+                      <p className="text-xs sm:text-sm text-[color:var(--sand-soft)] leading-relaxed">
+                        {heroFeatured.storyIntro}
                       </p>
                     </div>
-                  </div>
 
-                  <p className="text-xs sm:text-sm text-neutral-200/90 leading-relaxed mb-4 line-clamp-3">
-                    {artisan.shortBio}
-                  </p>
-
-                  <div className="mt-auto flex items-center justify-between gap-3 pt-2 border-t border-white/10">
-                    <span className="text-[11px] tracking-[0.2em] uppercase text-neutral-400">
-                      {artisan.yearsOfCraft} years of craft
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-[#2a1b10] px-3 py-1 text-[10px] font-medium tracking-[0.22em] uppercase text-[#f0a15f] group-hover:bg-[#f0a15f] group-hover:text-[#1b110a] transition-colors">
-                      View their edit
-                      <ArrowRight className="h-3 w-3" />
-                    </span>
-                  </div>
-                </motion.button>
-              ))}
-            </div>
-          </div>
-
-          {/* Subtle bottom note */}
-          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-6 mt-2 text-[11px] sm:text-xs text-neutral-400">
-            <p>
-              This is a fully mocked, frontend-only showcase. All stories, carts, and orders live
-              softly in your browser&apos;s local memory.
-            </p>
-            <button
-              type="button"
-              onClick={() => mockStore.reset()}
-              className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-black/40 px-3 py-1 text-[10px] font-medium tracking-[0.22em] uppercase text-neutral-200 hover:border-[#f0a15f]/70 hover:text-[#f0a15f] transition-colors"
-            >
-              Reset demo state
-            </button>
+                    <div className="flex items-center justify-between gap-3 text-xs sm:text-[0.78rem] text-[color:var(--sand-soft)]">
+                      <span>Hand-cut, hand-embroidered uppers from Jaipur.</span>
+                      <Link
+                        to={`/product/${heroFeatured.id}`}
+                        className="underline-offset-4 decoration-[rgba(255,214,170,0.5)] hover:decoration-[rgba(255,214,170,0.95)] text-[color:var(--sand)] whitespace-nowrap"
+                      >
+                        View story
+                      </Link>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
           </div>
         </div>
       </section>
-    </motion.main>
+
+      {/* FEATURED GALLERY / STORYTELLING STRIP */}
+      <section className="w-full py-14 lg:py-18 bg-[color:var(--sand)]">
+        <div className="w-full max-w-[1600px] mx-auto px-6 lg:px-12 flex flex-col gap-10 lg:gap-12">
+          <div className="flex flex-col lg:flex-row items-start justify-between gap-6">
+            <motion.div
+              className="max-w-xl"
+              initial={{ opacity: 0, y: 18 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.4 }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+            >
+              <p className="uppercase tracking-[0.28em] text-[0.7rem] text-[color:var(--ink-muted)] mb-3">
+                Edited for long evenings
+              </p>
+              <h2 className="font-['Playfair_Display'] text-2xl sm:text-3xl lg:text-[2.2rem] text-[color:var(--ink-deep)] leading-snug whitespace-normal break-words">
+                From mehfil floors to marble courtyards.
+              </h2>
+              <p className="mt-4 text-sm sm:text-base text-[color:var(--ink-soft)] max-w-xl leading-relaxed">
+                An asymmetric edit of mojris that move away from stacked grids — think courtly silhouettes,
+                marigold-dyed leathers and sand-beige neutrals, designed to flex from sherwani to denim.
+              </p>
+            </motion.div>
+
+            <motion.div
+              className="flex items-center gap-3 flex-wrap"
+              initial={{ opacity: 0, y: 18 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.4 }}
+              transition={{ delay: 0.1, duration: 0.6, ease: "easeOut" }}
+            >
+              <div className="flex items-center gap-2 text-xs sm:text-sm text-[color:var(--ink-muted)]">
+                <span className="inline-flex h-6 w-6 rounded-full border border-[color:var(--ink-soft)]/30 bg-[color:var(--sand-soft)]" />
+                <span>Leather lined, cushioned for all-day wear</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs sm:text-sm text-[color:var(--ink-muted)]">
+                <span className="inline-flex h-6 w-6 rounded-full border border-[color:var(--ochre-deep)]/40 bg-[color:var(--ochre-soft)]" />
+                <span>Each drop signed by its originating atelier</span>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Asymmetric masonry-like gallery */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-5 lg:gap-7">
+            {/* Left tall feature */}
+            <motion.div
+              className="md:col-span-5 lg:col-span-4 flex flex-col gap-4 md:gap-5 min-w-0"
+              variants={fadeInUp}
+              custom={0}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, amount: 0.25 }}
+            >
+              {galleryFeatured[0] && (
+                <div className="flex-1 min-h-[260px] rounded-[1.5rem] overflow-hidden bg-[color:var(--sand-soft)] border border-[color:var(--ink-soft)]/15 shadow-sm shadow-[rgba(15,23,42,0.05)] flex flex-col">
+                  <div
+                    className="w-full h-56 sm:h-64 md:h-72 bg-cover bg-center"
+                    style={{ backgroundImage: `url(${galleryFeatured[0].primaryImage})` }}
+                  />
+                  <div className="p-4 sm:p-5 flex flex-col gap-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="font-['Playfair_Display'] text-lg text-[color:var(--ink-deep)] whitespace-normal break-words">
+                        {galleryFeatured[0].name}
+                      </h3>
+                      <Badge className="rounded-full bg-[color:var(--ink-deep)] text-[color:var(--sand-soft)] border-0 text-[0.7rem] uppercase tracking-[0.16em]">
+                        Jaipur
+                      </Badge>
+                    </div>
+                    <p className="text-xs sm:text-sm text-[color:var(--ink-muted)] leading-relaxed">
+                      {galleryFeatured[0].storyIntro}
+                    </p>
+                    <div className="mt-1 flex items-center justify-between text-xs sm:text-sm text-[color:var(--ink-soft)]">
+                      <span>{formatPriceINR(galleryFeatured[0].price)}</span>
+                      <Link
+                        to={`/product/${galleryFeatured[0].id}`}
+                        className="underline underline-offset-4 decoration-[color:var(--ink-soft)]/40 hover:decoration-[color:var(--ink-deep)] text-[color:var(--ink-deep)] font-medium"
+                      >
+                        View pair
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+
+            {/* Middle staggered columns with cards */}
+            <motion.div
+              className="md:col-span-7 lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-5 min-w-0"
+              variants={fadeInUp}
+              custom={1}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, amount: 0.2 }}
+            >
+              {galleryFeatured[1] && (
+                <div className="flex flex-col gap-4 min-w-0">
+                  <div className="h-40 sm:h-44 rounded-[1.4rem] overflow-hidden bg-[url('/src/assets/gallery-1.jpg')] bg-cover bg-center shadow-md shadow-[rgba(15,23,42,0.16)]" />
+                  <Card className="border-[color:var(--ink-soft)]/12 bg-[color:var(--sand-soft)]/70 backdrop-blur-sm">
+                    <CardContent className="p-4 flex flex-col gap-2.5">
+                      <h3 className="font-['Playfair_Display'] text-base text-[color:var(--ink-deep)] whitespace-normal break-words">
+                        Marigold Bazaar edit
+                      </h3>
+                      <p className="text-xs sm:text-sm text-[color:var(--ink-muted)] leading-relaxed">
+                        Ochre and marigold tones that nod to market garlands and late afternoon light.
+                      </p>
+                      <Link
+                        to={`/product/${galleryFeatured[1].id}`}
+                        className="mt-1 text-xs font-medium text-[color:var(--ink-deep)] underline underline-offset-4 decoration-[color:var(--ochre-soft)] hover:decoration-[color:var(--ochre-rich)]"
+                      >
+                        Explore Marigold Bazaar
+                      </Link>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {galleryFeatured[2] && (
+                <div className="flex flex-col gap-4 min-w-0 mt-2 sm:mt-8">
+                  <Card className="border-[color:var(--ink-soft)]/12 bg-[color:var(--sand)]">
+                    <CardContent className="p-4 flex flex-col gap-2.5">
+                      <h3 className="font-['Playfair_Display'] text-base text-[color:var(--ink-deep)] whitespace-normal break-words">
+                        Thar sand neutrals
+                      </h3>
+                      <p className="text-xs sm:text-sm text-[color:var(--ink-muted)] leading-relaxed">
+                        Sand-beige silhouettes that keep the focus on drape and jewellery, not footwear.
+                      </p>
+                      <p className="mt-1 text-xs text-[color:var(--ink-soft)]">
+                        Perfect with wide-leg trousers, saris, and relaxed linen.
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <div className="h-44 sm:h-48 rounded-[1.4rem] overflow-hidden bg-[url('/src/assets/gallery-2.jpg')] bg-cover bg-center shadow-md shadow-[rgba(15,23,42,0.16)]" />
+                </div>
+              )}
+            </motion.div>
+
+            {/* Right slim narrative column */}
+            <motion.div
+              className="hidden lg:flex lg:col-span-3 flex-col gap-4 min-w-0"
+              variants={fadeInUp}
+              custom={2}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, amount: 0.2 }}
+            >
+              <Card className="h-full border-[color:var(--ink-soft)]/10 bg-[color:var(--ink-deep)] text-[color:var(--sand-soft)] flex flex-col">
+                <CardContent className="p-4 xl:p-5 flex flex-col gap-3 flex-1">
+                  <p className="uppercase tracking-[0.28em] text-[0.68rem] text-[color:var(--sand-muted)]">
+                    Styling notes
+                  </p>
+                  <p className="text-xs sm:text-sm leading-relaxed">
+                    We recommend sizing down half a size for a glove-like fit, especially for pairs with
+                    embroidered uppers that relax with wear.
+                  </p>
+                  <p className="text-xs sm:text-sm leading-relaxed">
+                    Each mojri ships in a breathable cotton dust bag — pack them flat between saris and
+                    shawls; they take less space than a single heel.
+                  </p>
+                  <div className="mt-auto pt-2 text-[0.7rem] text-[color:var(--sand-muted)] flex flex-col gap-1.5">
+                    <span>— Curated by the Jootiya studio in collaboration with independent ateliers.</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURED PRODUCTS STRIP (using ProductCard) */}
+      {featuredProducts.length > 0 && (
+        <section className="w-full py-14 lg:py-16 bg-[color:var(--sand-soft)]/80">
+          <div className="w-full max-w-[1600px] mx-auto px-6 lg:px-12 flex flex-col gap-8">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex flex-col gap-2 min-w-0">
+                <h2 className="font-['Playfair_Display'] text-xl sm:text-2xl text-[color:var(--ink-deep)] whitespace-normal break-words">
+                  This week&apos;s Jaipur &amp; Jodhpur pairs
+                </h2>
+                <p className="text-sm text-[color:var(--ink-muted)] max-w-xl">
+                  A rotating edit of three silhouettes we keep reaching for — stitched, burnished and
+                  ready to step out in.
+                </p>
+              </div>
+              <Button
+                asChild
+                variant="outline"
+                className="rounded-full border-[color:var(--ink-soft)]/40 text-[color:var(--ink-deep)] bg-[color:var(--sand)] hover:bg-[color:var(--sand-soft)] px-5 py-2 text-xs sm:text-sm font-medium"
+              >
+                <Link to="/catalog">View the full catalog</Link>
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-3 gap-5 lg:gap-7">
+              {featuredProducts.slice(0, 3).map((product, index) => (
+                <motion.div
+                  key={product.id}
+                  className="min-w-0"
+                  variants={fadeInUp}
+                  custom={index}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true, amount: 0.2 }}
+                >
+                  <ProductCard
+                    product={product}
+                    featured={index === 1}
+                    className={cn(
+                      index === 1
+                        ? "bg-[color:var(--sand)] border-[color:var(--ochre-soft)]/60 shadow-md shadow-[rgba(148,121,74,0.2)]"
+                        : "bg-[color:var(--sand)] border-[color:var(--ink-soft)]/12",
+                    )}
+                  />
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ARTISAN HIGHLIGHT SECTION */}
+      {primaryArtisan && (
+        <section id="artisans" className="w-full bg-[color:var(--ink-deep)] text-[color:var(--sand)] py-16 lg:py-20">
+          <div className="w-full max-w-[1600px] mx-auto px-6 lg:px-12 flex flex-col gap-12">
+            <motion.div
+              className="flex flex-col lg:flex-row items-start justify-between gap-6 lg:gap-10"
+              initial={{ opacity: 0, y: 22 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.35 }}
+              transition={{ duration: 0.7, ease: "easeOut" }}
+            >
+              <div className="max-w-xl">
+                <p className="uppercase tracking-[0.3em] text-[0.7rem] text-[color:var(--sand-muted)] mb-3">
+                  The hands behind each pair
+                </p>
+                <h2 className="font-['Playfair_Display'] text-2xl sm:text-3xl lg:text-[2.3rem] text-[color:var(--sand)] leading-snug whitespace-normal break-words">
+                  In the lanes of {primaryArtisan.region.split(",")[0]}.
+                </h2>
+                <p className="mt-4 text-sm sm:text-base text-[color:var(--sand-soft)] max-w-xl leading-relaxed">
+                  We work in small batches with ateliers like {primaryArtisan.name.split(" ")[0]}
+                  &apos;s — spaces where pattern blocks are passed down, not printed, and every pair carries the
+                  imprint of its maker.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3 text-xs sm:text-sm text-[color:var(--sand-muted)] max-w-md">
+                <p>
+                  Each order ships with a story card detailing the origin of your pair — the artisan, the
+                  motif, and the neighbourhood it was crafted in.
+                </p>
+                <p>
+                  Because this entire experience is fully mocked and browser-only, your artisan stories and
+                  orders live in your own localStorage, never on a server.
+                </p>
+              </div>
+            </motion.div>
+
+            <ArtisanStory
+              artisan={primaryArtisan}
+              featuredProducts={products.filter((p) => p.artisanId === primaryArtisan.id)}
+              fullHeight={false}
+              className="rounded-[1.75rem] overflow-hidden border border-[color:var(--sand-muted)]/30 bg-[radial-gradient(circle_at_top,_rgba(255,214,170,0.22),_rgba(7,17,37,1))]"
+            />
+
+            {secondaryArtisan && (
+              <motion.div
+                className="w-full"
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.25 }}
+                transition={{ duration: 0.7, ease: "easeOut" }}
+              >
+                <ArtisanStory
+                  artisan={secondaryArtisan}
+                  featuredProducts={products.filter((p) => p.artisanId === secondaryArtisan.id)}
+                  fullHeight={false}
+                  className="rounded-[1.75rem] overflow-hidden border border-[color:var(--sand-muted)]/26 bg-[radial-gradient(circle_at_top,_rgba(162,128,75,0.28),_rgba(7,17,37,1))] mt-2"
+                />
+              </motion.div>
+            )}
+          </div>
+        </section>
+      )}
+    </div>
   );
 };
 

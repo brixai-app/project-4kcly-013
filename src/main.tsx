@@ -1,37 +1,98 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App';
-import './index.css';
+import React, { Component, ReactNode } from "react";
+import ReactDOM from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
+import { Toaster } from "sonner";
 
-class ErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { hasError: boolean; error: string }
-> {
-  constructor(props: { children: React.ReactNode }) {
+import "./index.css";
+import App from "./App";
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode }) {
     super(props);
-    this.state = { hasError: false, error: '' };
+    this.state = { hasError: false };
   }
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error: error.message };
+
+  static getDerivedStateFromError(): { hasError: boolean } {
+    return { hasError: true };
   }
+
+  componentDidCatch(error: unknown, errorInfo: unknown) {
+    // In a real app we might send this to an error reporting service.
+    // For this frontend-only mock we simply log to console to avoid blank screens.
+    // eslint-disable-next-line no-console
+    console.error("Jootiya ErrorBoundary caught an error", { error, errorInfo });
+  }
+
+  handleReset = () => {
+    this.setState({ hasError: false });
+  };
+
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: '40px', fontFamily: 'Inter, system-ui, sans-serif', background: '#0a0a0f', color: '#f5f5f7', minHeight: '100vh' }}>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px' }}>Application Error</h1>
-          <pre style={{ padding: '16px', background: '#1a1a25', borderRadius: '8px', overflow: 'auto', fontSize: '14px', color: '#f87171' }}>{this.state.error}</pre>
-          <button onClick={() => this.setState({ hasError: false, error: '' })} style={{ marginTop: '16px', padding: '8px 20px', background: '#6366f1', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>Try Again</button>
+        <div className="min-h-screen w-full bg-background text-foreground flex items-center justify-center px-6 lg:px-12">
+          <div className="w-full max-w-xl border border-border/60 rounded-2xl bg-background/80 shadow-md p-8 space-y-4">
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight font-['Playfair_Display']">
+              Something went wrong.
+            </h1>
+            <p className="text-sm md:text-base text-muted-foreground leading-relaxed">
+              The Jootiya storefront encountered an unexpected error. This is a client-side only,
+              mocked experience with no backend. You can safely refresh the page or try returning to
+              the home view.
+            </p>
+            <div className="flex flex-wrap gap-3 pt-2">
+              <button
+                type="button"
+                onClick={this.handleReset}
+                className="inline-flex items-center justify-center rounded-full border border-border/70 bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+              >
+                Try again
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = "/";
+                }}
+                className="inline-flex items-center justify-center rounded-full bg-[#2f3f5b] px-4 py-2 text-sm font-medium text-white hover:bg-[#253347] transition-colors"
+              >
+                Go to home
+              </button>
+            </div>
+          </div>
         </div>
       );
     }
+
     return this.props.children;
   }
 }
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById("root");
+
+if (!rootElement) {
+  throw new Error("Root element with id 'root' not found");
+}
+
+const root = ReactDOM.createRoot(rootElement);
+
+root.render(
   <React.StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
+    <BrowserRouter>
+      <ErrorBoundary>
+        <App />
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            style: {
+              borderRadius: 9999,
+              border: "1px solid rgba(15,23,42,0.08)",
+              background: "rgba(250, 248, 244, 0.97)",
+              color: "#1f2933",
+            },
+          }}
+          richColors
+        />
+      </ErrorBoundary>
+    </BrowserRouter>
   </React.StrictMode>
 );

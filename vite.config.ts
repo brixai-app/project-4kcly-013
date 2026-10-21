@@ -1,9 +1,24 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import path from 'path';
+import { resolve } from 'path';
+
+// Vite configuration for Jootiya
+// - React + TypeScript SPA
+// - Dev server on port 5173 with host: true for broader accessibility
+// - Path alias '@' -> './src' for clean imports
 
 export default defineConfig({
   plugins: [react()],
-  server: { host: true, port: 5173, strictPort: true },
-  resolve: { alias: { '@': path.resolve(__dirname, './src') } },
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, 'src'),
+    },
+  },
+  server: {
+    port: 5173,
+    host: true,
+  },
+  build: {
+    sourcemap: true,
+  },
 });
