@@ -1,165 +1,169 @@
-// [auto-quarantined uninstalled package "hono"] import { Hono } from 'hono';
+// [auto-quarantined uninstalled package "hono"] import { Hono } from "hono";
 const Hono: any = typeof Proxy !== 'undefined' ? new Proxy((() => null) as any, { get: () => Hono, apply: () => null }) : (() => null);
-// [auto-quarantined uninstalled package "hono/cors"] import { cors } from 'hono/cors';
+// [auto-quarantined uninstalled package "hono/cors"] import { cors } from "hono/cors";
 const cors: any = typeof Proxy !== 'undefined' ? new Proxy((() => null) as any, { get: () => cors, apply: () => null }) : (() => null);
-import auth from './auth';
-import {
-  clearOrders,
-  getDbStats,
-  getOrderById,
-  getOrders,
-  getProductById,
-  getProductBySlug,
-  getProducts,
-  insertOrder,
-  initDb,
-  seedDb,
-} from './db';
-import type { CheckoutPayload, Order, Product } from '../src/types';
+import auth from "./auth";
+import { getOrderByNumber, getOrders, getProductById, getProductBySlug, getProducts, saveOrder } from "./db";
+import type { CartItem, CheckoutValidationResult, Order, PaymentInfo, ShippingInfo } from "../src/types";
 
-const app = new Hono();
+const index = new Hono();
 
-const jsonError = (message: string, status = 400, details?: unknown) =>
-  new Response(JSON.stringify({ error: message, details: details ?? null }), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-
-const parseBody = async <T,>(c: Parameters<typeof app.post>[1] extends (c: infer C) => any ? C : never): Promise<T | null> => {
-  try {
-    return (await c.req.json()) as T;
-  } catch {
-    return null;
-  }
-};
-
-const isValidOrder = (payload: CheckoutPayload | null): payload is CheckoutPayload => {
-  const items = payload?.items ?? [];
-  const shipping = payload?.shipping;
-  const payment = payload?.payment;
-  return (
-    Array.isArray(items) &&
-    items.length > 0 &&
-    !!shipping?.fullName &&
-    !!shipping?.email &&
-    !!shipping?.phone &&
-    !!shipping?.addressLine1 &&
-    !!shipping?.city &&
-    !!shipping?.state &&
-    !!shipping?.postalCode &&
-    !!shipping?.country &&
-    !!payment?.method
-  );
-};
-
-app.use(
-  '*',
+index.use(
+  "*",
   cors({
-    origin: '*',
-    allowHeaders: ['Content-Type', 'Authorization'],
-    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    exposeHeaders: ['Content-Length'],
+    origin: "*",
+    allowHeaders: ["Content-Type", "Authorization"],
+    allowMethods: ["GET", "POST", "OPTIONS"],
+    exposeHeaders: ["Content-Length"],
     maxAge: 86400,
   })
 );
 
-app.route('/api/auth', auth);
+index.route("/api/auth", auth);
 
-app.get('/api/health', (c) => c.json({ ok: true, service: 'jootiya-api' }));
+const json = (data: unknown, status = 200) => index.json(data, status);
 
-app.get('/api/products', async (c) => {
-  const slug = c.req.query('slug') ?? '';
-  const id = c.req.query('id') ?? '';
+const isString = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
+const isNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+const toTrimmed = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+const safeNumber = (value: unknown, fallback = 0) => (typeof value === "number" && Number.isFinite(value) ? value : fallback);
+
+const validateShipping = (shipping: unknown): { valid: boolean; errors: Record<string, string> } => {
+  const s = (shipping ?? {}) as Partial<ShippingInfo>;
+  const errors: Record<string, string> = {};
+  if (!isString(s.fullName)) errors.fullName = "Full name is required.";
+  if (!isString(s.phone)) errors.phone = "Phone number is required.";
+  if (!isString(s.email) || !String(s.email).includes("@")) errors.email = "Valid email is required.";
+  if (!isString(s.addressLine1)) errors.addressLine1 = "Address is required.";
+  if (!isString(s.city)) errors.city = "City is required.";
+  if (!isString(s.state)) errors.state = "State is required.";
+  if (!isString(s.postalCode)) errors.postalCode = "Postal code is required.";
+  if (!isString(s.country)) errors.country = "Country is required.";
+  return { valid: Object.keys(errors).length === 0, errors };
+};
+
+const validatePayment = (payment: unknown): { valid: boolean; errors: Record<string, string> } => {
+  const p = (payment ?? {}) as Partial<PaymentInfo>;
+  const errors: Record<string, string> = {};
+  if (!["cod", "upi", "card", "netbanking"].includes(String(p.method ?? ""))) errors.paymentMethod = "Payment method is required.";
+  if (p.method === "upi" && !isString(p.upiId)) errors.upiId = "UPI ID is required.";
+  if (p.method === "card" && !isString(p.cardholderName)) errors.cardholderName = "Cardholder name is required.";
+  if (p.method === "card" && !isString(p.cardLast4)) errors.cardLast4 = "Card details are required.";
+  return { valid: Object.keys(errors).length === 0, errors };
+};
+
+const validateItems = async (items: unknown): Promise<{ valid: boolean; errors: Record<string, string>; normalized: CartItem[] }> => {
+  const errors: Record<string, string> = {};
+  const normalized: CartItem[] = Array.isArray(items)
+    ? items
+        .map((item) => ({
+          productId: toTrimmed((item as CartItem)?.productId),
+          quantity: Math.max(1, Math.floor(safeNumber((item as CartItem)?.quantity, 1))),
+          size: (item as CartItem)?.size ?? null,
+          color: (item as CartItem)?.color ?? null,
+        }))
+        .filter((item) => item.productId.length > 0)
+    : [];
+
+  if (!normalized.length) errors.items = "At least one item is required.";
+
+  for (const item of normalized) {
+    const product = (await getProductById(item.productId)) ?? (await getProductBySlug(item.productId));
+    if (!product) errors.items = "One or more products are unavailable.";
+    if (product && !product.inStock) errors.items = `${product.name} is currently out of stock.`;
+    if (product && item.quantity > product.stock) errors.items = `${product.name} has only ${product.stock} left in stock.`;
+  }
+
+  return { valid: Object.keys(errors).length === 0, errors, normalized };
+};
+
+index.get("/api/health", (c) => c.json({ ok: true, service: "jootiya-api", timestamp: new Date().toISOString() }));
+
+index.get("/api/products", async (c) => {
   const products = await getProducts();
-  if (slug) {
-    const product = await getProductBySlug(slug);
-    return product ? c.json(product) : jsonError('Product not found', 404);
-  }
-  if (id) {
-    const product = await getProductById(id);
-    return product ? c.json(product) : jsonError('Product not found', 404);
-  }
   return c.json({ products });
 });
 
-app.get('/api/products/:slug', async (c) => {
-  const slug = c.req.param('slug') ?? '';
+index.get("/api/products/:slug", async (c) => {
+  const slug = c.req.param("slug") ?? "";
   const product = await getProductBySlug(slug);
-  return product ? c.json(product) : jsonError('Product not found', 404);
+  if (!product) return c.json({ error: "Product not found." }, 404);
+  return c.json({ product });
 });
 
-app.get('/api/orders', async () => c.json({ orders: await getOrders() }));
-
-app.get('/api/orders/:id', async (c) => {
-  const order = await getOrderById(c.req.param('id') ?? '');
-  return order ? c.json(order) : jsonError('Order not found', 404);
+index.get("/api/orders", async (c) => {
+  const orders = await getOrders();
+  return c.json({ orders });
 });
 
-app.post('/api/orders', async (c) => {
-  const payload = await parseBody<CheckoutPayload>(c);
-  if (!isValidOrder(payload)) return jsonError('Invalid order payload', 422);
+index.get("/api/orders/:orderNumber", async (c) => {
+  const orderNumber = c.req.param("orderNumber") ?? "";
+  const order = await getOrderByNumber(orderNumber);
+  if (!order) return c.json({ error: "Order not found." }, 404);
+  return c.json({ order });
+});
 
+index.post("/api/orders", async (c) => {
+  try {
+    const body = await c.req.json().catch(() => null);
+    const items = body?.items ?? [];
+    const shipping = body?.shipping ?? {};
+    const payment = body?.payment ?? {};
+    const subtotal = safeNumber(body?.subtotal, 0);
+    const shippingFee = safeNumber(body?.shippingFee, 0);
+    const total = safeNumber(body?.total, subtotal + shippingFee);
+
+    const itemCheck = await validateItems(items);
+    const shippingCheck = validateShipping(shipping);
+    const paymentCheck = validatePayment(payment);
+
+    const errors: CheckoutValidationResult["errors"] = {
+      ...(itemCheck.errors ?? {}),
+      ...(shippingCheck.errors ?? {}),
+      ...(paymentCheck.errors ?? {}),
+    };
+
+    if (!itemCheck.valid || !shippingCheck.valid || !paymentCheck.valid) {
+      return c.json({ valid: false, errors }, 400);
+    }
+
+    const order = await saveOrder({
+      items: itemCheck.normalized,
+      shipping: shipping as ShippingInfo,
+      payment: payment as PaymentInfo,
+      subtotal,
+      shippingFee,
+      total,
+    });
+
+    return c.json({ valid: true, order }, 201);
+  } catch {
+    return c.json({ error: "Unable to create order." }, 500);
+  }
+});
+
+index.get("/api/_admin/db/products", async (c) => {
   const products = await getProducts();
-  const normalizedItems = payload.items
-    .map((item) => {
-      const product = products.find((p) => p.id === item?.productId) ?? item?.product;
-      if (!product) return null;
-      return {
-        productId: product.id,
-        quantity: Math.max(1, Number(item?.quantity ?? 1)),
-        size: item?.size,
-        color: item?.color,
-        product,
-      };
-    })
-    .filter(Boolean) as Order['items'];
-
-  if (normalizedItems.length === 0) return jsonError('No valid items found', 422);
-
-  const subtotal = normalizedItems.reduce((sum, item) => sum + (item.product?.price ?? 0) * item.quantity, 0);
-  const shippingFee = subtotal >= 5000 ? 0 : 250;
-  const total = subtotal + shippingFee;
-
-  const order: Order = {
-    id: crypto.randomUUID(),
-    items: normalizedItems,
-    shipping: payload.shipping,
-    payment: payload.payment,
-    subtotal,
-    shippingFee,
-    total,
-    status: 'confirmed',
-    createdAt: new Date().toISOString(),
-  };
-
-  const saved = await insertOrder(order);
-  return c.json({ order: saved }, 201);
+  return c.json({ count: products.length, products });
 });
 
-app.get('/api/_admin/db/stats', async (c) => c.json(await getDbStats()));
-
-app.get('/api/_admin/db/schema', async (c) => {
-  const stats = await getDbStats();
-  return c.json({
-    tables: ['products', 'orders', 'artisans'],
-    stats,
-    endpoints: ['/api/products', '/api/orders', '/api/_admin/db/stats', '/api/_admin/db/schema'],
-  });
+index.get("/api/_admin/db/orders", async (c) => {
+  const orders = await getOrders();
+  return c.json({ count: orders.length, orders });
 });
 
-app.post('/api/_admin/db/seed', async (c) => {
-  await initDb();
-  await seedDb();
-  return c.json({ ok: true });
+index.get("/api/_admin/db/orders/:orderNumber", async (c) => {
+  const orderNumber = c.req.param("orderNumber") ?? "";
+  const order = await getOrderByNumber(orderNumber);
+  return order ? c.json({ order }) : c.json({ error: "Order not found." }, 404);
 });
 
-app.post('/api/_admin/db/clear-orders', async (c) => {
-  await clearOrders();
-  return c.json({ ok: true });
+index.get("/api/_admin/db/products/:slug", async (c) => {
+  const slug = c.req.param("slug") ?? "";
+  const product = await getProductBySlug(slug);
+  return product ? c.json({ product }) : c.json({ error: "Product not found." }, 404);
 });
 
-app.notFound((c) => jsonError('Route not found', 404));
-app.onError((err) => jsonError('Internal server error', 500, err instanceof Error ? err.message : String(err ?? 'unknown')));
+index.all("*", (c) => c.json({ error: "Not found." }, 404));
 
-export { app };
-export default app;
+export default index;

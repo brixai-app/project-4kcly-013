@@ -1,109 +1,103 @@
-export type ProductCategory = 'mojri' | 'juttis' | 'bridal' | 'mens' | 'womens' | 'artisan';
-
-export type ProductSize = 'XS' | 'S' | 'M' | 'L' | 'XL' | 'UK 6' | 'UK 7' | 'UK 8' | 'UK 9' | 'UK 10' | 'UK 11';
-
-export type ProductColor = 'ivory' | 'maroon' | 'antique-gold' | 'tan' | 'black' | 'rust';
-
-export interface Artisan {
-  id: string;
-  name: string;
-  location: string;
-  lineage: string;
-  specialty: string;
-  portraitUrl?: string;
-}
-
-export interface Product {
+export type Product = {
   id: string;
   slug: string;
   name: string;
-  category: ProductCategory;
+  category: string;
+  collection: string;
   price: number;
+  originalPrice?: number | null;
   description: string;
+  story?: string;
   image: string;
-  gallery?: string[];
-  artisanId?: string;
-  artisanName?: string;
-  colors?: ProductColor[];
-  sizes?: ProductSize[];
-  featured?: boolean;
-  inStock?: boolean;
+  images?: string[];
+  artisanId?: string | null;
   material?: string;
-  craftsmanship?: string;
-}
+  color?: string;
+  sizes?: string[];
+  inStock: boolean;
+  stock: number;
+  featured?: boolean;
+  tags?: string[];
+};
 
-export interface CartItem {
+export type Artisan = {
+  id: string;
+  name: string;
+  village?: string;
+  district?: string;
+  specialty: string;
+  bio: string;
+  portrait?: string;
+  yearsActive?: number;
+  techniques?: string[];
+};
+
+export type CartItem = {
   productId: string;
   quantity: number;
-  size?: ProductSize;
-  color?: ProductColor;
-  product?: Product;
-}
+  size?: string | null;
+  color?: string | null;
+};
 
-export interface ShippingInfo {
+export type ShippingInfo = {
   fullName: string;
-  email: string;
   phone: string;
+  email: string;
   addressLine1: string;
   addressLine2?: string;
   city: string;
   state: string;
   postalCode: string;
   country: string;
-}
+};
 
-export interface PaymentInfo {
-  method: 'card' | 'upi' | 'cod';
-  last4?: string;
-  provider?: string;
-  transactionId?: string;
-}
+export type PaymentInfo = {
+  method: "cod" | "upi" | "card" | "netbanking";
+  upiId?: string;
+  cardLast4?: string;
+  cardholderName?: string;
+};
 
-export interface Order {
+export type Order = {
   id: string;
-  userId?: string;
+  orderNumber: string;
   items: CartItem[];
   shipping: ShippingInfo;
   payment: PaymentInfo;
   subtotal: number;
   shippingFee: number;
   total: number;
-  status: 'pending' | 'confirmed' | 'packed' | 'shipped' | 'delivered' | 'cancelled';
+  status: "pending" | "confirmed" | "packed" | "shipped" | "delivered" | "cancelled";
   createdAt: string;
-}
-
-export interface CatalogFilters {
-  query: string;
-  category: ProductCategory | 'all';
-  artisanId: string | 'all';
-  priceRange: [number, number];
-  sortBy: 'featured' | 'newest' | 'price-asc' | 'price-desc';
-}
-
-export interface CatalogFilterOption<T extends string = string> {
-  label: string;
-  value: T;
-}
-
-export interface CatalogFilterGroup<T extends string = string> {
-  label: string;
-  options: CatalogFilterOption<T>[];
-}
-
-export interface CheckoutPayload {
-  items: CartItem[];
-  shipping: ShippingInfo;
-  payment: PaymentInfo;
-}
-
-export type AppTypes = {
-  Product: Product;
-  Artisan: Artisan;
-  CartItem: CartItem;
-  Order: Order;
-  ShippingInfo: ShippingInfo;
-  PaymentInfo: PaymentInfo;
-  CatalogFilters: CatalogFilters;
 };
 
-export default AppTypes;
+export type FilterState = {
+  query: string;
+  categories: string[];
+  collections: string[];
+  priceRange: [number, number];
+  inStockOnly: boolean;
+  artisanIds: string[];
+};
+
+export type CheckoutValidationErrors = Partial<{
+  fullName: string;
+  phone: string;
+  email: string;
+  addressLine1: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+  paymentMethod: string;
+  upiId: string;
+  cardholderName: string;
+  cardLast4: string;
+}>;
+
+export type CheckoutValidationResult = {
+  valid: boolean;
+  errors: CheckoutValidationErrors;
+};
+
+export default Product;

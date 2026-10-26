@@ -5,5 +5,6 @@ const authClient = createAuthClient({
   baseURL: typeof window !== "undefined" ? window.location.origin : "",
 });
 
-export const { signIn, signUp, signOut, useSession, getSession, updateUser } = authClient;
+export const { signIn, signUp, signOut, useSession, getSession } = authClient;
+
 export default authClient;
