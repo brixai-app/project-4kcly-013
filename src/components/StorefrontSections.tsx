@@ -1,184 +1,261 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { ArrowRight, ChevronDown, Filter, Sparkles } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import ProductCard from '@/components/ProductCard';
-import { categories, editorialStories, products } from '@/data/mockData';
-import type { CatalogFilter, Product } from '@/types';
+import { motion } from 'framer-motion';
+import { ChevronRight, Filter, Sparkles, ArrowRight, Search, ChevronDown } from 'lucide-react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { cn } from '@/lib/utils';
+import { mockData } from '@/data/mockData';
+import { ProductCard } from '@/components/ProductCard';
 
 type SectionProps = { className?: string };
-type GridProps = { products?: Product[]; className?: string };
 
-export function HeroSection({ className = '' }: SectionProps = {}) {
-  const story = editorialStories?.[0] ?? {};
+const products = mockData?.products ?? [];
+const categories = mockData?.categories ?? [];
+const collections = mockData?.collections ?? [];
+const editorialSections = mockData?.editorialSections ?? [];
+
+function SectionShell({ children, className = '' }: React.PropsWithChildren<SectionProps>) {
+  return <section className={cn('mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8', className)}>{children}</section>;
+}
+
+function HomeExperience({ className = '' }: SectionProps = {}) {
+  const featured = products?.filter((p) => p?.featured)?.slice(0, 5) ?? products?.slice(0, 5) ?? [];
+  const [activeCollection, setActiveCollection] = useState<string>('All');
+  const filtered = useMemo(
+    () => (activeCollection === 'All' ? featured : featured.filter((p) => (p?.collection ?? p?.category ?? '') === activeCollection)),
+    [activeCollection, featured]
+  );
+
   return (
-    <section className={cn('relative min-h-[92vh] overflow-hidden bg-[#F5F0E6] text-[#2B2B2B]', className)}>
-      <div className="absolute inset-0">
-        <img
-          src={story?.image ?? 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&w=1400&q=85'}
-          alt={story?.title ?? 'Jootiya heritage lookbook'}
-          crossOrigin="anonymous"
-          className="h-full w-full object-cover object-center"
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#F5F0E6]/90 via-[#F5F0E6]/35 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#2B2B2B]/35 via-transparent to-transparent" />
+    <div className={cn('space-y-16 pb-16', className)}>
+      <div className="relative overflow-hidden border-b border-[#CBBCA7] bg-[#F6F0E5]">
+        <SectionShell className="relative py-8 sm:py-10 lg:py-14">
+          <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
+            <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
+              <p className="mb-4 text-xs font-semibold uppercase tracking-[0.35em] text-[#6F6254]">Jodhpur atelier / authentic mojris</p>
+              <h1 className="max-w-3xl font-['Playfair_Display'] text-5xl font-light tracking-tight text-[#17130F] sm:text-6xl lg:text-7xl">
+                Handcrafted Mojris, composed like an editorial archive.
+              </h1>
+              <p className="mt-5 max-w-2xl text-base leading-8 text-[#6F6254] sm:text-lg">
+                Ivory textures, terracotta leather, and deep indigo contrast frame a luxury storefront for the season&apos;s most refined Rajasthani footwear.
+              </p>
+              <div className="mt-8 flex flex-wrap items-center gap-3">
+                <Link to="/shop" className="inline-flex items-center gap-2 rounded-sm bg-[#A8472A] px-5 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-white transition-colors hover:bg-[#84351F]">
+                  Explore Collection <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link to="/shop" className="inline-flex items-center gap-2 rounded-sm border border-[#CBBCA7] bg-[#FFFDF8] px-5 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-[#17130F] transition-colors hover:border-[#A8472A]">
+                  Shop Latest Drop
+                </Link>
+              </div>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, x: 24 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.8, delay: 0.1 }}
+              className="relative overflow-hidden border border-[#CBBCA7] bg-[#FFFDF8]"
+            >
+              <img
+                src={editorialSections?.[0]?.image ?? products?.[0]?.image ?? 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=800&q=80'}
+                alt={editorialSections?.[0]?.title ?? 'Editorial lookbook'}
+                crossOrigin="anonymous"
+                className="h-[34rem] w-full object-cover"
+              />
+              <div className="absolute inset-x-0 bottom-0 border-t border-[#CBBCA7] bg-[#FFFDF8]/95 p-5 backdrop-blur-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#6F6254]">Lookbook 01</p>
+                <p className="mt-2 max-w-md text-sm leading-6 text-[#17130F]">
+                  A tactile composition of hand-stitched silhouettes, ceremonial finishes, and heirloom craft.
+                </p>
+              </div>
+            </motion.div>
+          </div>
+        </SectionShell>
       </div>
-      <div className="relative mx-auto flex min-h-[92vh] max-w-7xl items-end px-4 py-8 sm:px-6 lg:px-8">
-        <div className="grid w-full gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="max-w-3xl border-l border-[#C9A66B] pl-5 sm:pl-8">
-            <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.35em] text-[#6F655B]">JODHPUR PROVENANCE</p>
-            <h1 className="font-['Playfair_Display'] text-5xl font-light tracking-tight text-[#2B2B2B] sm:text-6xl lg:text-7xl">
-              {story?.title ?? 'Heritage Mojris, reimagined for the modern ceremonial wardrobe.'}
-            </h1>
-            <p className="mt-5 max-w-xl font-['Lora'] text-base leading-7 text-[#6F655B] sm:text-lg">
-              {story?.excerpt ?? 'Hand-finished silhouettes, supple leathers, and restrained ornamentation shaped by Jodhpuri craft traditions.'}
-            </p>
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Link
-                to="/shop"
-                className="inline-flex items-center gap-2 bg-[#7B2D26] px-5 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-white transition-colors hover:bg-[#61211C]"
-              >
-                Explore Collection <ArrowRight size={16} />
-              </Link>
-              <Link
-                to="/custom-orders"
-                className="inline-flex items-center gap-2 border border-[#C9A66B] bg-[#FFF9F0]/80 px-5 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-[#2B2B2B] transition-colors hover:bg-[#FFF9F0]"
-              >
-                Bespoke Order
-              </Link>
+
+      <SectionShell>
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#6F6254]">Featured drop</p>
+            <h2 className="mt-2 font-['Playfair_Display'] text-3xl font-light text-[#17130F] sm:text-4xl">Selected pairs</h2>
+          </div>
+          <Link to="/shop" className="hidden items-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#A8472A] sm:inline-flex">
+            View all <ChevronRight className="h-4 w-4" />
+          </Link>
+        </div>
+        <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {filtered?.map((product) => <ProductCard key={product?.id ?? product?.slug} product={product} />)}
+        </div>
+      </SectionShell>
+
+      <SectionShell>
+        <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="border border-[#CBBCA7] bg-[#FFFDF8] p-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#6F6254]">Collection index</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {['All', ...collections].map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setActiveCollection(item)}
+                  className={cn(
+                    'min-w-0 rounded-sm border px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition-colors',
+                    activeCollection === item
+                      ? 'border-[#A8472A] bg-[#A8472A] text-white'
+                      : 'border-[#CBBCA7] bg-transparent text-[#17130F] hover:border-[#A8472A]'
+                  )}
+                >
+                  <span className="block max-w-[12rem] truncate">{item}</span>
+                </button>
+              ))}
+            </div>
+            <div className="mt-6 space-y-4">
+              {categories?.slice(0, 4)?.map((category) => (
+                <Link key={category} to="/shop" className="flex items-center justify-between border-b border-[#CBBCA7] pb-3 text-sm text-[#17130F]">
+                  <span className="min-w-0 truncate">{category}</span>
+                  <ChevronRight className="h-4 w-4 text-[#6F6254]" />
+                </Link>
+              ))}
             </div>
           </div>
-          <div className="hidden items-end justify-end lg:flex">
-            <div className="w-full max-w-sm border border-[#C9A66B] bg-[#FFF9F0]/85 p-4 backdrop-blur-sm">
-              <div className="aspect-[4/5] overflow-hidden">
-                <img
-                  src={editorialStories?.[1]?.image ?? 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1400&q=85'}
-                  alt={editorialStories?.[1]?.title ?? 'Heritage detail'}
-                  crossOrigin="anonymous"
-                  className="h-full w-full object-cover object-center"
-                />
-              </div>
-              <div className="mt-4 flex items-center justify-between border-t border-[#C9A66B] pt-3">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#6F655B]">Craft Notes</span>
-                <span className="text-xs text-[#7B2D26]">Since 1984</span>
-              </div>
+          <div className="grid gap-5 sm:grid-cols-2">
+            {editorialSections?.slice(1, 3)?.map((section) => (
+              <article key={section?.id} className="overflow-hidden border border-[#CBBCA7] bg-[#FFFDF8]">
+                <img src={section?.image ?? 'https://images.unsplash.com/photo-1541099649105-f69ad21f3246?auto=format&fit=crop&w=800&q=80'} alt={section?.title ?? 'Craft section'} crossOrigin="anonymous" className="h-72 w-full object-cover" />
+                <div className="p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#6F6254]">{section?.eyebrow ?? 'Craft'}</p>
+                  <h3 className="mt-2 font-['Playfair_Display'] text-2xl font-light text-[#17130F]">{section?.title ?? 'Atelier notes'}</h3>
+                  <p className="mt-3 text-sm leading-7 text-[#6F6254]">{section?.body ?? ''}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </SectionShell>
+
+      <SectionShell>
+        <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="grid gap-5 sm:grid-cols-2">
+            {products?.slice(0, 4)?.map((product) => (
+              <ProductCard key={product?.id ?? product?.slug} product={product} />
+            ))}
+          </div>
+          <div className="border border-[#CBBCA7] bg-[#0a0a0a] p-6 text-[#FFFDF8]">
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#CBBCA7]">Manifesto</p>
+            <h2 className="mt-4 font-['Playfair_Display'] text-4xl font-light leading-tight">Crafted in Jodhpur, worn everywhere.</h2>
+            <p className="mt-4 max-w-xl text-sm leading-7 text-[#E8DDCF]">
+              Each pair is shaped by hand, finished with patience, and designed to move from ceremony to city with quiet confidence.
+            </p>
+            <div className="mt-8 flex items-center gap-3">
+              <Sparkles className="h-5 w-5 text-[#A8472A]" />
+              <span className="text-xs font-semibold uppercase tracking-[0.28em] text-[#FFFDF8]">Heirloom quality, modern rhythm</span>
             </div>
           </div>
         </div>
-      </div>
-    </section>
-  );
-}
+      </SectionShell>
 
-export function CatalogToolbar({ className = '' }: SectionProps = {}) {
-  const filter: CatalogFilter = { query: '', category: '', occasion: '', size: '', priceRange: '', artisan: '', sortBy: '' };
-  return (
-    <div className={cn('flex flex-wrap items-center justify-between gap-3 border-y border-[#C9A66B] bg-[#FFF9F0] px-4 py-4 sm:px-6 lg:px-8', className)}>
-      <div>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#6F655B]">Catalog</p>
-        <h2 className="font-['Playfair_Display'] text-2xl font-light text-[#2B2B2B]">Curated by occasion and craft</h2>
-      </div>
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#6F655B]">
-        <Filter size={14} />
-        <span>{filter?.sortBy ?? 'Refine selection'}</span>
-        <ChevronDown size={14} />
-      </div>
+      <SectionShell>
+        <div className="border border-[#CBBCA7] bg-[#FFFDF8] p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#6F6254]">Newsletter</p>
+              <h2 className="mt-2 font-['Playfair_Display'] text-3xl font-light text-[#17130F]">Receive the next drop.</h2>
+            </div>
+            <div className="flex w-full max-w-xl items-center gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-2 border border-[#CBBCA7] bg-[#F6F0E5] px-4 py-3">
+                <Search className="h-4 w-4 text-[#6F6254]" />
+                <input className="w-full bg-transparent text-sm text-[#17130F] outline-none placeholder:text-[#6F6254]" placeholder="Email address" />
+              </div>
+              <button type="button" className="inline-flex shrink-0 items-center gap-2 rounded-sm bg-[#A8472A] px-5 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-white hover:bg-[#84351F]">
+                Join <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </SectionShell>
     </div>
   );
 }
 
-export function ProductGrid({ products: items = products, className = '' }: GridProps = {}) {
-  return (
-    <section className={cn('px-4 py-8 sm:px-6 lg:px-8', className)}>
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {items?.map((product, index) => (
-          <motion.div
-            key={product?.id ?? index}
-            initial={{ opacity: 0, y: 18 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: '-80px' }}
-            transition={{ duration: 0.45, delay: index * 0.03 }}
-          >
-            <ProductCard product={product} />
-          </motion.div>
-        ))}
-      </div>
-    </section>
-  );
-}
+function CatalogExperience({ className = '' }: SectionProps = {}) {
+  const [sort, setSort] = useState('Featured');
+  const [visible, setVisible] = useState(8);
+  const [category, setCategory] = useState('All');
+  const catalog = useMemo(() => {
+    const list = [...products];
+    if (category !== 'All') return list.filter((p) => (p?.category ?? '') === category);
+    return list;
+  }, [category]);
 
-export function CategoryShowcase({ className = '' }: SectionProps = {}) {
+  const sorted = useMemo(() => {
+    const list = [...catalog];
+    if (sort === 'Price: Low to High') list.sort((a, b) => (a?.price ?? 0) - (b?.price ?? 0));
+    if (sort === 'Price: High to Low') list.sort((a, b) => (b?.price ?? 0) - (a?.price ?? 0));
+    return list;
+  }, [catalog, sort]);
+
   return (
-    <section className={cn('bg-[#2B2B2B] px-4 py-10 text-[#FFF9F0] sm:px-6 lg:px-8', className)}>
-      <div className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-4">
-        {categories?.slice(0, 4)?.map((category: string, index: number) => (
-          <motion.div
-            key={category}
-            initial={{ opacity: 0, x: index % 2 === 0 ? -18 : 18 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            className={cn('border border-[#C9A66B]/40 p-5', index === 0 ? 'lg:col-span-2' : 'lg:col-span-1')}
-          >
-            <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#C9A66B]">Category</p>
-            <h3 className="mt-3 font-['Playfair_Display'] text-3xl font-light">{category}</h3>
-            <div className="mt-6 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#FFF9F0]">
-              <span>Shop</span>
-              <ArrowRight size={14} />
+    <div className={cn('space-y-8 pb-16', className)}>
+      <SectionShell className="pt-6">
+        <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <aside className="border border-[#CBBCA7] bg-[#FFFDF8] p-5">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-[#A8472A]" />
+              <h2 className="min-w-0 truncate font-['Playfair_Display'] text-2xl font-light text-[#17130F]">Filters</h2>
             </div>
-          </motion.div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-export function BrandManifesto({ className = '' }: SectionProps = {}) {
-  const story = editorialStories?.[2] ?? editorialStories?.[0] ?? {};
-  return (
-    <section className={cn('bg-[#F5F0E6] px-4 py-12 sm:px-6 lg:px-8', className)}>
-      <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-        <div className="border border-[#C9A66B] bg-[#FFF9F0] p-6">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#6F655B]">Manifesto</p>
-          <h2 className="mt-3 font-['Playfair_Display'] text-4xl font-light text-[#2B2B2B]">
-            {story?.title ?? 'Crafted with restraint, worn with ceremony.'}
-          </h2>
-          <p className="mt-4 font-['Lora'] text-base leading-7 text-[#6F655B]">
-            {story?.excerpt ?? 'Every pair is shaped by hand, balanced for comfort, and finished with a quiet sense of occasion.'}
-          </p>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {editorialStories?.slice(0, 2)?.map((item, index) => (
-            <div key={item?.id ?? index} className="overflow-hidden border border-[#C9A66B] bg-[#FFF9F0]">
-              <div className="aspect-[4/5]">
-                <img src={item?.image ?? ''} alt={item?.title ?? 'Editorial story'} crossOrigin="anonymous" className="h-full w-full object-cover" />
-              </div>
-              <div className="p-4">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#6F655B]">Story</p>
-                <h3 className="mt-2 font-['Playfair_Display'] text-2xl font-light text-[#2B2B2B]">{item?.title ?? 'Heritage'}</h3>
-              </div>
+            <div className="mt-5 flex flex-col gap-2.5">
+              {['All', ...categories].map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setCategory(item)}
+                  className={cn(
+                    'min-w-0 rounded-sm border px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.22em] transition-colors',
+                    category === item ? 'border-[#A8472A] bg-[#A8472A] text-white' : 'border-[#CBBCA7] text-[#17130F] hover:border-[#A8472A]'
+                  )}
+                >
+                  <span className="block truncate">{item}</span>
+                </button>
+              ))}
             </div>
-          ))}
+          </aside>
+          <div className="min-w-0">
+            <div className="flex flex-col gap-4 border-b border-[#CBBCA7] pb-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#6F6254]">Catalog</p>
+                <h1 className="mt-2 font-['Playfair_Display'] text-4xl font-light text-[#17130F]">Mojri archive</h1>
+              </div>
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <button type="button" className="inline-flex items-center gap-2 rounded-sm border border-[#CBBCA7] bg-[#FFFDF8] px-4 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-[#17130F]">
+                    Sort <ChevronDown className="h-4 w-4" />
+                  </button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content className="z-50 min-w-52 border border-[#CBBCA7] bg-[#FFFDF8] p-2 shadow-lg">
+                    {['Featured', 'Price: Low to High', 'Price: High to Low'].map((item) => (
+                      <DropdownMenu.Item key={item} onSelect={() => setSort(item)} className="cursor-pointer rounded-sm px-3 py-2 text-sm text-[#17130F] outline-none hover:bg-[#F6F0E5]">
+                        {item}
+                      </DropdownMenu.Item>
+                    ))}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+            </div>
+            <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {sorted?.slice(0, visible)?.map((product) => <ProductCard key={product?.id ?? product?.slug} product={product} />)}
+            </div>
+            {visible < sorted.length && (
+              <div className="mt-8 flex justify-center">
+                <button type="button" onClick={() => setVisible((v) => v + 4)} className="inline-flex items-center gap-2 rounded-sm border border-[#CBBCA7] bg-[#FFFDF8] px-5 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-[#17130F] hover:border-[#A8472A]">
+                  Load more <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    </section>
+      </SectionShell>
+    </div>
   );
 }
 
-export function NewsletterSection({ className = '' }: SectionProps = {}) {
-  return (
-    <section className={cn('bg-[#FFF9F0] px-4 py-12 sm:px-6 lg:px-8', className)}>
-      <div className="mx-auto flex max-w-7xl flex-col gap-6 border-t border-[#C9A66B] pt-8 lg:flex-row lg:items-end lg:justify-between">
-        <div className="max-w-2xl">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#6F655B]">Newsletter</p>
-          <h2 className="mt-3 font-['Playfair_Display'] text-4xl font-light text-[#2B2B2B]">Receive new drops, artisan notes, and private access.</h2>
-        </div>
-        <Link to="/custom-orders" className="inline-flex items-center gap-2 bg-[#7B2D26] px-5 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-white transition-colors hover:bg-[#61211C]">
-          Request Bespoke <Sparkles size={16} />
-        </Link>
-      </div>
-    </section>
-  );
-}
-
-export default HeroSection;
+export { HomeExperience, CatalogExperience };
+export default HomeExperience;

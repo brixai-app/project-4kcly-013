@@ -1,57 +1,30 @@
-export type CatalogFilter = {
-  query: string;
-  category: string;
-  occasion: string;
-  size: string;
-  priceRange: string;
-  artisan: string;
-  sortBy: string;
-};
-
-export type ShippingInfo = {
-  fullName: string;
-  email: string;
-  phone: string;
-  addressLine1: string;
-  addressLine2?: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
-};
-
 export type Product = {
   id: string;
   name: string;
-  category: string;
-  occasion: string;
-  artisanId: string;
-  artisanName: string;
+  slug: string;
   price: number;
-  originalPrice?: number;
-  description: string;
-  details?: string[];
-  sizes: string[];
-  colors?: string[];
   image: string;
   gallery?: string[];
+  category: string;
+  collection?: string;
+  description?: string;
+  artisanId?: string;
+  sizes?: string[];
+  colors?: string[];
   featured?: boolean;
   inStock?: boolean;
   material?: string;
-  care?: string;
-  fit?: string;
   origin?: string;
 };
 
 export type Artisan = {
   id: string;
   name: string;
-  location: string;
-  specialty: string;
-  story: string;
-  image: string;
-  yearsActive?: number;
-  techniques?: string[];
+  location?: string;
+  craft?: string;
+  bio?: string;
+  portrait?: string;
+  yearsExperience?: number;
 };
 
 export type CartItem = {
@@ -61,33 +34,57 @@ export type CartItem = {
   color?: string;
 };
 
+export type ShippingInfo = {
+  fullName: string;
+  email: string;
+  phone?: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+};
+
 export type Order = {
   id: string;
+  userId?: string;
   items: CartItem[];
   shipping: ShippingInfo;
   subtotal: number;
   shippingCost: number;
   total: number;
+  status: "pending" | "paid" | "fulfilled" | "cancelled";
   createdAt: string;
-  status: string;
-  notes?: string;
 };
 
-export type CustomOrderRequest = {
-  fullName: string;
+export type Filter = {
+  query?: string;
+  category?: string;
+  collection?: string;
+  priceMin?: number;
+  priceMax?: number;
+  inStockOnly?: boolean;
+  featuredOnly?: boolean;
+  artisanId?: string;
+};
+
+export type AuthUser = {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+};
+
+export type AuthSession = {
+  user?: AuthUser | null;
+  expires?: string | null;
+};
+
+export type AuthCredentials = {
   email: string;
-  phone: string;
-  occasion: string;
-  size: string;
-  colorPreference: string;
-  budget: string;
-  timeline: string;
-  notes: string;
-};
-
-export type CheckoutFormValues = ShippingInfo & {
-  notes?: string;
-  paymentMethod: string;
+  password: string;
+  name?: string;
 };
 
 export default {};
