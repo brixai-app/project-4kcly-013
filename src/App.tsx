@@ -1,32 +1,48 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
-import HomePage from '@/pages/HomePage';
-import CatalogPage from '@/pages/CatalogPage';
-import ProductDetailPage from '@/pages/ProductDetailPage';
-import CheckoutPage from '@/pages/CheckoutPage';
-import ArtisanStoryPage from '@/pages/ArtisanStoryPage';
+import { CartProvider } from '@/context/CartContext';
+import { AppLayout } from '@/components/AppLayout';
+import { Home } from '@/pages/Home';
+import { ShopPage } from '@/pages/ShopPage';
+import { ProductPage } from '@/pages/ProductPage';
+import { CheckoutPage } from '@/pages/CheckoutPage';
+import { CustomOrdersPage } from '@/pages/CustomOrdersPage';
+import { ArtisanStoriesPage } from '@/pages/ArtisanStoriesPage';
+import { OrderConfirmationPage } from '@/pages/OrderConfirmationPage';
 
-export default function App() {
+export function App() {
   return (
-    <BrowserRouter>
-      <div className="min-h-screen flex flex-col bg-background text-foreground antialiased selection:bg-primary/20">
-        <Toaster position="top-right" richColors theme="dark" />
-        <Header />
-        <main className="flex-1 w-full">
-          <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/catalog" element={<CatalogPage />} />
-          <Route path="/product/:slug" element={<ProductDetailPage />} />
+    <HashRouter>
+      <CartProvider>
+        <AppLayout />
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/shop" element={<ShopPage />} />
+          <Route path="/product/:productId" element={<ProductPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
-          <Route path="/artisans" element={<ArtisanStoryPage />} />
-            <Route path="*" element={<HomePage />} />
-          </Routes>
-        </main>
-        <Footer />
-      </div>
-    </BrowserRouter>
+          <Route path="/custom-orders" element={<CustomOrdersPage />} />
+          <Route path="/artisans" element={<ArtisanStoriesPage />} />
+          <Route path="/order/:orderId" element={<OrderConfirmationPage />} />
+          <Route path="/cart" element={<Navigate to="/shop" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+        <Toaster
+          position="top-right"
+          richColors={false}
+          closeButton
+          toastOptions={{
+            style: {
+              background: '#FFF9F0',
+              color: '#2B2B2B',
+              border: '1px solid #C9A66B',
+              borderRadius: '4px',
+            },
+          }}
+        />
+      </CartProvider>
+    </HashRouter>
   );
 }
+
+export default App;

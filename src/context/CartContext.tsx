@@ -1,352 +1,176 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import type {
-  CartContextValue,
-  CartItem,
-  CartPersistedState,
-  CartState,
-  CartTotals,
-  Product,
-  ShippingMethod,
-} from '@/types';
+import mockData from '@/data/mockData';
+import type { CartItem, Order, Product, ShippingInfo } from '@/types';
 
-const PERSIST_KEY = 'jootiya-cart-v1';
-const PERSIST_VERSION = 1;
-
-const defaultState: CartState = {
-  items: [],
-  status: 'idle',
-  currency: 'INR',
-  lastUpdatedAt: undefined,
+type CartContextValue = {
+  items: CartItem[];
+  isCartOpen: boolean;
+  subtotal: number;
+  shippingCost: number;
+  shippingThreshold: number;
+  total: number;
+  itemCount: number;
+  openCart: () => void;
+  closeCart: () => void;
+  toggleCart: () => void;
+  addToCart: (product: Product, size?: string, color?: string, quantity?: number) => void;
+  updateQuantity: (productId: string, quantity: number, size?: string, color?: string) => void;
+  removeFromCart: (productId: string, size?: string, color?: string) => void;
+  clearCart: () => void;
+  completeOrder: (shipping: ShippingInfo, notes?: string) => Order;
+  getProductById: (productId: string) => Product | undefined;
 };
 
-const defaultContextValue: CartContextValue = {
-  state: defaultState,
-  addItem: () => undefined,
-  removeItem: () => undefined,
-  updateQuantity: () => undefined,
-  clearCart: () => undefined,
-  getResolvedItems: () => [],
-  getTotals: () => ({
-    subtotal: 0,
-    shipping: 0,
-    tax: 0,
-    discount: 0,
-    grandTotal: 0,
-    currency: 'INR',
-  }),
-};
+const CartContext = createContext<CartContextValue | undefined>(undefined);
+const STORAGE_KEY = 'jootiya-cart-v1';
+const ORDERS_KEY = 'jootiya-orders-v1';
+const SHIPPING_THRESHOLD = 5000;
+const SHIPPING_COST = 250;
 
-export const RawCartContext = createContext<CartContextValue>(defaultContextValue);
+const getLineKey = (productId: string, size?: string, color?: string) =>
+  `${productId}::${size ?? ''}::${color ?? ''}`;
 
-function readPersistedCart(): CartState {
-  if (typeof window === 'undefined') return defaultState;
+const normalizeQuantity = (quantity: number) => Math.max(1, Math.min(5, Math.round(quantity || 1)));
+
+const readStorage = <T,>(key: string, fallback: T): T => {
+  if (typeof window === 'undefined') return fallback;
   try {
-    const raw = window.localStorage.getItem(PERSIST_KEY);
-    if (!raw) return defaultState;
-    const parsed = JSON.parse(raw) as CartPersistedState;
-    if (!parsed || typeof parsed !== 'object') return defaultState;
-    if (parsed.version !== PERSIST_VERSION) return defaultState;
-    return {
-      items: parsed.items ?? [],
-      status: parsed.status ?? 'idle',
-      currency: parsed.currency ?? 'INR',
-      lastUpdatedAt: parsed.lastUpdatedAt,
-    };
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
-    return defaultState;
+    return fallback;
   }
-}
+};
 
-function writePersistedCart(state: CartState) {
+const writeStorage = (key: string, value: unknown) => {
   if (typeof window === 'undefined') return;
-  const payload: CartPersistedState = {
-    ...state,
-    version: PERSIST_VERSION,
-  };
   try {
-    window.localStorage.setItem(PERSIST_KEY, JSON.stringify(payload));
+    window.localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    // ignore
+    return;
   }
-}
+};
 
-function calculateTax(subtotal: number): number {
-  if (subtotal <= 0) return 0;
-  const rate = 0.12;
-  return Math.round(subtotal * rate);
-}
-
-export interface CartProviderProps {
-  children?: React.ReactNode;
-}
-
-export function CartProvider({ children = null }: CartProviderProps) {
-  const [state, setState] = useState<CartState>(() => readPersistedCart());
+export function CartProvider({ children }: { children?: React.ReactNode } = {}) {
+  const [items, setItems] = useState<CartItem[]>(() => readStorage<CartItem[]>(STORAGE_KEY, []));
+  const [isCartOpen, setIsCartOpen] = useState(false);
 
   useEffect(() => {
-    writePersistedCart(state);
-  }, [state]);
+    writeStorage(STORAGE_KEY, items);
+  }, [items]);
 
-  const setStatus = useCallback((status: CartState['status']) => {
-    setState(prev => ({
-      ...prev,
-      status,
-      lastUpdatedAt: new Date().toISOString(),
-    }));
+  const productMap = useMemo(() => {
+    const map = new Map<string, Product>();
+    (mockData?.products ?? []).forEach((product: Product) => map.set(product.id, product));
+    return map;
   }, []);
 
-  const addItem = useCallback(
-    (product: Product, sizeId: string, quantity: number = 1) => {
-      if (!product?.id || !sizeId) return;
-      if (quantity <= 0) {
-        toast.error('Quantity must be at least 1.');
-        return;
-      }
+  const getProductById = (productId: string) => productMap.get(productId);
 
-      const size = product.sizes.find(s => s.id === sizeId);
-      if (!size) {
-        toast.error('Selected size is unavailable.');
-        return;
-      }
-
-      const stock = size.stock ?? 0;
-      if (stock <= 0) {
-        toast.error('This size is currently sold out.');
-        return;
-      }
-
-      setStatus('updating');
-
-      setState(prev => {
-        const existingIndex = prev.items.findIndex(
-          item => item.productId === product.id && item.sizeId === sizeId
-        );
-        const now = new Date().toISOString();
-        let nextItems: CartItem[];
-
-        if (existingIndex !== -1) {
-          const existing = prev.items[existingIndex];
-          const newQty = Math.min(existing.quantity + quantity, stock);
-          if (newQty === existing.quantity) {
-            toast.error('Maximum stock selected for this size.');
-            return {
-              ...prev,
-              status: 'idle',
-              lastUpdatedAt: now,
-            };
-          }
-          const updated: CartItem = {
-            ...existing,
-            quantity: newQty,
-            addedAt: now,
-          };
-          nextItems = [...prev.items];
-          nextItems[existingIndex] = updated;
-        } else {
-          const newItem: CartItem = {
-            id: `cart-${product.id}-${sizeId}-${Math.random().toString(36).slice(2)}`,
-            productId: product.id,
-            sizeId,
-            quantity: Math.min(quantity, stock),
-            unitPrice: product.price,
-            currency: product.currency ?? prev.currency ?? 'INR',
-            addedAt: now,
-          };
-          nextItems = [...prev.items, newItem];
-        }
-
-        toast.success('Added to bag', {
-          description: `${product.name} • ${size.sizeLabel}`,
-        });
-
-        return {
-          ...prev,
-          items: nextItems,
-          status: 'idle',
-          currency: product.currency ?? prev.currency ?? 'INR',
-          lastUpdatedAt: now,
-        };
-      });
-    },
-    [setStatus]
+  const subtotal = useMemo(
+    () =>
+      items.reduce((sum, item) => {
+        const product = getProductById(item.productId);
+        return sum + (product?.price ?? 0) * normalizeQuantity(item.quantity);
+      }, 0),
+    [items, productMap]
   );
 
-  const removeItem = useCallback((cartItemId: string) => {
-    if (!cartItemId) return;
-    setStatus('updating');
-    setState(prev => {
-      const existing = prev.items.find(item => item.id === cartItemId);
-      const filtered = prev.items.filter(item => item.id !== cartItemId);
+  const shippingCost = subtotal >= SHIPPING_THRESHOLD || subtotal === 0 ? 0 : SHIPPING_COST;
+  const total = subtotal + shippingCost;
+  const itemCount = items.reduce((sum, item) => sum + normalizeQuantity(item.quantity), 0);
+
+  const openCart = () => setIsCartOpen(true);
+  const closeCart = () => setIsCartOpen(false);
+  const toggleCart = () => setIsCartOpen((prev) => !prev);
+
+  const addToCart = (product: Product, size?: string, color?: string, quantity = 1) => {
+    const nextQty = normalizeQuantity(quantity);
+    const selectedSize = size ?? product?.sizes?.[0] ?? '';
+    const key = getLineKey(product?.id ?? '', selectedSize, color);
+    setItems((prev) => {
+      const existing = prev.find((item) => getLineKey(item.productId, item.size, item.color) === key);
       if (existing) {
-        toast('Removed from bag', {
-          description: `Item was removed from your cart.`,
-        });
+        return prev.map((item) =>
+          getLineKey(item.productId, item.size, item.color) === key
+            ? { ...item, quantity: normalizeQuantity(item.quantity + nextQty) }
+            : item
+        );
       }
-      return {
-        ...prev,
-        items: filtered,
-        status: 'idle',
-        lastUpdatedAt: new Date().toISOString(),
-      };
+      return [...prev, { productId: product?.id ?? '', quantity: nextQty, size: selectedSize || undefined, color }];
     });
-  }, [setStatus]);
+    toast.success(`${product?.name ?? 'Item'} added to cart`);
+    setIsCartOpen(true);
+  };
 
-  const updateQuantity = useCallback(
-    (cartItemId: string, quantity: number) => {
-      if (!cartItemId) return;
-      if (quantity <= 0) {
-        removeItem(cartItemId);
-        return;
-      }
+  const updateQuantity = (productId: string, quantity: number, size?: string, color?: string) => {
+    const nextQty = normalizeQuantity(quantity);
+    const key = getLineKey(productId, size, color);
+    setItems((prev) =>
+      prev
+        .map((item) => (getLineKey(item.productId, item.size, item.color) === key ? { ...item, quantity: nextQty } : item))
+        .filter((item) => item.quantity > 0)
+    );
+  };
 
-      setStatus('updating');
-      setState(prev => {
-        const index = prev.items.findIndex(item => item.id === cartItemId);
-        if (index === -1) {
-          return {
-            ...prev,
-            status: 'idle',
-            lastUpdatedAt: new Date().toISOString(),
-          };
-        }
-        const item = prev.items[index];
-        const now = new Date().toISOString();
+  const removeFromCart = (productId: string, size?: string, color?: string) => {
+    const key = getLineKey(productId, size, color);
+    setItems((prev) => prev.filter((item) => getLineKey(item.productId, item.size, item.color) !== key));
+    toast.message('Removed from cart');
+  };
 
-        // optimistic update; stock validation happens at resolve time
-        const updated: CartItem = {
-          ...item,
-          quantity,
-          addedAt: now,
-        };
-        const nextItems = [...prev.items];
-        nextItems[index] = updated;
-        return {
-          ...prev,
-          items: nextItems,
-          status: 'idle',
-          lastUpdatedAt: now,
-        };
-      });
-    },
-    [removeItem, setStatus]
-  );
+  const clearCart = () => {
+    setItems([]);
+    toast.message('Cart cleared');
+  };
 
-  const clearCart = useCallback(() => {
-    if (!state.items.length) return;
-    setStatus('updating');
-    setState(prev => ({
-      ...prev,
-      items: [],
-      status: 'idle',
-      lastUpdatedAt: new Date().toISOString(),
-    }));
-    toast('Bag cleared', {
-      description: 'Your cart has been emptied.',
-    });
-  }, [setStatus, state.items.length]);
+  const completeOrder = (shipping: ShippingInfo, notes?: string) => {
+    const order: Order = {
+      id: crypto.randomUUID(),
+      items,
+      shipping,
+      subtotal,
+      shippingCost,
+      total,
+      createdAt: new Date().toISOString(),
+      status: 'confirmed',
+      notes,
+    };
+    const existing = readStorage<Order[]>(ORDERS_KEY, []);
+    writeStorage(ORDERS_KEY, [order, ...existing]);
+    setItems([]);
+    setIsCartOpen(false);
+    toast.success('Order confirmed');
+    return order;
+  };
 
-  const getResolvedItems = useCallback(
-    (products: Product[]) => {
-      if (!Array.isArray(products) || !products.length) return [];
-      return state.items
-        .map<CartTotals | null>(() => null)
-        .length; // purely to keep types happy, not used
+  const value: CartContextValue = {
+    items,
+    isCartOpen,
+    subtotal,
+    shippingCost,
+    shippingThreshold: SHIPPING_THRESHOLD,
+    total,
+    itemCount,
+    openCart,
+    closeCart,
+    toggleCart,
+    addToCart,
+    updateQuantity,
+    removeFromCart,
+    clearCart,
+    completeOrder,
+    getProductById,
+  };
 
-      // eslint-disable-next-line no-unreachable
-      return state.items
-        .map(item => {
-          const product = products.find(p => p.id === item.productId);
-          if (!product) return null;
-          const size = product.sizes.find(s => s.id === item.sizeId);
-          if (!size) return null;
-
-          const maxQty = size.stock ?? item.quantity;
-          const safeQty = Math.min(item.quantity, maxQty);
-
-          return {
-            ...item,
-            product,
-            size,
-            quantity: safeQty,
-            lineTotal: safeQty * item.unitPrice,
-          };
-        })
-        .filter((x): x is any => Boolean(x));
-    },
-    [state.items]
-  );
-
-  const memoizedGetResolvedItems = useCallback(
-    (products: Product[]) => {
-      if (!Array.isArray(products) || !products.length) return [];
-      return state.items
-        .map(item => {
-          const product = products.find(p => p.id === item.productId);
-          if (!product) return null;
-          const size = product.sizes.find(s => s.id === item.sizeId);
-          if (!size) return null;
-          const maxQty = size.stock ?? item.quantity;
-          const safeQty = Math.min(item.quantity, maxQty);
-          return {
-            ...item,
-            product,
-            size,
-            quantity: safeQty,
-            lineTotal: safeQty * item.unitPrice,
-          };
-        })
-        .filter((x): x is any => Boolean(x));
-    },
-    [state.items]
-  );
-
-  const getTotals = useCallback(
-    (products: Product[], shippingMethod?: ShippingMethod): CartTotals => {
-      const resolved = memoizedGetResolvedItems(products);
-      const subtotal = resolved.reduce((sum, item) => sum + item.lineTotal, 0);
-      const shipping = shippingMethod?.amount ?? (subtotal > 15000 ? 0 : subtotal > 0 ? 499 : 0);
-      const tax = calculateTax(subtotal);
-      const discount = 0;
-      const grandTotal = subtotal + shipping + tax - discount;
-      return {
-        subtotal,
-        shipping,
-        tax,
-        discount,
-        grandTotal,
-        currency: state.currency ?? 'INR',
-      };
-    },
-    [memoizedGetResolvedItems, state.currency]
-  );
-
-  const value: CartContextValue = useMemo(
-    () => ({
-      state,
-      addItem,
-      removeItem,
-      updateQuantity,
-      clearCart,
-      getResolvedItems: memoizedGetResolvedItems,
-      getTotals,
-    }),
-    [state, addItem, removeItem, updateQuantity, clearCart, memoizedGetResolvedItems, getTotals]
-  );
-
-  return <RawCartContext.Provider value={value}>{children}</RawCartContext.Provider>;
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
 
-export function useCart(): CartContextValue {
-  const ctx = useContext(RawCartContext);
-  return ctx ?? defaultContextValue;
+export function useCart() {
+  const context = useContext(CartContext);
+  if (!context) throw new Error('useCart must be used within CartProvider');
+  return context;
 }
 
-const CartContext = {
-  CartProvider,
-  useCart,
-  RawCartContext,
-};
-
-export { CartContext };
-export default CartContext;
+export default CartProvider;

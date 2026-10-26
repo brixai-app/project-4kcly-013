@@ -2,32 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --radius: 0.5rem;
-  }
+:root {
+  --color-bg: #F5F0E6;
+  --color-bg-rgb: 245, 240, 230;
+  --color-surface: #FFF9F0;
+  --color-surface-rgb: 255, 249, 240;
+  --color-surface-hover: #EFE4D2;
+  --color-surface-hover-rgb: 239, 228, 210;
+  --color-border: #C9A66B;
+  --color-border-rgb: 201, 166, 107;
+  --color-text-primary: #2B2B2B;
+  --color-text-primary-rgb: 43, 43, 43;
+  --color-text-muted: #6F655B;
+  --color-text-muted-rgb: 111, 101, 91;
+  --color-accent: #7B2D26;
+  --color-accent-rgb: 123, 45, 38;
+  --color-accent-hover: #61211C;
+  --color-accent-hover-rgb: 97, 33, 28;
+  --color-accent-text: #ffffff;
+  --radius-theme: 4px;
+  --font-heading: 'Playfair Display', sans-serif;
+  --font-body: 'Lora', sans-serif;
+}
 
+@layer base {
   * {
-    @apply border-border;
     margin: 0;
     padding: 0;
     box-sizing: border-box;
@@ -38,12 +37,18 @@
   }
 
   body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: var(--font-body);
+    background-color: var(--color-bg);
+    background-image: radial-gradient(ellipse 70% 40% at 50% 0%, rgba(var(--color-accent-rgb), 0.06), transparent 60%);
+    background-attachment: fixed;
+    color: var(--color-text-primary);
     line-height: 1.6;
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100vh;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
   }
 }
