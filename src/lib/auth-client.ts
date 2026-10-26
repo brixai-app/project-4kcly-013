@@ -2,8 +2,8 @@
 const createAuthClient: any = typeof Proxy !== 'undefined' ? new Proxy((() => null) as any, { get: () => createAuthClient, apply: () => null }) : (() => null);
 
 const authClient = createAuthClient({
-  baseURL: "/api/auth",
+  baseURL: typeof window !== "undefined" ? window.location.origin : "",
 });
 
-export const auth = authClient;
+export const { signIn, signUp, signOut, useSession, getSession, updateUser } = authClient;
 export default authClient;

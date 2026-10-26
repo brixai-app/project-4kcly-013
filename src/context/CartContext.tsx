@@ -1,146 +1,160 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import type { CartItem, Order, Product, ShippingInfo } from "@/types";
-import { products as mockProducts } from "@/data/mockData";
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import type { CartItem, Product, ProductColor, ProductSize } from '@/types';
+import { products as mockProducts } from '@/data/mockData';
 
-type CartLine = CartItem & { productId: string; quantity: number; size?: string; color?: string };
-type CartContextValue = {
-  items: CartLine[];
+export type CartMutation = {
+  product: Product;
+  quantity?: number;
+  size?: ProductSize;
+  color?: ProductColor;
+};
+
+export type CartContextValue = {
+  items: CartItem[];
+  isOpen: boolean;
   subtotal: number;
-  drawerOpen: boolean;
-  setDrawerOpen: (open: boolean) => void;
-  addItem: (product: Product, options?: { size?: string; color?: string; quantity?: number }) => void;
-  updateItem: (productId: string, options: { size?: string; color?: string }, quantity: number) => void;
-  removeItem: (productId: string, options?: { size?: string; color?: string }) => void;
+  itemCount: number;
+  openCart: () => void;
+  closeCart: () => void;
+  toggleCart: () => void;
+  addItem: (input: CartMutation) => void;
+  updateItem: (productId: string, size?: ProductSize, color?: ProductColor, quantity?: number) => void;
+  removeItem: (productId: string, size?: ProductSize, color?: ProductColor) => void;
   clearCart: () => void;
-  getItemQuantity: (productId: string, options?: { size?: string; color?: string }) => number;
-  buildOrder: (shipping: ShippingInfo, userId?: string) => Order;
+  getItemQuantity: (productId: string, size?: ProductSize, color?: ProductColor) => number;
 };
 
 const CartContext = createContext<CartContextValue | undefined>(undefined);
-const STORAGE_KEY = "jootiya-cart-v1";
+const STORAGE_KEY = 'jootiya-cart-v1';
 
-const normalize = (value?: string) => value?.trim() ?? "";
-const lineKey = (productId: string, size?: string, color?: string) => `${productId}::${normalize(size)}::${normalize(color)}`;
-const safeParse = (raw: string | null): CartLine[] => {
+function getProductById(productId: string): Product | undefined {
+  return mockProducts?.find((product) => product?.id === productId);
+}
+
+function itemKey(productId: string, size?: ProductSize, color?: ProductColor): string {
+  return [productId, size ?? '', color ?? ''].join('|');
+}
+
+function normalizeItems(items: CartItem[]): CartItem[] {
+  return items
+    .filter((item) => item?.productId)
+    .map((item) => {
+      const product = item?.product ?? getProductById(item?.productId ?? '');
+      const maxStock = product?.inStock === false ? 0 : 99;
+      const quantity = Math.max(1, Math.min(item?.quantity ?? 1, maxStock || 1));
+      return { ...item, quantity, product };
+    });
+}
+
+function readStoredCart(): CartItem[] {
+  if (typeof window === 'undefined') return [];
   try {
-    const parsed = JSON.parse(raw ?? "[]") as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((item) => ({
-        productId: String((item as CartLine)?.productId ?? ""),
-        quantity: Math.max(1, Number((item as CartLine)?.quantity ?? 1)),
-        size: normalize((item as CartLine)?.size),
-        color: normalize((item as CartLine)?.color),
-      }))
-      .filter((item) => item.productId.length > 0);
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as CartItem[];
+    return normalizeItems(Array.isArray(parsed) ? parsed : []);
   } catch {
     return [];
   }
-};
+}
 
-const findProduct = (productId: string) => mockProducts.find((product) => product.id === productId) ?? null;
-
-export function CartProvider({ children }: { children?: React.ReactNode } = {}) {
-  const [items, setItems] = useState<CartLine[]>([]);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
+export function CartProvider({ children }: { children?: React.ReactNode }) {
+  const [items, setItems] = useState<CartItem[]>(() => readStoredCart());
+  const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    setItems(safeParse(window.localStorage.getItem(STORAGE_KEY)));
-    setHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
+    if (typeof window === 'undefined') return;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-  }, [hydrated, items]);
+  }, [items]);
 
   const subtotal = useMemo(
-    () =>
-      items.reduce((sum, item) => {
-        const product = findProduct(item.productId);
-        return sum + (product?.price ?? 0) * item.quantity;
-      }, 0),
+    () => items.reduce((sum, item) => sum + (item?.product?.price ?? 0) * (item?.quantity ?? 0), 0),
     [items]
   );
 
-  const getItemQuantity = useCallback(
-    (productId: string, options: { size?: string; color?: string } = {}) =>
-      items.find((item) => lineKey(item.productId, item.size, item.color) === lineKey(productId, options.size, options.color))?.quantity ?? 0,
+  const itemCount = useMemo(
+    () => items.reduce((sum, item) => sum + (item?.quantity ?? 0), 0),
     [items]
   );
 
-  const addItem = useCallback((product: Product, options: { size?: string; color?: string; quantity?: number } = {}) => {
-    const size = normalize(options.size);
-    const color = normalize(options.color);
-    const quantity = Math.max(1, Number(options.quantity ?? 1));
-    if (product?.id == null) return;
-    if (product?.sizes?.length && size && !product.sizes.includes(size)) {
-      toast.error("Please choose an available size.");
+  const openCart = () => setIsOpen(true);
+  const closeCart = () => setIsOpen(false);
+  const toggleCart = () => setIsOpen((prev) => !prev);
+
+  const addItem = ({ product, quantity = 1, size, color }: CartMutation) => {
+    const safeProduct = product ?? undefined;
+    if (!safeProduct?.id) return;
+
+    if (safeProduct?.inStock === false) {
+      toast.error('This piece is currently unavailable.');
       return;
     }
-    if (product?.colors?.length && color && !product.colors.includes(color)) {
-      toast.error("Please choose an available color.");
-      return;
-    }
+
+    const maxStock = 99;
+    const nextQuantity = Math.max(1, Math.min(quantity, maxStock));
     setItems((current) => {
-      const key = lineKey(product.id, size, color);
-      const existing = current.find((item) => lineKey(item.productId, item.size, item.color) === key);
-      if (existing) {
-        return current.map((item) => (lineKey(item.productId, item.size, item.color) === key ? { ...item, quantity: item.quantity + quantity } : item));
+      const key = itemKey(safeProduct.id, size, color);
+      const index = current.findIndex((item) => itemKey(item?.productId ?? '', item?.size, item?.color) === key);
+      if (index >= 0) {
+        const updated = [...current];
+        const existing = updated[index];
+        const mergedQuantity = Math.min((existing?.quantity ?? 0) + nextQuantity, maxStock);
+        updated[index] = { ...existing, quantity: mergedQuantity, product: safeProduct };
+        return normalizeItems(updated);
       }
-      return [...current, { productId: product.id, quantity, size: size || undefined, color: color || undefined }];
+      return normalizeItems([...current, { productId: safeProduct.id, quantity: nextQuantity, size, color, product: safeProduct }]);
     });
-    setDrawerOpen(true);
-    toast.success(`${product?.name ?? "Item"} added to cart.`);
-  }, []);
+    toast.success('Added to cart.');
+    setIsOpen(true);
+  };
 
-  const updateItem = useCallback((productId: string, options: { size?: string; color?: string }, quantity: number) => {
-    const nextQuantity = Math.max(1, Number(quantity ?? 1));
-    const size = normalize(options?.size);
-    const color = normalize(options?.color);
+  const updateItem = (productId: string, size?: ProductSize, color?: ProductColor, quantity?: number) => {
     setItems((current) =>
-      current.map((item) =>
-        lineKey(item.productId, item.size, item.color) === lineKey(productId, size, color) ? { ...item, quantity: nextQuantity } : item
+      normalizeItems(
+        current
+          .map((item) => {
+            const matches = itemKey(item?.productId ?? '', item?.size, item?.color) === itemKey(productId, size, color);
+            if (!matches) return item;
+            if ((quantity ?? 0) <= 0) return item;
+            const product = item?.product ?? getProductById(productId);
+            const maxStock = product?.inStock === false ? 0 : 99;
+            return { ...item, quantity: Math.max(1, Math.min(quantity ?? 1, maxStock || 1)), product };
+          })
+          .filter((item) => itemKey(item?.productId ?? '', item?.size, item?.color) !== itemKey(productId, size, color) || (quantity ?? 1) > 0)
       )
     );
-  }, []);
+  };
 
-  const removeItem = useCallback((productId: string, options: { size?: string; color?: string } = {}) => {
-    const size = normalize(options.size);
-    const color = normalize(options.color);
-    setItems((current) => current.filter((item) => lineKey(item.productId, item.size, item.color) !== lineKey(productId, size, color)));
-    toast.message("Removed from cart.");
-  }, []);
+  const removeItem = (productId: string, size?: ProductSize, color?: ProductColor) => {
+    setItems((current) => current.filter((item) => itemKey(item?.productId ?? '', item?.size, item?.color) !== itemKey(productId, size, color)));
+    toast.message('Removed from cart.');
+  };
 
-  const clearCart = useCallback(() => {
+  const clearCart = () => {
     setItems([]);
-    toast.message("Cart cleared.");
-  }, []);
+    toast.message('Cart cleared.');
+  };
 
-  const buildOrder = useCallback(
-    (shipping: ShippingInfo, userId?: string) => {
-      const id = crypto.randomUUID();
-      const shippingCost = subtotal > 0 ? 0 : 0;
-      return {
-        id,
-        userId,
-        items: items.map(({ productId, quantity, size, color }) => ({ productId, quantity, size, color })),
-        shipping,
-        subtotal,
-        shippingCost,
-        total: subtotal + shippingCost,
-        status: "pending",
-        createdAt: new Date().toISOString(),
-      };
-    },
-    [items, subtotal]
-  );
+  const getItemQuantity = (productId: string, size?: ProductSize, color?: ProductColor) =>
+    items.find((item) => itemKey(item?.productId ?? '', item?.size, item?.color) === itemKey(productId, size, color))?.quantity ?? 0;
 
-  const value = useMemo(
-    () => ({ items, subtotal, drawerOpen, setDrawerOpen, addItem, updateItem, removeItem, clearCart, getItemQuantity, buildOrder }),
-    [items, subtotal, drawerOpen, addItem, updateItem, removeItem, clearCart, getItemQuantity, buildOrder]
+  const value = useMemo<CartContextValue>(
+    () => ({
+      items,
+      isOpen,
+      subtotal,
+      itemCount,
+      openCart,
+      closeCart,
+      toggleCart,
+      addItem,
+      updateItem,
+      removeItem,
+      clearCart,
+      getItemQuantity,
+    }),
+    [items, isOpen, subtotal, itemCount]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
@@ -148,8 +162,9 @@ export function CartProvider({ children }: { children?: React.ReactNode } = {}) 
 
 export function useCart() {
   const context = useContext(CartContext);
-  if (!context) throw new Error("useCart must be used within CartProvider");
+  if (!context) throw new Error('useCart must be used within a CartProvider');
   return context;
 }
 
-export default CartProvider;
+export default CartContext;
+export { CartContext };

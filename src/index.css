@@ -3,22 +3,22 @@
 @tailwind utilities;
 
 :root {
-  --color-bg: #F6F0E5;
-  --color-bg-rgb: 246, 240, 229;
+  --color-bg: #F7F0E4;
+  --color-bg-rgb: 247, 240, 228;
   --color-surface: #FFFDF8;
   --color-surface-rgb: 255, 253, 248;
-  --color-surface-hover: #EFE3D2;
-  --color-surface-hover-rgb: 239, 227, 210;
-  --color-border: #CBBCA7;
-  --color-border-rgb: 203, 188, 167;
-  --color-text-primary: #17130F;
-  --color-text-primary-rgb: 23, 19, 15;
-  --color-text-muted: #6F6254;
-  --color-text-muted-rgb: 111, 98, 84;
-  --color-accent: #A8472A;
-  --color-accent-rgb: 168, 71, 42;
-  --color-accent-hover: #84351F;
-  --color-accent-hover-rgb: 132, 53, 31;
+  --color-surface-hover: #EFE2CF;
+  --color-surface-hover-rgb: 239, 226, 207;
+  --color-border: #CDBB9F;
+  --color-border-rgb: 205, 187, 159;
+  --color-text-primary: #2B1715;
+  --color-text-primary-rgb: 43, 23, 21;
+  --color-text-muted: #765F55;
+  --color-text-muted-rgb: 118, 95, 85;
+  --color-accent: #741F2B;
+  --color-accent-rgb: 116, 31, 43;
+  --color-accent-hover: #57151F;
+  --color-accent-hover-rgb: 87, 21, 31;
   --color-accent-text: #ffffff;
   --radius-theme: 4px;
   --font-heading: 'Playfair Display', sans-serif;

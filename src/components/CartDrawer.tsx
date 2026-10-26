@@ -1,41 +1,45 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowRight, Check, Minus, Plus, ShoppingBag, Trash2, X } from 'lucide-react';
-import React from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useCart } from '@/context/CartContext';
 import { cn } from '@/lib/utils';
-import { products } from '@/data/mockData';
 
-type CartDrawerProps = {
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  className?: string;
-};
-
-export function CartDrawer({ open = false, onOpenChange = () => {}, className = '' }: CartDrawerProps = {}) {
+export function CartDrawer({ className = '' }: { className?: string }) {
   const navigate = useNavigate();
-  const { items = [], updateQuantity, removeItem, subtotal = 0, clearCart } = useCart() ?? {};
-  const count = items?.reduce((sum: number, item: any) => sum + (item?.quantity ?? 0), 0) ?? 0;
-  const shippingThreshold = 5000;
-  const shippingProgress = Math.min(100, Math.round((subtotal / shippingThreshold) * 100));
-  const remaining = Math.max(0, shippingThreshold - subtotal);
-  const lookup = React.useMemo(() => new Map((products ?? []).map((p) => [p.id, p])), []);
+  const { items, isOpen, closeCart, updateItem, removeItem, subtotal, clearCart } = useCart();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleCheckout = () => {
-    onOpenChange(false);
-    navigate('/checkout');
-    toast.message('Proceeding to checkout');
+  const shippingFee = useMemo(() => (subtotal > 0 ? 0 : 0), [subtotal]);
+  const total = useMemo(() => subtotal + shippingFee, [subtotal, shippingFee]);
+
+  const handleCheckout = async () => {
+    if (!items?.length) {
+      toast.error('Your cart is empty.');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 650));
+      toast.success('Cart ready for checkout.');
+      closeCart();
+      navigate('/checkout');
+    } catch {
+      toast.error('Unable to proceed to checkout.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={isOpen} onOpenChange={(open) => (open ? undefined : closeCart())}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-[#17130F]/45 backdrop-blur-[2px]" />
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-[#2B1715]/45 backdrop-blur-[2px]" />
         <Dialog.Content
           className={cn(
-            'fixed right-0 top-0 z-50 h-full w-full max-w-[420px] border-l border-[#CBBCA7] bg-[#FFFDF8] shadow-2xl outline-none',
+            'fixed right-0 top-0 z-50 h-full w-full max-w-[420px] border-l border-[#CDBB9F] bg-[#FFFDF8] shadow-2xl outline-none',
             className
           )}
         >
@@ -46,19 +50,19 @@ export function CartDrawer({ open = false, onOpenChange = () => {}, className = 
             transition={{ duration: 0.28, ease: 'easeOut' }}
             className="flex h-full flex-col"
           >
-            <div className="flex items-center justify-between border-b border-[#CBBCA7] px-5 py-4">
+            <div className="flex items-center justify-between border-b border-[#CDBB9F] px-5 py-4">
               <div className="min-w-0">
-                <Dialog.Title className="font-['Playfair_Display'] text-2xl font-medium tracking-tight text-[#17130F]">
+                <Dialog.Title className="font-['Playfair_Display'] text-2xl font-medium tracking-tight text-[#2B1715]">
                   Cart
                 </Dialog.Title>
-                <p className="mt-1 text-xs uppercase tracking-[0.24em] text-[#6F6254]">
-                  {count} item{count === 1 ? '' : 's'}
+                <p className="mt-1 text-xs uppercase tracking-[0.24em] text-[#765F55]">
+                  {items?.length ?? 0} item{(items?.length ?? 0) === 1 ? '' : 's'}
                 </p>
               </div>
               <Dialog.Close asChild>
                 <button
                   type="button"
-                  className="inline-flex h-10 w-10 items-center justify-center border border-[#CBBCA7] text-[#17130F] transition-colors hover:bg-[#A8472A] hover:text-white"
+                  className="inline-flex h-10 w-10 items-center justify-center border border-[#CDBB9F] text-[#2B1715] transition-colors hover:bg-[#741F2B] hover:text-white"
                   aria-label="Close cart"
                 >
                   <X className="h-4 w-4" />
@@ -67,162 +71,132 @@ export function CartDrawer({ open = false, onOpenChange = () => {}, className = 
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-4">
-              {count === 0 ? (
-                <div className="flex h-full flex-col items-start justify-center gap-4 py-10">
-                  <div className="flex h-14 w-14 items-center justify-center border border-[#CBBCA7] text-[#A8472A]">
-                    <ShoppingBag className="h-6 w-6" />
-                  </div>
-                  <div className="max-w-sm">
-                    <h3 className="font-['Playfair_Display'] text-3xl font-medium tracking-tight text-[#17130F]">
-                      Your cart is empty
-                    </h3>
-                    <p className="mt-2 text-sm leading-6 text-[#6F6254]">
-                      Add handcrafted Mojris and accessories to begin your order.
-                    </p>
-                  </div>
-                  <Dialog.Close asChild>
-                    <button
-                      type="button"
-                      onClick={() => navigate('/shop')}
-                      className="inline-flex items-center gap-2 border border-[#A8472A] bg-[#A8472A] px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-white transition-colors hover:bg-[#84351F]"
-                    >
-                      Explore collection
-                      <ArrowRight className="h-4 w-4" />
-                    </button>
-                  </Dialog.Close>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs uppercase tracking-[0.22em] text-[#6F6254]">Shipping progress</span>
-                      <span className="text-xs uppercase tracking-[0.22em] text-[#6F6254]">
-                        {shippingProgress}% to free shipping
-                      </span>
-                    </div>
-                    <div className="h-2 overflow-hidden border border-[#CBBCA7] bg-white">
-                      <div className="h-full bg-[#A8472A]" style={{ width: `${shippingProgress}%` }} />
-                    </div>
-                    <p className="text-sm text-[#6F6254]">
-                      {remaining > 0 ? `Add ₹${remaining.toLocaleString('en-IN')} more for free shipping.` : 'You have unlocked free shipping.'}
-                    </p>
-                  </div>
-
-                  <AnimatePresence initial={false}>
-                    {items?.map((item: any) => {
-                      const product = lookup.get(item?.productId ?? '');
-                      if (!product) return null;
-                      const lineTotal = (product?.price ?? 0) * (item?.quantity ?? 0);
+              <AnimatePresence initial={false}>
+                {items?.length ? (
+                  <div className="flex flex-col gap-4">
+                    {items.map((item) => {
+                      const product = item.product;
+                      const key = `${item.productId}-${item.size ?? 'na'}-${item.color ?? 'na'}`;
                       return (
                         <motion.div
-                          key={`${item?.productId ?? ''}-${item?.size ?? ''}-${item?.color ?? ''}`}
+                          key={key}
                           layout
-                          initial={{ opacity: 0, y: 12 }}
+                          initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -12 }}
-                          className="flex gap-4 border-b border-[#CBBCA7] pb-4"
+                          exit={{ opacity: 0, y: -10 }}
+                          className="flex gap-3 border border-[#CDBB9F] bg-white p-3"
                         >
                           <img
-                            src={product?.image ?? ''}
-                            alt={product?.name ?? 'Product'}
+                            src={product?.image ?? 'https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=800&q=80'}
+                            alt={product?.name ?? 'Product image'}
                             crossOrigin="anonymous"
-                            className="h-24 w-20 shrink-0 border border-[#CBBCA7] object-cover"
+                            className="h-24 w-20 shrink-0 object-cover"
                           />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <p className="truncate font-['Playfair_Display'] text-lg text-[#17130F]">{product?.name ?? ''}</p>
-                                <p className="mt-1 text-xs uppercase tracking-[0.2em] text-[#6F6254]">
-                                  {product?.collection ?? product?.category ?? ''}
+                                <p className="truncate font-['Playfair_Display'] text-base text-[#2B1715]">
+                                  {product?.name ?? 'Mojri'}
+                                </p>
+                                <p className="mt-1 truncate text-xs uppercase tracking-[0.18em] text-[#765F55]">
+                                  {product?.category ?? 'artisan'}
                                 </p>
                               </div>
                               <button
                                 type="button"
-                                onClick={() => removeItem?.(item)}
-                                className="inline-flex h-9 w-9 items-center justify-center border border-[#CBBCA7] text-[#17130F] transition-colors hover:bg-[#A8472A] hover:text-white"
+                                onClick={() => removeItem(item.productId, item.size, item.color)}
+                                className="inline-flex h-8 w-8 items-center justify-center border border-[#CDBB9F] text-[#765F55] transition-colors hover:border-[#741F2B] hover:text-[#741F2B]"
                                 aria-label="Remove item"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>
                             </div>
 
-                            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#6F6254]">
-                              {item?.size ? <span className="border border-[#CBBCA7] px-2 py-1">Size {item.size}</span> : null}
-                              {item?.color ? <span className="border border-[#CBBCA7] px-2 py-1">Color {item.color}</span> : null}
+                            <div className="mt-2 flex flex-wrap gap-2 text-xs uppercase tracking-[0.18em] text-[#765F55]">
+                              {item.size ? <span className="border border-[#CDBB9F] px-2 py-1">{item.size}</span> : null}
+                              {item.color ? <span className="border border-[#CDBB9F] px-2 py-1">{item.color}</span> : null}
                             </div>
 
-                            <div className="mt-4 flex items-center justify-between gap-3">
-                              <div className="inline-flex items-center border border-[#CBBCA7]">
+                            <div className="mt-3 flex items-center justify-between gap-3">
+                              <div className="flex items-center border border-[#CDBB9F]">
                                 <button
                                   type="button"
-                                  onClick={() => updateQuantity?.(item, Math.max(1, (item?.quantity ?? 1) - 1))}
-                                  className="flex h-9 w-9 items-center justify-center text-[#17130F] transition-colors hover:bg-[#F6F0E5]"
+                                  onClick={() => updateItem(item.productId, item.size, item.color, Math.max(1, (item.quantity ?? 1) - 1))}
+                                  className="inline-flex h-8 w-8 items-center justify-center text-[#2B1715] transition-colors hover:bg-[#F7F0E4]"
                                   aria-label="Decrease quantity"
                                 >
-                                  <Minus className="h-4 w-4" />
+                                  <Minus className="h-3.5 w-3.5" />
                                 </button>
-                                <span className="min-w-10 px-3 text-center text-sm text-[#17130F]">{item?.quantity ?? 1}</span>
+                                <span className="min-w-9 px-2 text-center text-sm text-[#2B1715]">{item.quantity ?? 1}</span>
                                 <button
                                   type="button"
-                                  onClick={() => updateQuantity?.(item, (item?.quantity ?? 1) + 1)}
-                                  className="flex h-9 w-9 items-center justify-center text-[#17130F] transition-colors hover:bg-[#F6F0E5]"
+                                  onClick={() => updateItem(item.productId, item.size, item.color, (item.quantity ?? 1) + 1)}
+                                  className="inline-flex h-8 w-8 items-center justify-center text-[#2B1715] transition-colors hover:bg-[#F7F0E4]"
                                   aria-label="Increase quantity"
                                 >
-                                  <Plus className="h-4 w-4" />
+                                  <Plus className="h-3.5 w-3.5" />
                                 </button>
                               </div>
-                              <div className="text-right">
-                                <p className="text-sm font-semibold text-[#17130F]">₹{lineTotal.toLocaleString('en-IN')}</p>
-                                <p className="text-xs uppercase tracking-[0.18em] text-[#6F6254]">
-                                  ₹{(product?.price ?? 0).toLocaleString('en-IN')} each
-                                </p>
-                              </div>
+                              <p className="text-sm font-semibold text-[#2B1715]">
+                                ₹{((product?.price ?? 0) * (item.quantity ?? 1)).toLocaleString('en-IN')}
+                              </p>
                             </div>
                           </div>
                         </motion.div>
                       );
                     })}
-                  </AnimatePresence>
-                </div>
-              )}
+                  </div>
+                ) : (
+                  <div className="flex h-full min-h-[320px] flex-col items-center justify-center text-center">
+                    <div className="mb-4 inline-flex h-16 w-16 items-center justify-center border border-[#CDBB9F] text-[#741F2B]">
+                      <ShoppingBag className="h-7 w-7" />
+                    </div>
+                    <p className="font-['Playfair_Display'] text-2xl text-[#2B1715]">Your cart is empty</p>
+                    <p className="mt-2 max-w-xs text-sm leading-6 text-[#765F55]">
+                      Add a pair of handcrafted Mojris to begin your order.
+                    </p>
+                  </div>
+                )}
+              </AnimatePresence>
             </div>
 
-            <div className="border-t border-[#CBBCA7] bg-[#FFFDF8] px-5 py-4">
-              <div className="space-y-2 text-sm">
+            <div className="border-t border-[#CDBB9F] bg-[#FFFDF8] px-5 py-4">
+              <div className="space-y-2 text-sm text-[#2B1715]">
                 <div className="flex items-center justify-between">
-                  <span className="text-[#6F6254]">Subtotal</span>
-                  <span className="font-semibold text-[#17130F]">₹{subtotal.toLocaleString('en-IN')}</span>
+                  <span className="text-[#765F55]">Subtotal</span>
+                  <span>₹{subtotal.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-[#6F6254]">Shipping</span>
-                  <span className="text-[#17130F]">{subtotal >= shippingThreshold ? 'Free' : 'Calculated at checkout'}</span>
+                  <span className="text-[#765F55]">Shipping</span>
+                  <span>{shippingFee === 0 ? 'Complimentary' : `₹${shippingFee.toLocaleString('en-IN')}`}</span>
+                </div>
+                <div className="flex items-center justify-between border-t border-[#CDBB9F] pt-2 text-base font-semibold">
+                  <span>Total</span>
+                  <span>₹{total.toLocaleString('en-IN')}</span>
                 </div>
               </div>
 
               <div className="mt-4 flex gap-3">
                 <button
                   type="button"
-                  onClick={handleCheckout}
-                  className="flex-1 inline-flex items-center justify-center gap-2 bg-[#A8472A] px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-white transition-colors hover:bg-[#84351F]"
-                >
-                  Checkout
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    clearCart?.();
-                    toast.success('Cart cleared');
-                  }}
-                  className="inline-flex items-center justify-center border border-[#CBBCA7] px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#17130F] transition-colors hover:bg-[#F6F0E5]"
+                  onClick={() => clearCart()}
+                  className="inline-flex flex-1 items-center justify-center border border-[#CDBB9F] px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#2B1715] transition-colors hover:bg-[#F7F0E4]"
                 >
                   Clear
                 </button>
-              </div>
-
-              <div className="mt-3 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#6F6254]">
-                <Check className="h-4 w-4 text-[#A8472A]" />
-                Secure checkout and local cart persistence
+                <button
+                  type="button"
+                  onClick={() => void handleCheckout()}
+                  disabled={!items?.length || isSubmitting}
+                  className="inline-flex flex-1 items-center justify-center gap-2 bg-[#741F2B] px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-white transition-colors hover:bg-[#57151F] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSubmitting ? (
+                    <Check className="h-4 w-4 animate-pulse" />
+                  ) : (
+                    <ArrowRight className="h-4 w-4" />
+                  )}
+                  Checkout
+                </button>
               </div>
             </div>
           </motion.div>

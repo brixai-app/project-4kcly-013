@@ -1,134 +1,165 @@
-// [auto-quarantined uninstalled package "hono"] import { Hono } from "hono";
+// [auto-quarantined uninstalled package "hono"] import { Hono } from 'hono';
 const Hono: any = typeof Proxy !== 'undefined' ? new Proxy((() => null) as any, { get: () => Hono, apply: () => null }) : (() => null);
-// [auto-quarantined uninstalled package "hono/cors"] import { cors } from "hono/cors";
+// [auto-quarantined uninstalled package "hono/cors"] import { cors } from 'hono/cors';
 const cors: any = typeof Proxy !== 'undefined' ? new Proxy((() => null) as any, { get: () => cors, apply: () => null }) : (() => null);
-import auth from "./auth";
+import auth from './auth';
 import {
-  createOrder,
+  clearOrders,
+  getDbStats,
   getOrderById,
+  getOrders,
+  getProductById,
+  getProductBySlug,
   getProducts,
-  initializeDatabase,
-  listOrders,
-} from "./db";
-import type { Order, Product } from "../src/types";
+  insertOrder,
+  initDb,
+  seedDb,
+} from './db';
+import type { CheckoutPayload, Order, Product } from '../src/types';
 
 const app = new Hono();
 
+const jsonError = (message: string, status = 400, details?: unknown) =>
+  new Response(JSON.stringify({ error: message, details: details ?? null }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+const parseBody = async <T,>(c: Parameters<typeof app.post>[1] extends (c: infer C) => any ? C : never): Promise<T | null> => {
+  try {
+    return (await c.req.json()) as T;
+  } catch {
+    return null;
+  }
+};
+
+const isValidOrder = (payload: CheckoutPayload | null): payload is CheckoutPayload => {
+  const items = payload?.items ?? [];
+  const shipping = payload?.shipping;
+  const payment = payload?.payment;
+  return (
+    Array.isArray(items) &&
+    items.length > 0 &&
+    !!shipping?.fullName &&
+    !!shipping?.email &&
+    !!shipping?.phone &&
+    !!shipping?.addressLine1 &&
+    !!shipping?.city &&
+    !!shipping?.state &&
+    !!shipping?.postalCode &&
+    !!shipping?.country &&
+    !!payment?.method
+  );
+};
+
 app.use(
-  "*",
+  '*',
   cors({
-    origin: "*",
-    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization"],
-    exposeHeaders: ["Content-Length", "X-Requested-With"],
+    origin: '*',
+    allowHeaders: ['Content-Type', 'Authorization'],
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    exposeHeaders: ['Content-Length'],
     maxAge: 86400,
   })
 );
 
-app.get("/api/health", (c) => c.json({ ok: true, service: "jootiya-api" }));
+app.route('/api/auth', auth);
 
-app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
+app.get('/api/health', (c) => c.json({ ok: true, service: 'jootiya-api' }));
 
-app.get("/api/products", async (c) => {
-  const query = c.req.query("query") ?? "";
-  const category = c.req.query("category") ?? "";
-  const collection = c.req.query("collection") ?? "";
-  const artisanId = c.req.query("artisanId") ?? "";
-  const priceMin = Number(c.req.query("priceMin") ?? "");
-  const priceMax = Number(c.req.query("priceMax") ?? "");
-  const inStockOnly = c.req.query("inStockOnly") === "true";
-  const featuredOnly = c.req.query("featuredOnly") === "true";
-
-  const products = await getProducts({
-    query: query || undefined,
-    category: category || undefined,
-    collection: collection || undefined,
-    artisanId: artisanId || undefined,
-    priceMin: Number.isFinite(priceMin) ? priceMin : undefined,
-    priceMax: Number.isFinite(priceMax) ? priceMax : undefined,
-    inStockOnly,
-    featuredOnly,
-  });
-
+app.get('/api/products', async (c) => {
+  const slug = c.req.query('slug') ?? '';
+  const id = c.req.query('id') ?? '';
+  const products = await getProducts();
+  if (slug) {
+    const product = await getProductBySlug(slug);
+    return product ? c.json(product) : jsonError('Product not found', 404);
+  }
+  if (id) {
+    const product = await getProductById(id);
+    return product ? c.json(product) : jsonError('Product not found', 404);
+  }
   return c.json({ products });
 });
 
-app.get("/api/products/:slug", async (c) => {
-  const slug = c.req.param("slug") ?? "";
-  const products = await getProducts({ query: slug });
-  const product = products.find((item) => item.slug === slug) ?? null;
-  return product ? c.json({ product }) : c.json({ error: "Product not found" }, 404);
+app.get('/api/products/:slug', async (c) => {
+  const slug = c.req.param('slug') ?? '';
+  const product = await getProductBySlug(slug);
+  return product ? c.json(product) : jsonError('Product not found', 404);
 });
 
-app.post("/api/orders", async (c) => {
-  const body = (await c.req.json().catch(() => null)) as Partial<Order> | null;
-  const items = body?.items ?? [];
-  const shipping = body?.shipping ?? null;
+app.get('/api/orders', async () => c.json({ orders: await getOrders() }));
 
-  if (!Array.isArray(items) || items.length === 0 || !shipping?.fullName || !shipping?.email || !shipping?.addressLine1 || !shipping?.city || !shipping?.state || !shipping?.postalCode || !shipping?.country) {
-    return c.json({ error: "Invalid order payload" }, 400);
-  }
+app.get('/api/orders/:id', async (c) => {
+  const order = await getOrderById(c.req.param('id') ?? '');
+  return order ? c.json(order) : jsonError('Order not found', 404);
+});
 
-  const subtotal = Number(body?.subtotal ?? 0);
-  const shippingCost = Number(body?.shippingCost ?? 0);
-  const total = Number(body?.total ?? subtotal + shippingCost);
+app.post('/api/orders', async (c) => {
+  const payload = await parseBody<CheckoutPayload>(c);
+  if (!isValidOrder(payload)) return jsonError('Invalid order payload', 422);
+
+  const products = await getProducts();
+  const normalizedItems = payload.items
+    .map((item) => {
+      const product = products.find((p) => p.id === item?.productId) ?? item?.product;
+      if (!product) return null;
+      return {
+        productId: product.id,
+        quantity: Math.max(1, Number(item?.quantity ?? 1)),
+        size: item?.size,
+        color: item?.color,
+        product,
+      };
+    })
+    .filter(Boolean) as Order['items'];
+
+  if (normalizedItems.length === 0) return jsonError('No valid items found', 422);
+
+  const subtotal = normalizedItems.reduce((sum, item) => sum + (item.product?.price ?? 0) * item.quantity, 0);
+  const shippingFee = subtotal >= 5000 ? 0 : 250;
+  const total = subtotal + shippingFee;
 
   const order: Order = {
-    id: body?.id ?? crypto.randomUUID(),
-    userId: body?.userId,
-    items: items as Order["items"],
-    shipping: shipping as Order["shipping"],
-    subtotal: Number.isFinite(subtotal) ? subtotal : 0,
-    shippingCost: Number.isFinite(shippingCost) ? shippingCost : 0,
-    total: Number.isFinite(total) ? total : 0,
-    status: body?.status ?? "pending",
-    createdAt: body?.createdAt ?? new Date().toISOString(),
+    id: crypto.randomUUID(),
+    items: normalizedItems,
+    shipping: payload.shipping,
+    payment: payload.payment,
+    subtotal,
+    shippingFee,
+    total,
+    status: 'confirmed',
+    createdAt: new Date().toISOString(),
   };
 
-  const saved = await createOrder(order);
+  const saved = await insertOrder(order);
   return c.json({ order: saved }, 201);
 });
 
-app.get("/api/orders/:id", async (c) => {
-  const id = c.req.param("id") ?? "";
-  const order = await getOrderById(id);
-  return order ? c.json({ order }) : c.json({ error: "Order not found" }, 404);
+app.get('/api/_admin/db/stats', async (c) => c.json(await getDbStats()));
+
+app.get('/api/_admin/db/schema', async (c) => {
+  const stats = await getDbStats();
+  return c.json({
+    tables: ['products', 'orders', 'artisans'],
+    stats,
+    endpoints: ['/api/products', '/api/orders', '/api/_admin/db/stats', '/api/_admin/db/schema'],
+  });
 });
 
-app.get("/api/orders", async (c) => {
-  const userId = c.req.query("userId") ?? undefined;
-  const orders = await listOrders(userId);
-  return c.json({ orders });
-});
-
-app.get("/api/_admin/db/tables", async (c) => {
-  const tables = ["products", "orders", "users", "sessions", "accounts", "verification"];
-  return c.json({ tables });
-});
-
-app.get("/api/_admin/db/products", async (c) => {
-  const products = await getProducts({});
-  return c.json({ count: products.length, products });
-});
-
-app.get("/api/_admin/db/orders", async (c) => {
-  const orders = await listOrders();
-  return c.json({ count: orders.length, orders });
-});
-
-app.post("/api/_admin/db/seed-check", async (c) => {
-  await initializeDatabase();
+app.post('/api/_admin/db/seed', async (c) => {
+  await initDb();
+  await seedDb();
   return c.json({ ok: true });
 });
 
-app.notFound((c) => c.json({ error: "Not found" }, 404));
-
-app.onError((err, c) => {
-  console.error(err);
-  return c.json({ error: "Internal server error" }, 500);
+app.post('/api/_admin/db/clear-orders', async (c) => {
+  await clearOrders();
+  return c.json({ ok: true });
 });
 
-await initializeDatabase();
+app.notFound((c) => jsonError('Route not found', 404));
+app.onError((err) => jsonError('Internal server error', 500, err instanceof Error ? err.message : String(err ?? 'unknown')));
 
 export { app };
 export default app;
