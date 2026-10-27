@@ -1,136 +1,133 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import type { Cart, CartItem, PersistedOrder, Product } from '@/types';
+import type { CartItem, CheckoutFormState, Order, Product, ShippingInfo } from '@/types';
 
 type CartContextValue = {
   items: CartItem[];
-  subtotal: number;
-  itemCount: number;
   isOpen: boolean;
+  latestOrder: Order | null;
+  subtotal: number;
+  shippingFee: number;
+  total: number;
+  itemCount: number;
   openCart: () => void;
   closeCart: () => void;
   toggleCart: () => void;
-  addItem: (product: Product, quantity?: number, size?: string, color?: string) => void;
-  updateQuantity: (productId: string, quantity: number, size?: string, color?: string) => void;
-  removeItem: (productId: string, size?: string, color?: string) => void;
+  addItem: (product: Product, quantity?: number, size?: string) => void;
+  updateQuantity: (productId: string, quantity: number, size?: string) => void;
+  removeItem: (productId: string, size?: string) => void;
   clearCart: () => void;
-  submitOrder: (order: Omit<PersistedOrder, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'items' | 'subtotal'> & { items?: CartItem[]; subtotal?: number }) => Promise<PersistedOrder | null>;
+  setDrawerOpen: (open: boolean) => void;
+  setLatestOrder: (order: Order | null) => void;
+  createOrderFromCheckout: (form: CheckoutFormState) => Order;
 };
 
 const CartContext = createContext<CartContextValue | undefined>(undefined);
-const STORAGE_KEY = 'jootiya-cart-v1';
-const ORDER_KEY = 'jootiya-orders-v1';
 
-const safeParse = <T,>(value: string | null, fallback: T): T => {
-  try {
-    return value ? (JSON.parse(value) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-};
+const clampQuantity = (quantity: number) => Math.min(5, Math.max(1, Math.round(quantity || 1)));
 
-const keyOf = (productId: string, size?: string, color?: string) => `${productId}::${size ?? ''}::${color ?? ''}`;
+const makeKey = (productId: string, size?: string) => `${productId}::${size ?? 'default'}`;
 
-const clampQty = (quantity: number) => Math.min(5, Math.max(1, Math.floor(quantity || 1)));
-
-const toCart = (items: CartItem[]): Cart => ({
-  items,
-  subtotal: items.reduce((sum, item) => sum + item.price * item.quantity, 0),
-  itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
+const buildShipping = (form: CheckoutFormState): ShippingInfo => ({
+  fullName: form?.shipping?.fullName ?? '',
+  phone: form?.shipping?.phone ?? '',
+  email: form?.shipping?.email ?? '',
+  addressLine1: form?.shipping?.addressLine1 ?? '',
+  addressLine2: form?.shipping?.addressLine2 ?? '',
+  city: form?.shipping?.city ?? '',
+  state: form?.shipping?.state ?? '',
+  postalCode: form?.shipping?.postalCode ?? '',
+  country: form?.shipping?.country ?? 'India',
 });
 
 export function CartProvider({ children }: { children?: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [latestOrder, setLatestOrder] = useState<Order | null>(null);
 
-  useEffect(() => {
-    const stored = safeParse<CartItem[]>(localStorage.getItem(STORAGE_KEY), []);
-    setItems(Array.isArray(stored) ? stored.filter((item) => item?.productId && item?.quantity > 0) : []);
-  }, []);
+  const subtotal = useMemo(
+    () =>
+      items.reduce((sum, item) => {
+        const price = item?.product?.price ?? 0;
+        return sum + price * (item?.quantity ?? 0);
+      }, 0),
+    [items],
+  );
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-  }, [items]);
+  const shippingFee = useMemo(() => (subtotal > 0 && subtotal < 5000 ? 250 : 0), [subtotal]);
+  const total = useMemo(() => subtotal + shippingFee, [subtotal, shippingFee]);
+  const itemCount = useMemo(() => items.reduce((sum, item) => sum + (item?.quantity ?? 0), 0), [items]);
 
-  const openCart = useCallback(() => setIsOpen(true), []);
-  const closeCart = useCallback(() => setIsOpen(false), []);
-  const toggleCart = useCallback(() => setIsOpen((prev) => !prev), []);
+  const openCart = () => setIsOpen(true);
+  const closeCart = () => setIsOpen(false);
+  const toggleCart = () => setIsOpen((prev) => !prev);
+  const setDrawerOpen = (open: boolean) => setIsOpen(open);
 
-  const addItem = useCallback((product: Product, quantity = 1, size?: string, color?: string) => {
+  const addItem = (product: Product, quantity = 1, size?: string) => {
     if (!product?.id) return;
-    if (product?.inStock === false) {
-      toast.error('This style is currently out of stock.');
-      return;
-    }
-    const nextQty = clampQty(quantity);
+    const nextQuantity = clampQuantity(quantity);
     setItems((prev) => {
-      const idx = prev.findIndex((item) => keyOf(item.productId, item.size, item.color) === keyOf(product.id, size, color));
-      if (idx >= 0) {
-        const merged = clampQty((prev[idx]?.quantity ?? 1) + nextQty);
+      const key = makeKey(product.id, size);
+      const index = prev.findIndex((item) => makeKey(item?.productId ?? '', item?.size) === key);
+      if (index >= 0) {
         const next = [...prev];
-        next[idx] = { ...next[idx], quantity: merged };
-        toast.success('Updated cart.');
+        const current = next[index];
+        next[index] = { ...current, quantity: clampQuantity((current?.quantity ?? 0) + nextQuantity), product };
         return next;
       }
-      toast.success('Added to cart.');
-      return [...prev, { productId: product.id, name: product.name, slug: product.slug, price: product.price, image: product.image, quantity: nextQty, size, color }];
+      return [...prev, { productId: product.id, quantity: nextQuantity, size, product }];
     });
+    toast.success(`${product?.name ?? 'Item'} added to cart`);
     setIsOpen(true);
-  }, []);
+  };
 
-  const updateQuantity = useCallback((productId: string, quantity: number, size?: string, color?: string) => {
-    const nextQty = clampQty(quantity);
-    setItems((prev) => prev.map((item) => (keyOf(item.productId, item.size, item.color) === keyOf(productId, size, color) ? { ...item, quantity: nextQty } : item)));
-  }, []);
+  const updateQuantity = (productId: string, quantity: number, size?: string) => {
+    const nextQuantity = clampQuantity(quantity);
+    setItems((prev) =>
+      prev
+        .map((item) =>
+          makeKey(item?.productId ?? '', item?.size) === makeKey(productId, size)
+            ? { ...item, quantity: nextQuantity }
+            : item,
+        )
+        .filter((item) => (item?.quantity ?? 0) > 0),
+    );
+  };
 
-  const removeItem = useCallback((productId: string, size?: string, color?: string) => {
-    setItems((prev) => prev.filter((item) => keyOf(item.productId, item.size, item.color) !== keyOf(productId, size, color)));
-    toast.message('Removed from cart.');
-  }, []);
+  const removeItem = (productId: string, size?: string) => {
+    setItems((prev) => prev.filter((item) => makeKey(item?.productId ?? '', item?.size) !== makeKey(productId, size)));
+  };
 
-  const clearCart = useCallback(() => {
-    setItems([]);
-    toast.message('Cart cleared.');
-  }, []);
+  const clearCart = () => setItems([]);
 
-  const submitOrder = useCallback(async (order: Omit<PersistedOrder, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'items' | 'subtotal'> & { items?: CartItem[]; subtotal?: number }) => {
-    const payloadItems = (order?.items?.length ? order.items : items).filter((item) => item?.productId && item?.quantity > 0);
-    if (!payloadItems.length) {
-      toast.error('Your cart is empty.');
-      return null;
-    }
-    const subtotal = order?.subtotal ?? toCart(payloadItems).subtotal;
-    const now = new Date().toISOString();
-    const persisted: PersistedOrder = {
+  const createOrderFromCheckout = (form: CheckoutFormState) => {
+    const order: Order = {
       id: crypto.randomUUID(),
-      cartId: order?.cartId,
-      customerName: order?.customerName ?? '',
-      email: order?.email ?? '',
-      phone: order?.phone,
-      address: order?.address,
-      city: order?.city,
-      state: order?.state,
-      pincode: order?.pincode,
-      notes: order?.notes,
-      items: payloadItems,
+      items: items.map((item) => ({ ...item })),
+      shipping: buildShipping(form),
+      paymentMethod: form?.paymentMethod ?? 'cod',
       subtotal,
-      status: 'draft',
-      createdAt: now,
-      updatedAt: now,
+      shippingFee,
+      total,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
     };
-    const orders = safeParse<PersistedOrder[]>(localStorage.getItem(ORDER_KEY), []);
-    localStorage.setItem(ORDER_KEY, JSON.stringify([persisted, ...orders]));
-    toast.success('Order saved.');
-    return persisted;
-  }, [items]);
+    setLatestOrder(order);
+    clearCart();
+    closeCart();
+    toast.success('Order created successfully');
+    return order;
+  };
 
-  const value = useMemo<CartContextValue>(() => {
-    const cart = toCart(items);
-    return {
-      items: cart.items,
-      subtotal: cart.subtotal,
-      itemCount: cart.itemCount,
+  const value = useMemo<CartContextValue>(
+    () => ({
+      items,
       isOpen,
+      latestOrder,
+      subtotal,
+      shippingFee,
+      total,
+      itemCount,
       openCart,
       closeCart,
       toggleCart,
@@ -138,9 +135,12 @@ export function CartProvider({ children }: { children?: React.ReactNode }) {
       updateQuantity,
       removeItem,
       clearCart,
-      submitOrder,
-    };
-  }, [items, isOpen, openCart, closeCart, toggleCart, addItem, updateQuantity, removeItem, clearCart, submitOrder]);
+      setDrawerOpen,
+      setLatestOrder,
+      createOrderFromCheckout,
+    }),
+    [items, isOpen, latestOrder, subtotal, shippingFee, total, itemCount],
+  );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

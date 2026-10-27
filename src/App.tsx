@@ -1,53 +1,44 @@
-import React, { useEffect, useState } from "react";
-import { HashRouter, Routes, Route, useLocation } from "react-router-dom";
-import { Toaster } from "sonner";
-import { AnimatePresence, motion } from "framer-motion";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
-import CartDrawer from "@/components/CartDrawer";
-import AuthModal from "@/components/AuthModal";
-import { CartProvider } from "@/context/CartContext";
-import Home from "@/pages/Home";
-import ShopPage from "@/pages/ShopPage";
-import { ProductPage, CartPage, ArtisanStoriesPage } from "@/pages/HeritagePages";
+import React, { useMemo, useState } from 'react';
+import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Toaster } from 'sonner';
+import { AnimatePresence, motion } from 'framer-motion';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
+import CartDrawer from '@/components/CartDrawer';
+import AuthModal from '@/components/AuthModal';
+import { CartProvider } from '@/context/CartContext';
+import Home from '@/pages/Home';
+import ShopPage from '@/pages/ShopPage';
+import JourneyPages from '@/pages/JourneyPages';
 
 function AppShell() {
   const location = useLocation();
   const [cartOpen, setCartOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
 
-  useEffect(() => {
-    const onOpenCart = () => setCartOpen(true);
-    const onOpenAuth = () => setAuthOpen(true);
-    window.addEventListener("jootiya:open-cart", onOpenCart);
-    window.addEventListener("jootiya:open-auth", onOpenAuth);
-    return () => {
-      window.removeEventListener("jootiya:open-cart", onOpenCart);
-      window.removeEventListener("jootiya:open-auth", onOpenAuth);
-    };
-  }, []);
+  const pageKey = useMemo(() => location.pathname + location.hash, [location.pathname, location.hash]);
 
   return (
-    <div className="min-h-screen bg-[#F5F0E6] text-[#2B2B2B]">
-      <Header />
-      <AnimatePresence mode="wait">
-        <motion.main
-          key={location.pathname}
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.35, ease: "easeOut" }}
-          className="min-h-[calc(100vh-8rem)]"
-        >
-          <Routes location={location}>
-            <Route path="/" element={<Home />} />
-            <Route path="/shop" element={<ShopPage />} />
-            <Route path="/product/:slug" element={<ProductPage />} />
-            <Route path="/cart" element={<CartPage />} />
-            <Route path="/stories" element={<ArtisanStoriesPage />} />
-          </Routes>
-        </motion.main>
-      </AnimatePresence>
+    <div className="min-h-screen bg-[#FAF9F6] text-[#2B2B2B]">
+      <Header className="sticky top-0 z-40" />
+      <main className="relative">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={pageKey}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+          >
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/shop" element={<ShopPage />} />
+              <Route path="/journey/*" element={<JourneyPages />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </motion.div>
+        </AnimatePresence>
+      </main>
       <Footer />
       <CartDrawer open={cartOpen} onOpenChange={setCartOpen} />
       <AuthModal open={authOpen} onOpenChange={setAuthOpen} />

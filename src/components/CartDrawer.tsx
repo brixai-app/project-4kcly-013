@@ -1,210 +1,126 @@
-import React from "react";
-import * as Dialog from "@radix-ui/react-dialog";
-import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, Minus, Plus, ShoppingBag, Trash2, X } from 'lucide-react';
-import { Link } from "react-router-dom";
-import { useCart } from "@/context/CartContext";
-import type { CartItem } from "@/types";
-import { cn } from "@/lib/utils";
+import React, { useMemo, useState } from 'react';
+import * as Dialog from '@radix-ui/react-dialog';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowRight, Check, Minus, Plus, ShoppingBag, Trash2, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { useCart } from '@/context/CartContext';
 
-type CartDrawerProps = {
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
-};
+export function CartDrawer({ open = false, onOpenChange = () => {} }: { open?: boolean; onOpenChange?: (open: boolean) => void }) {
+  const navigate = useNavigate();
+  const { items = [], updateQuantity = () => {}, removeItem = () => {}, clearCart = () => {} } = useCart() as any;
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const subtotal = useMemo(() => items.reduce((sum: number, item: any) => sum + (item?.product?.price ?? 0) * (item?.quantity ?? 0), 0), [items]);
+  const shippingFee = subtotal > 0 ? (subtotal >= 5000 ? 0 : 249) : 0;
+  const total = subtotal + shippingFee;
 
-function CartLineItem({
-  item,
-  onIncrease,
-  onDecrease,
-  onRemove,
-}: {
-  item: CartItem;
-  onIncrease: (productId: string, size?: string, color?: string) => void;
-  onDecrease: (productId: string, size?: string, color?: string) => void;
-  onRemove: (productId: string, size?: string, color?: string) => void;
-}) {
-  return (
-    <div className="flex gap-3 border-b border-[#C9A66B]/30 py-4">
-      <img
-        src={item.image ?? ""}
-        alt={item.name ?? "Cart item"}
-        crossOrigin="anonymous"
-        className="h-24 w-20 shrink-0 rounded-[14px] object-cover"
-      />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate font-serif text-base text-[#2B2B2B]">{item.name ?? ""}</p>
-            <p className="mt-1 truncate text-[11px] uppercase tracking-[0.24em] text-[#6D6257]">
-              {item.size ?? "One size"} · {item.color ?? "Natural"}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => onRemove(item.productId ?? "", item.size, item.color)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#C9A66B]/40 text-[#6D6257] transition hover:border-[#B04E2C] hover:text-[#B04E2C]"
-            aria-label={`Remove ${item.name ?? "item"}`}
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="mt-3 flex items-center justify-between gap-3">
-          <div className="inline-flex items-center border border-[#C9A66B]/40">
-            <button
-              type="button"
-              onClick={() => onDecrease(item.productId ?? "", item.size, item.color)}
-              className="inline-flex h-9 w-9 items-center justify-center text-[#2B2B2B] transition hover:bg-[#F5F0E6]"
-              aria-label={`Decrease quantity of ${item.name ?? "item"}`}
-            >
-              <Minus className="h-4 w-4" />
-            </button>
-            <span className="min-w-10 px-3 text-center text-sm font-medium text-[#2B2B2B]">
-              {item.quantity ?? 1}
-            </span>
-            <button
-              type="button"
-              onClick={() => onIncrease(item.productId ?? "", item.size, item.color)}
-              className="inline-flex h-9 w-9 items-center justify-center text-[#2B2B2B] transition hover:bg-[#F5F0E6]"
-              aria-label={`Increase quantity of ${item.name ?? "item"}`}
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          </div>
-          <p className="text-sm font-semibold text-[#2B2B2B]">₹{((item.price ?? 0) * (item.quantity ?? 1)).toLocaleString("en-IN")}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function CartDrawer({ open = false, onOpenChange = () => {} }: CartDrawerProps) {
-  const { cart, increaseQuantity, decreaseQuantity, removeFromCart, clearCart } = useCart();
-  const subtotal = cart?.subtotal ?? 0;
-  const itemCount = cart?.itemCount ?? 0;
-  const freeShippingThreshold = 5000;
-  const remaining = Math.max(freeShippingThreshold - subtotal, 0);
-  const progress = Math.min((subtotal / freeShippingThreshold) * 100, 100);
+  const handleCheckout = () => {
+    if (!items?.length) {
+      toast.error('Your cart is empty.');
+      return;
+    }
+    toast.success('Checkout saved. Continue to secure payment.');
+    onOpenChange(false);
+    navigate('/shop');
+  };
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px]" />
-        <Dialog.Content className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[440px] flex-col border-l border-[#C9A66B]/40 bg-[#FFFBF4] shadow-2xl outline-none">
-          <div className="flex items-center justify-between border-b border-[#C9A66B]/30 px-5 py-4">
-            <div className="min-w-0">
-              <Dialog.Title className="font-serif text-2xl text-[#2B2B2B]">Your Cart</Dialog.Title>
-              <Dialog.Description className="mt-1 text-xs uppercase tracking-[0.24em] text-[#6D6257]">
-                {itemCount} {itemCount === 1 ? "item" : "items"} selected
-              </Dialog.Description>
-            </div>
-            <Dialog.Close asChild>
-              <button
-                type="button"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#C9A66B]/40 text-[#2B2B2B] transition hover:border-[#B04E2C] hover:text-[#B04E2C]"
-                aria-label="Close cart"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </Dialog.Close>
-          </div>
-
-          <div className="flex-1 overflow-y-auto px-5">
-            <AnimatePresence initial={false}>
-              {cart?.items?.length ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 12 }}
-                  className="pb-4"
-                >
-                  {cart.items.map((item) => (
-                    <CartLineItem
-                      key={`${item.productId ?? ""}-${item.size ?? ""}-${item.color ?? ""}`}
-                      item={item}
-                      onIncrease={increaseQuantity}
-                      onDecrease={decreaseQuantity}
-                      onRemove={removeFromCart}
-                    />
-                  ))}
-                </motion.div>
-              ) : (
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex h-full flex-col items-center justify-center py-16 text-center"
-                >
-                  <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full border border-[#C9A66B]/40 text-[#B04E2C]">
-                    <ShoppingBag className="h-7 w-7" />
-                  </div>
-                  <p className="font-serif text-2xl text-[#2B2B2B]">Your cart is empty</p>
-                  <p className="mt-2 max-w-xs text-sm leading-6 text-[#6D6257]">
-                    Add handcrafted Mojris to begin your order.
-                  </p>
-                  <Dialog.Close asChild>
-                    <Link
-                      to="/shop"
-                      className="mt-6 inline-flex items-center gap-2 border border-[#B04E2C] bg-[#B04E2C] px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-white transition hover:bg-[#8F3C22]"
-                    >
-                      Explore Collection
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
-                  </Dialog.Close>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          <div className="border-t border-[#C9A66B]/30 px-5 py-4">
-            <div className="mb-4">
-              <div className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.24em] text-[#6D6257]">
-                <span>Free shipping progress</span>
-                <span>{remaining > 0 ? `₹${remaining.toLocaleString("en-IN")} away` : "Unlocked"}</span>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/35 backdrop-blur-[2px]" />
+        <Dialog.Content className="fixed right-0 top-0 z-50 h-full w-full max-w-md border-l border-[#D8CDBB] bg-[#FAF9F6] shadow-2xl outline-none">
+          <motion.div initial={{ x: 24, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 24, opacity: 0 }} transition={{ duration: 0.28, ease: 'easeOut' }} className="flex h-full flex-col">
+            <div className="flex items-center justify-between border-b border-[#D8CDBB] px-5 py-4">
+              <div className="min-w-0">
+                <Dialog.Title className="font-['Playfair_Display'] text-2xl font-medium tracking-tight text-[#2B2B2B]">Cart</Dialog.Title>
+                <p className="mt-1 text-xs uppercase tracking-[0.24em] text-[#6E665C]">{items?.length ?? 0} items</p>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-[#F5F0E6]">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${progress}%` }}
-                  transition={{ duration: 0.6, ease: "easeOut" }}
-                  className="h-full bg-[#B04E2C]"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between border-b border-[#C9A66B]/30 pb-4">
-              <span className="text-sm uppercase tracking-[0.24em] text-[#6D6257]">Subtotal</span>
-              <span className="text-lg font-semibold text-[#2B2B2B]">₹{subtotal.toLocaleString("en-IN")}</span>
-            </div>
-
-            <div className="mt-4 flex flex-col gap-3">
-              <Dialog.Close asChild>
-                <Link
-                  to="/shop"
-                  className="inline-flex items-center justify-center gap-2 border border-[#C9A66B]/50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-[#2B2B2B] transition hover:border-[#B04E2C] hover:text-[#B04E2C]"
-                >
-                  Continue Shopping
-                </Link>
+              <Dialog.Close className="inline-flex h-10 w-10 items-center justify-center border border-[#D8CDBB] text-[#2B2B2B] transition-colors hover:bg-[#9A7135] hover:text-black">
+                <X className="h-4 w-4" />
               </Dialog.Close>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (!cart?.items?.length) return;
-                  clearCart();
-                }}
-                className={cn(
-                  "inline-flex items-center justify-center gap-2 border border-[#B04E2C] bg-[#B04E2C] px-4 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-white transition hover:bg-[#8F3C22]",
-                  !cart?.items?.length && "cursor-not-allowed opacity-50"
-                )}
-                disabled={!cart?.items?.length}
-              >
-                Place Order Intent
-                <ArrowRight className="h-4 w-4" />
-              </button>
             </div>
-          </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              <AnimatePresence initial={false}>
+                {items?.length ? items.map((item: any) => {
+                  const product = item?.product ?? {};
+                  const id = item?.productId ?? product?.id ?? '';
+                  return (
+                    <motion.div key={`${id}-${item?.size ?? 'default'}`} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: 24 }} className="mb-4 border border-[#D8CDBB] bg-white p-3">
+                      <div className="flex gap-3">
+                        <img src={product?.image ?? ''} alt={product?.name ?? 'Product'} crossOrigin="anonymous" className="h-24 w-20 shrink-0 object-cover" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate font-['Playfair_Display'] text-base text-[#2B2B2B]">{product?.name ?? 'Item'}</p>
+                              <p className="mt-1 truncate text-xs uppercase tracking-[0.2em] text-[#6E665C]">{product?.category ?? 'Collection'}</p>
+                              <p className="mt-2 text-sm font-semibold text-[#2B2B2B]">₹{Number(product?.price ?? 0).toLocaleString('en-IN')}</p>
+                            </div>
+                            <button onClick={() => setConfirmId(id)} className="inline-flex h-8 w-8 items-center justify-center border border-[#D8CDBB] text-[#6E665C] transition-colors hover:bg-[#9A7135] hover:text-black">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <div className="mt-3 flex items-center justify-between gap-3">
+                            <div className="inline-flex items-center border border-[#D8CDBB]">
+                              <button onClick={() => updateQuantity(id, Math.max(1, (item?.quantity ?? 1) - 1))} className="inline-flex h-8 w-8 items-center justify-center text-[#2B2B2B] transition-colors hover:bg-[#FAF9F6]"><Minus className="h-3.5 w-3.5" /></button>
+                              <span className="min-w-9 px-3 text-center text-sm text-[#2B2B2B]">{item?.quantity ?? 1}</span>
+                              <button onClick={() => updateQuantity(id, (item?.quantity ?? 1) + 1)} className="inline-flex h-8 w-8 items-center justify-center text-[#2B2B2B] transition-colors hover:bg-[#FAF9F6]"><Plus className="h-3.5 w-3.5" /></button>
+                            </div>
+                            <span className="text-xs uppercase tracking-[0.2em] text-[#6E665C]">{item?.size ? `Size ${item.size}` : 'One size'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                }) : (
+                  <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+                    <div className="mb-4 inline-flex h-16 w-16 items-center justify-center border border-[#D8CDBB] bg-white text-[#9A7135]">
+                      <ShoppingBag className="h-7 w-7" />
+                    </div>
+                    <h3 className="font-['Playfair_Display'] text-2xl text-[#2B2B2B]">Your cart is empty</h3>
+                    <p className="mt-2 max-w-xs text-sm leading-6 text-[#6E665C]">Discover handcrafted Jodhpuri Mojris and add your first pair to begin the journey.</p>
+                  </div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className="border-t border-[#D8CDBB] bg-white px-5 py-4">
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between text-[#6E665C]"><span>Subtotal</span><span className="text-[#2B2B2B]">₹{subtotal.toLocaleString('en-IN')}</span></div>
+                <div className="flex items-center justify-between text-[#6E665C]"><span>Shipping</span><span className="text-[#2B2B2B]">{shippingFee === 0 && subtotal > 0 ? 'Free' : `₹${shippingFee.toLocaleString('en-IN')}`}</span></div>
+                <div className="flex items-center justify-between border-t border-[#D8CDBB] pt-2 font-semibold text-[#2B2B2B]"><span>Total</span><span>₹{total.toLocaleString('en-IN')}</span></div>
+              </div>
+              <div className="mt-4 h-1 overflow-hidden bg-[#FAF9F6]">
+                <div className="h-full bg-[#9A7135]" style={{ width: `${Math.min(100, (subtotal / 5000) * 100)}%` }} />
+              </div>
+              <p className="mt-2 text-xs uppercase tracking-[0.2em] text-[#6E665C]">{subtotal >= 5000 ? 'Complimentary shipping unlocked' : `Add ₹${Math.max(0, 5000 - subtotal).toLocaleString('en-IN')} for free shipping`}</p>
+              <div className="mt-4 flex gap-3">
+                <button onClick={() => clearCart()} className="inline-flex flex-1 items-center justify-center border border-[#D8CDBB] px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#2B2B2B] transition-colors hover:bg-[#FAF9F6]">Clear</button>
+                <button onClick={handleCheckout} className="inline-flex flex-1 items-center justify-center bg-[#9A7135] px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-black transition-colors hover:bg-[#765326]">
+                  Checkout <ArrowRight className="ml-2 h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </motion.div>
         </Dialog.Content>
       </Dialog.Portal>
+
+      <Dialog.Root open={!!confirmId} onOpenChange={(v) => !v && setConfirmId(null)}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[60] bg-black/35" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[60] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 border border-[#D8CDBB] bg-white p-5 outline-none">
+            <Dialog.Title className="font-['Playfair_Display'] text-xl text-[#2B2B2B]">Remove item?</Dialog.Title>
+            <p className="mt-2 text-sm leading-6 text-[#6E665C]">This pair will be removed from your cart.</p>
+            <div className="mt-5 flex gap-3">
+              <Dialog.Close asChild>
+                <button onClick={() => setConfirmId(null)} className="flex-1 border border-[#D8CDBB] px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#2B2B2B]">Cancel</button>
+              </Dialog.Close>
+              <button onClick={() => { if (confirmId) removeItem(confirmId); setConfirmId(null); toast.success('Item removed'); }} className="flex-1 bg-[#9A7135] px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-black">Remove</button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </Dialog.Root>
   );
 }

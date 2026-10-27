@@ -1,144 +1,52 @@
-import React, { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React from 'react';
+import * as Dialog from '@radix-ui/react-dialog';
 import { motion } from 'framer-motion';
-import { ArrowRight, Filter, Search, Sparkles, Truck, Shield, Leaf } from 'lucide-react';
+import { ArrowRight, ChevronRight, Filter, Heart, ShoppingBag, Star, Truck, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import mockData from '@/data/mockData';
+import { categories, heroSlides, products, artisans, shopSortOptions, verifiedImages } from '@/data/mockData';
+import type { Artisan, Product, ProductFilters, ShopSortOption } from '@/types';
 import ProductCard from '@/components/ProductCard';
-import ProductDetailModal from '@/components/ProductDetailModal';
 import { useCart } from '@/context/CartContext';
 
 type SectionProps = { className?: string };
 
-const products = mockData?.products ?? [];
-const artisans = mockData?.artisans ?? [];
-const editorial = mockData?.editorialContent ?? {};
-const categories = mockData?.categories ?? [];
-const sizeOptions = mockData?.sizeOptions ?? [];
-const sortOptions = mockData?.sortOptions ?? [];
-const verifiedImages = mockData?.verifiedImages ?? [];
-
-export function HomeSection({ className = '' }: SectionProps) {
-  const heroImage = verifiedImages?.[3] ?? 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=800&q=80';
-  const featured = products?.filter((p) => p?.featured)?.slice(0, 4) ?? [];
+export function HeroCarousel({ className = '' }: SectionProps) {
+  const slide = heroSlides?.[0] ?? { title: 'Jootiya', subtitle: 'Authentic Jodhpuri Mojris', image: verifiedImages?.[0] ?? '' };
   return (
-    <section className={cn('bg-[#F9F5F0] text-[#2B2B2B]', className)}>
-      <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-        <div className="relative overflow-hidden border border-[#BFA6A0] bg-[#FFFDFC]">
-          <img src={heroImage} alt="Jodhpur artisan workshop" crossOrigin="anonymous" className="h-[72vh] w-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a]/55 via-[#0a0a0a]/20 to-transparent" />
-          <div className="absolute bottom-0 left-0 max-w-xl border-r border-t border-[#BFA6A0] bg-[#FFFDFC]/95 p-6 backdrop-blur-sm sm:p-8">
-            <div className="mb-4 flex items-center gap-3 text-xs uppercase tracking-[0.3em] text-[#6F625D]">
-              <span className="h-px w-10 bg-[#D9381E]" />
-              <span>{editorial?.heroKicker ?? 'Jodhpur craft ledger'}</span>
-            </div>
-            <h1 className="font-['Playfair_Display'] text-5xl font-light leading-none tracking-tight text-[#2B2B2B] sm:text-6xl">
-              {editorial?.heroTitle ?? 'Authentic Mojris, hand-finished in Jodhpur.'}
-            </h1>
-            <p className="mt-4 max-w-lg font-['Lora'] text-sm leading-7 text-[#6F625D]">
-              {editorial?.heroBody ?? 'A luxury storefront for heritage footwear shaped by patient stitching, vegetable-tanned leather, and ceremonial detail.'}
-            </p>
-            <div className="mt-6 flex items-center gap-4">
-              <Link to="/shop" className="inline-flex items-center gap-2 border border-[#D9381E] bg-[#D9381E] px-5 py-3 text-xs font-semibold uppercase tracking-[0.25em] text-white transition-colors hover:bg-[#B92B17]">
-                Explore Collection <ArrowRight size={16} />
-              </Link>
-              <Link to="/journey" className="text-xs font-semibold uppercase tracking-[0.25em] text-[#2B2B2B] underline decoration-[#BFA6A0] underline-offset-4">
-                Artisan journey
-              </Link>
-            </div>
-          </div>
-          <div className="absolute right-4 top-4 hidden w-40 overflow-hidden border border-[#BFA6A0] bg-[#FFFDFC] shadow-sm lg:block">
-            <img src={verifiedImages?.[1] ?? heroImage} alt="Mojri detail" crossOrigin="anonymous" className="aspect-[3/4] w-full object-cover" />
-          </div>
-        </div>
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {featured.map((product) => <ProductCard key={product?.id ?? product?.name} product={product} />)}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-export function CatalogSection({ className = '' }: SectionProps) {
-  const [query, setQuery] = useState('');
-  const [category, setCategory] = useState('All');
-  const [size, setSize] = useState('All');
-  const [sort, setSort] = useState(sortOptions?.[0]?.value ?? 'featured');
-  const [selected, setSelected] = useState(null);
-  const filtered = useMemo(() => products.filter((p) => {
-    const matchesQuery = !query || `${p?.name ?? ''} ${p?.category ?? ''}`.toLowerCase().includes(query.toLowerCase());
-    const matchesCategory = category === 'All' || p?.category === category;
-    const matchesSize = size === 'All' || (p?.sizes ?? []).includes(size);
-    return matchesQuery && matchesCategory && matchesSize;
-  }).sort((a, b) => sort === 'price-asc' ? (a?.price ?? 0) - (b?.price ?? 0) : sort === 'price-desc' ? (b?.price ?? 0) - (a?.price ?? 0) : Number(Boolean(b?.featured)) - Number(Boolean(a?.featured))), [query, category, size, sort]);
-  return (
-    <section className={cn('bg-[#F9F5F0]', className)}>
-      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-        <div className="grid gap-8 lg:grid-cols-[240px_minmax(0,1fr)]">
-          <aside className="min-w-0 border border-[#BFA6A0] bg-[#FFFDFC] p-4">
-            <div className="flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-[#6F625D]"><Filter size={14} /> Refine</div>
-            <div className="mt-4 flex flex-col gap-2.5">
-              <label className="flex items-center gap-2 border border-[#BFA6A0] px-3 py-2">
-                <Search size={14} className="shrink-0 text-[#6F625D]" />
-                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search mojris" className="min-w-0 w-full bg-transparent text-sm outline-none placeholder:text-[#6F625D]" />
-              </label>
-              <select value={category} onChange={(e) => setCategory(e.target.value)} className="border border-[#BFA6A0] bg-transparent px-3 py-2 text-sm outline-none">
-                <option>All</option>{categories.map((c) => <option key={c}>{c}</option>)}
-              </select>
-              <select value={size} onChange={(e) => setSize(e.target.value)} className="border border-[#BFA6A0] bg-transparent px-3 py-2 text-sm outline-none">
-                <option>All</option>{sizeOptions.map((o) => <option key={o.value}>{o.label}</option>)}
-              </select>
-              <select value={sort} onChange={(e) => setSort(e.target.value)} className="border border-[#BFA6A0] bg-transparent px-3 py-2 text-sm outline-none">
-                {sortOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-          </aside>
-          <div className="min-w-0">
-            <div className="mb-4 flex items-end justify-between gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.25em] text-[#6F625D]">Catalog</p>
-                <h2 className="font-['Playfair_Display'] text-3xl font-light text-[#2B2B2B]">Curated silhouettes</h2>
+    <section className={cn('relative overflow-hidden border-b border-[#D8CDBB] bg-[#FAF9F6]', className)}>
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="grid min-h-[78vh] gap-0 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="relative flex items-end overflow-hidden">
+            <img src={slide.image ?? verifiedImages?.[0] ?? ''} alt={slide.title ?? 'Editorial lookbook'} crossOrigin="anonymous" className="h-full w-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 border-t border-white/20 bg-[#FAF9F6]/95 p-5 sm:p-7">
+              <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.35em] text-[#9A7135]">
+                <span className="h-px w-10 bg-[#9A7135]" />
+                <span>Verified Craft</span>
+                <span className="h-px w-10 bg-[#9A7135]" />
               </div>
-              <div className="hidden text-xs uppercase tracking-[0.25em] text-[#6F625D] sm:block">{filtered.length} pieces</div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {filtered.map((product) => <ProductCard key={product?.id ?? product?.name} product={product} onPreview={setSelected} />)}
-            </div>
-          </div>
-        </div>
-      </div>
-      <ProductDetailModal product={selected} open={!!selected} onOpenChange={(open) => !open && setSelected(null)} />
-    </section>
-  );
-}
-
-export function ProductSection({ className = '' }: SectionProps) {
-  const spotlight = products?.[0] ?? null;
-  return <section className={cn('bg-[#FFFDFC] py-10', className)}>{spotlight ? <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8"><ProductCard product={spotlight} /></div> : null}</section>;
-}
-
-export function ArtisanSection({ className = '' }: SectionProps) {
-  return (
-    <section className={cn('bg-[#F9F5F0]', className)}>
-      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="border border-[#BFA6A0] bg-[#FFFDFC] p-6">
-            <p className="text-xs uppercase tracking-[0.25em] text-[#6F625D]">Artisans</p>
-            <h2 className="mt-2 font-['Playfair_Display'] text-3xl font-light text-[#2B2B2B]">Hands that preserve the line.</h2>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              {artisans.slice(0, 2).map((artisan) => (
-                <div key={artisan?.id} className="border-t border-[#BFA6A0] pt-4">
-                  <img src={artisan?.portrait ?? verifiedImages?.[4] ?? ''} alt={artisan?.name ?? 'Artisan'} crossOrigin="anonymous" className="aspect-[4/5] w-full object-cover" />
-                  <h3 className="mt-3 font-['Playfair_Display'] text-xl text-[#2B2B2B]">{artisan?.name ?? ''}</h3>
-                  <p className="text-sm text-[#6F625D]">{artisan?.location ?? ''} · {artisan?.specialty ?? ''}</p>
+              <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div className="max-w-2xl">
+                  <p className="font-serif text-5xl font-light tracking-tight text-[#2B2B2B] sm:text-6xl lg:text-7xl">{slide.title ?? 'Jootiya'}</p>
+                  <p className="mt-3 max-w-xl text-sm leading-6 text-[#6E665C] sm:text-base">{slide.subtitle ?? 'Authentic Jodhpuri Mojris, hand-finished for ceremonial and everyday elegance.'}</p>
                 </div>
-              ))}
+                <a href="#shop" className="inline-flex items-center gap-2 border border-[#2B2B2B] bg-[#2B2B2B] px-5 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-white transition hover:bg-[#9A7135] hover:text-black">
+                  Explore Collection <ArrowRight className="h-4 w-4" />
+                </a>
+              </div>
             </div>
           </div>
-          <div className="border border-[#BFA6A0] bg-[#FFFDFC] p-6">
-            <img src={verifiedImages?.[5] ?? 'https://images.unsplash.com/photo-1560769629-975ec94e6a86?auto=format&fit=crop&w=800&q=80'} alt="Artisan portrait" crossOrigin="anonymous" className="aspect-[4/5] w-full object-cover" />
-            <p className="mt-4 text-sm leading-7 text-[#6F625D]">{editorial?.artisanBody ?? 'Each pair is shaped through a measured sequence of cutting, embroidery, and finishing that keeps the craft alive.'}</p>
+          <div className="grid gap-px bg-[#D8CDBB] lg:grid-rows-2">
+            {[verifiedImages?.[1], verifiedImages?.[2]].map((src, i) => (
+              <div key={String(src ?? i)} className="relative min-h-[38vh] overflow-hidden bg-white">
+                <img src={src ?? verifiedImages?.[0] ?? ''} alt={`Editorial detail ${i + 1}`} crossOrigin="anonymous" className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
+                <div className="absolute left-4 top-4 border border-white/30 bg-black/35 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.3em] text-white">
+                  Chapter {String(i + 1).padStart(2, '0')}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -146,48 +54,148 @@ export function ArtisanSection({ className = '' }: SectionProps) {
   );
 }
 
-export function CheckoutSection({ className = '' }: SectionProps) {
-  const { cartItems } = useCart();
+export function ProductMasonry({ className = '' }: SectionProps) {
+  const items = products?.slice(0, 6) ?? [];
   return (
-    <section className={cn('bg-[#FFFDFC] py-10', className)}>
-      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-        <div className="border border-[#BFA6A0] p-6">
-          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-[#6F625D]"><Shield size={14} /> Secure checkout</div>
-          <p className="mt-3 text-sm leading-7 text-[#6F625D]">Your order is protected with validated shipping details and local cart persistence.</p>
-          <div className="mt-4 flex items-center gap-4 text-sm text-[#2B2B2B]"><Truck size={16} /> {cartItems?.length ?? 0} items ready for dispatch</div>
+    <section id="shop" className={cn('mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8', className)}>
+      <div className="mb-6 flex items-end justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#9A7135]">New Drop</p>
+          <h2 className="mt-2 font-serif text-3xl font-light tracking-tight text-[#2B2B2B] sm:text-4xl">Masonry of hand-finished pairs</h2>
         </div>
+        <a href="#filters" className="hidden items-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#6E665C] sm:inline-flex">
+          Refine <ChevronRight className="h-4 w-4" />
+        </a>
+      </div>
+      <div className="columns-1 gap-4 md:columns-2 xl:columns-3">
+        {items.map((product, index) => (
+          <div key={product.id} className="mb-4 break-inside-avoid">
+            <ProductCard product={product} index={index} />
+          </div>
+        ))}
       </div>
     </section>
   );
 }
 
-export function CustomOrderSection({ className = '' }: SectionProps) {
-  const submit = () => toast.success('Custom order request sent');
+export function ShopFilters({ filters = { query: '', category: 'All', priceRange: [0, 99999], artisan: '', inStockOnly: false }, onChange = () => {}, sort = shopSortOptions?.[0] ?? { label: 'Featured', value: 'featured' }, onSortChange = () => {} }: { filters?: ProductFilters; onChange?: (next: ProductFilters) => void; sort?: ShopSortOption; onSortChange?: (next: ShopSortOption) => void }) {
+  const cats = categories ?? ['All'];
   return (
-    <section className={cn('bg-[#F9F5F0] py-10', className)}>
-      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-        <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-          <div className="border border-[#BFA6A0] bg-[#FFFDFC] p-6">
-            <p className="text-xs uppercase tracking-[0.25em] text-[#6F625D]">Custom order</p>
-            <h2 className="mt-2 font-['Playfair_Display'] text-3xl font-light text-[#2B2B2B]">Made for the occasion.</h2>
-            <p className="mt-3 text-sm leading-7 text-[#6F625D]">Share your size, palette, and event details. We will respond with a tailored craft proposal.</p>
-            <button onClick={() => submit()} className="mt-6 inline-flex items-center gap-2 border border-[#D9381E] bg-[#D9381E] px-5 py-3 text-xs font-semibold uppercase tracking-[0.25em] text-white hover:bg-[#B92B17]">
-              Request consultation <ArrowRight size={16} />
-            </button>
+    <aside id="filters" className="rounded-sm border border-[#D8CDBB] bg-white p-4">
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#6E665C]"><Filter className="h-4 w-4" /> Filters</div>
+      <div className="mt-4 flex flex-col gap-2.5">
+        {cats.map((cat) => (
+          <button key={cat} onClick={() => onChange({ ...filters, category: cat })} className={cn('min-w-0 truncate border px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.22em] transition', filters.category === cat ? 'border-[#2B2B2B] bg-[#2B2B2B] text-white' : 'border-[#D8CDBB] bg-white text-[#2B2B2B] hover:border-[#9A7135]')}>
+            {cat}
+          </button>
+        ))}
+      </div>
+      <div className="mt-5 flex flex-col gap-2.5">
+        {shopSortOptions?.map((opt) => (
+          <button key={opt.value} onClick={() => onSortChange(opt)} className={cn('min-w-0 truncate border px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.22em] transition', sort.value === opt.value ? 'border-[#9A7135] bg-[#9A7135] text-black' : 'border-[#D8CDBB] bg-white text-[#2B2B2B] hover:border-[#9A7135]')}>
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+export function ProductPurchasePanel({ product = null }: { product?: Product | null }) {
+  const { addItem } = useCart();
+  if (!product) return null;
+  return (
+    <section className="rounded-sm border border-[#D8CDBB] bg-white p-5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#9A7135]">{product.category ?? 'Collection'}</p>
+      <h3 className="mt-2 font-serif text-3xl font-light tracking-tight text-[#2B2B2B]">{product.name ?? 'Product'}</h3>
+      <p className="mt-3 text-sm leading-6 text-[#6E665C]">{product.description ?? 'Hand-finished craftsmanship with a refined ceremonial silhouette.'}</p>
+      <div className="mt-5 flex items-center justify-between border-y border-[#D8CDBB] py-4">
+        <span className="text-xs font-semibold uppercase tracking-[0.28em] text-[#6E665C]">Price</span>
+        <span className="font-serif text-2xl text-[#2B2B2B]">₹{product.price?.toLocaleString?.('en-IN') ?? product.price}</span>
+      </div>
+      <button onClick={() => { addItem(product, 1); toast.success('Added to cart'); }} className="mt-5 inline-flex w-full items-center justify-center gap-2 bg-[#2B2B2B] px-4 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-white transition hover:bg-[#9A7135] hover:text-black">
+        Add to Cart <ShoppingBag className="h-4 w-4" />
+      </button>
+    </section>
+  );
+}
+
+export function ArtisanGrid({ className = '' }: SectionProps) {
+  const list = artisans?.slice(0, 4) ?? [];
+  return (
+    <section className={cn('mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8', className)}>
+      <div className="grid gap-4 lg:grid-cols-4">
+        {list.map((artisan: Artisan) => (
+          <div key={artisan.id} className="border border-[#D8CDBB] bg-white p-4">
+            <img src={artisan.image ?? verifiedImages?.[3] ?? ''} alt={artisan.name ?? 'Artisan'} crossOrigin="anonymous" className="aspect-[4/5] w-full object-cover" />
+            <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.35em] text-[#9A7135]">{artisan.location ?? 'India'}</p>
+            <h3 className="mt-2 font-serif text-2xl font-light text-[#2B2B2B]">{artisan.name ?? 'Artisan'}</h3>
+            <p className="mt-2 text-sm text-[#6E665C]">{artisan.specialty ?? 'Handcrafted leatherwork'}</p>
           </div>
-          <div className="border border-[#BFA6A0] bg-[#FFFDFC] p-6">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="border border-[#BFA6A0] p-4"><Sparkles size={16} className="text-[#D9381E]" /><p className="mt-2 text-sm text-[#6F625D]">Bespoke embroidery</p></div>
-              <div className="border border-[#BFA6A0] p-4"><Leaf size={16} className="text-[#D9381E]" /><p className="mt-2 text-sm text-[#6F625D]">Vegetable-tanned leather</p></div>
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
     </section>
   );
 }
 
-const sections = { home: HomeSection, catalog: CatalogSection, product: ProductSection, artisan: ArtisanSection, checkout: CheckoutSection, customOrder: CustomOrderSection };
-export function CommerceSections() { return null; }
-export default sections;
-export { sections };
+export function CartView({ className = '' }: SectionProps) {
+  const { items, subtotal, removeItem, updateQuantity } = useCart();
+  return (
+    <div className={cn('space-y-3', className)}>
+      {items?.length ? items.map((item) => (
+        <div key={`${item.productId}-${item.size ?? 'na'}`} className="flex items-center gap-3 border-b border-[#D8CDBB] pb-3">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-[#2B2B2B]">{item.product?.name ?? 'Product'}</p>
+            <p className="text-xs text-[#6E665C]">Qty {item.quantity ?? 1}</p>
+          </div>
+          <button onClick={() => updateQuantity(item.productId, Math.max(0, (item.quantity ?? 1) - 1))} className="text-xs uppercase tracking-[0.22em] text-[#6E665C]">-</button>
+          <button onClick={() => updateQuantity(item.productId, (item.quantity ?? 1) + 1)} className="text-xs uppercase tracking-[0.22em] text-[#6E665C]">+</button>
+          <button onClick={() => removeItem(item.productId)} className="text-[#6E665C]"><X className="h-4 w-4" /></button>
+        </div>
+      )) : <p className="text-sm text-[#6E665C]">Your cart is empty.</p>}
+      <div className="flex items-center justify-between pt-2 text-sm font-semibold text-[#2B2B2B]">
+        <span>Subtotal</span><span>₹{subtotal?.toLocaleString?.('en-IN') ?? subtotal}</span>
+      </div>
+    </div>
+  );
+}
+
+export function CheckoutForm({ className = '' }: SectionProps) {
+  return <div className={cn('rounded-sm border border-[#D8CDBB] bg-white p-5', className)}><p className="text-sm text-[#6E665C]">Checkout form placeholder</p></div>;
+}
+
+export function ConfirmationSummary({ className = '' }: SectionProps) {
+  return <div className={cn('rounded-sm border border-[#D8CDBB] bg-white p-5', className)}><p className="text-sm text-[#6E665C]">Confirmation summary placeholder</p></div>;
+}
+
+export function CartDrawer({ open = false, onOpenChange = () => {} }: { open?: boolean; onOpenChange?: (open: boolean) => void }) {
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-black/40" />
+        <Dialog.Content className="fixed right-0 top-0 h-full w-full max-w-md border-l border-[#D8CDBB] bg-[#FAF9F6] p-5 shadow-2xl outline-none">
+          <div className="flex items-center justify-between border-b border-[#D8CDBB] pb-4">
+            <Dialog.Title className="font-serif text-2xl font-light text-[#2B2B2B]">Cart</Dialog.Title>
+            <Dialog.Close className="text-[#6E665C]"><X className="h-5 w-5" /></Dialog.Close>
+          </div>
+          <div className="mt-5"><CartView /></div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+const CommerceSections = {
+  HeroCarousel,
+  ProductMasonry,
+  ShopFilters,
+  ProductPurchasePanel,
+  ArtisanGrid,
+  CartView,
+  CheckoutForm,
+  ConfirmationSummary,
+  CartDrawer,
+};
+
+export default CommerceSections;
+export { CommerceSections };

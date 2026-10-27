@@ -3,26 +3,26 @@
 @tailwind utilities;
 
 :root {
-  --color-bg: #F5F0E6;
-  --color-bg-rgb: 245, 240, 230;
-  --color-surface: #FFFBF4;
-  --color-surface-rgb: 255, 251, 244;
-  --color-surface-hover: #EADFCC;
-  --color-surface-hover-rgb: 234, 223, 204;
-  --color-border: #C9A66B;
-  --color-border-rgb: 201, 166, 107;
+  --color-bg: #FAF9F6;
+  --color-bg-rgb: 250, 249, 246;
+  --color-surface: #FFFFFF;
+  --color-surface-rgb: 255, 255, 255;
+  --color-surface-hover: #F2EDE4;
+  --color-surface-hover-rgb: 242, 237, 228;
+  --color-border: #D8CDBB;
+  --color-border-rgb: 216, 205, 187;
   --color-text-primary: #2B2B2B;
   --color-text-primary-rgb: 43, 43, 43;
-  --color-text-muted: #6D6257;
-  --color-text-muted-rgb: 109, 98, 87;
-  --color-accent: #B04E2C;
-  --color-accent-rgb: 176, 78, 44;
-  --color-accent-hover: #8F3C22;
-  --color-accent-hover-rgb: 143, 60, 34;
-  --color-accent-text: #ffffff;
-  --radius-theme: 18px;
+  --color-text-muted: #6E665C;
+  --color-text-muted-rgb: 110, 102, 92;
+  --color-accent: #9A7135;
+  --color-accent-rgb: 154, 113, 53;
+  --color-accent-hover: #765326;
+  --color-accent-hover-rgb: 118, 83, 38;
+  --color-accent-text: #000000;
+  --radius-theme: 2px;
   --font-heading: 'Playfair Display', sans-serif;
-  --font-body: 'Lora', sans-serif;
+  --font-body: 'Inter', sans-serif;
 }
 
 @layer base {
