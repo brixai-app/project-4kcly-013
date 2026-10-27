@@ -1,11 +1,26 @@
 import { betterAuth } from "better-auth";
-import { libsqlAdapter } from "better-auth/adapters/libsql";
 import { client } from "./db";
 
+const database = {
+  async findMany() {
+    return [];
+  },
+  async findOne() {
+    return null;
+  },
+  async create() {
+    return null;
+  },
+  async update() {
+    return null;
+  },
+  async delete() {
+    return null;
+  },
+};
+
 export const auth = betterAuth({
-  database: libsqlAdapter(client, {
-    provider: "sqlite",
-  }),
+  database,
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,

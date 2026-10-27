@@ -253,20 +253,3 @@ const db: DbShape = { client, init, seedItems, listItems, getItemBySlug, writeOr
 
 export { client, init, seedItems, listItems, getItemBySlug, writeOrder, listOrders, getOrderById };
 export default db;
-// Auto-synthesized missing export
-export const client: any = {};
-
-// Auto-synthesized missing export
-export const init: any = {};
-
-// Auto-synthesized missing export
-export const getItemBySlug: any = {};
-
-// Auto-synthesized missing export
-export const listItems: any = {};
-
-// Auto-synthesized missing export
-export const listOrders: any = {};
-
-// Auto-synthesized missing export
-export const writeOrder: any = {};
