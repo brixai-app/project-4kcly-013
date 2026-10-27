@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { AlertCircle, RefreshCw } from 'lucide-react';
-import { CatalogExperience } from "@/components/CatalogExperience";
+import { CommerceSections } from "@/components/CommerceSections";
 import type { Product } from "@/types";
 
 export function ShopPage() {
@@ -47,7 +47,7 @@ export function ShopPage() {
           </button>
         </div>
       ) : null}
-      <CatalogExperience products={products} loading={loading} error={error} search={search} />
+      <CommerceSections products={products} />
     </main>
   );
 }
