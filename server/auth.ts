@@ -2,20 +2,31 @@
 const betterAuth: any = typeof Proxy !== 'undefined' ? new Proxy((() => null) as any, { get: () => betterAuth, apply: () => null }) : (() => null);
 import { db } from './db';
 
-export const auth = betterAuth({
-  database: db,
+const auth = betterAuth({
+  database: {
+    provider: 'sqlite',
+    db,
+  },
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,
+    minPasswordLength: 8,
   },
   user: {
-    additionalFields: {},
+    additionalFields: {
+      name: {
+        type: 'string',
+        required: true,
+      },
+    },
   },
   session: {
-    expiresIn: 60 * 60 * 24 * 30,
-    updateAge: 60 * 60 * 24,
+    cookieCache: {
+      enabled: true,
+      maxAge: 60 * 60 * 24,
+    },
   },
-  trustedOrigins: [],
 });
 
+export { auth };
 export default auth;

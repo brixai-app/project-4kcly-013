@@ -1,173 +1,168 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import type { CartItem, Order, PaymentInfo, Product, ProductSize, ShippingInfo } from '@/types';
-import { products as mockProducts } from '@/data/mockData';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import type { CartItem, Product } from '@/types';
+import { products } from '@/data/mockData';
 
 type CartContextValue = {
   items: CartItem[];
-  selectedSizes: Record<string, ProductSize>;
-  isCartOpen: boolean;
-  subtotal: number;
-  shipping: number;
-  total: number;
-  itemCount: number;
-  setCartOpen: (open: boolean) => void;
-  toggleCart: () => void;
-  setSelectedSize: (productId: string, size: ProductSize) => void;
-  addToCart: (product: Product, size?: ProductSize, quantity?: number) => void;
-  updateQuantity: (productId: string, size: ProductSize, quantity: number) => void;
-  removeFromCart: (productId: string, size: ProductSize) => void;
+  isOpen: boolean;
+  isCheckoutOpen: boolean;
+  hydrated: boolean;
+  addItem: (product: Product, size: string, color?: string | null, quantity?: number) => void;
+  updateQuantity: (productId: string, size: string, quantity: number, color?: string | null) => void;
+  removeItem: (productId: string, size: string, color?: string | null) => void;
   clearCart: () => void;
-  checkout: (shippingInfo: ShippingInfo, paymentInfo: PaymentInfo) => Promise<Order>;
+  openCart: () => void;
+  closeCart: () => void;
+  toggleCart: () => void;
+  openCheckout: () => void;
+  closeCheckout: () => void;
+  subtotal: number;
+  itemCount: number;
+  getItemQuantity: (productId: string, size: string, color?: string | null) => number;
 };
 
 const CartContext = createContext<CartContextValue | undefined>(undefined);
-
 const STORAGE_KEY = 'jootiya-cart-v1';
-const SIZE_KEY = 'jootiya-sizes-v1';
+const CHECKOUT_KEY = 'jootiya-checkout-v1';
+const MAX_QTY = 10;
 
-const getDefaultSize = (product?: Product | null): ProductSize => product?.sizes?.[0] ?? 'UK 8';
+const normalizeKey = (productId: string, size: string, color?: string | null) =>
+  `${productId}::${size}::${color ?? ''}`;
 
-const safeProducts = (): Product[] => mockProducts ?? [];
-
-const findProduct = (productId: string) => safeProducts().find((product) => product?.id === productId) ?? null;
-
-const persist = (items: CartItem[], selectedSizes: Record<string, ProductSize>) => {
+const safeParse = (value: string | null): CartItem[] => {
+  if (!value) return [];
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    localStorage.setItem(SIZE_KEY, JSON.stringify(selectedSizes));
-  } catch {}
-};
-
-const loadItems = (): CartItem[] => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as CartItem[]) : [];
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is CartItem => {
+          const candidate = item as Partial<CartItem> | null;
+          return !!candidate?.productId && !!candidate?.size && typeof candidate?.quantity === 'number';
+        })
+      : [];
   } catch {
     return [];
   }
 };
 
-const loadSizes = (): Record<string, ProductSize> => {
-  try {
-    const raw = localStorage.getItem(SIZE_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, ProductSize>) : {};
-  } catch {
-    return {};
-  }
-};
-
-export function CartProvider({ children }: { children?: React.ReactNode } = {}) {
+export function CartProvider({ children }: { children?: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
-  const [selectedSizes, setSelectedSizes] = useState<Record<string, ProductSize>>({});
-  const [isCartOpen, setCartOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setItems(loadItems());
-    setSelectedSizes(loadSizes());
+    if (typeof window === 'undefined') return;
+    setItems(safeParse(window.localStorage.getItem(STORAGE_KEY)));
+    setIsCheckoutOpen(window.localStorage.getItem(CHECKOUT_KEY) === 'true');
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
-    persist(items, selectedSizes);
-  }, [items, selectedSizes]);
+    if (!hydrated || typeof window === 'undefined') return;
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  }, [hydrated, items]);
 
-  const setSelectedSize = (productId: string, size: ProductSize) => {
-    setSelectedSizes((prev) => ({ ...prev, [productId]: size }));
-  };
+  useEffect(() => {
+    if (!hydrated || typeof window === 'undefined') return;
+    window.localStorage.setItem(CHECKOUT_KEY, String(isCheckoutOpen));
+  }, [hydrated, isCheckoutOpen]);
 
-  const addToCart = (product: Product, size?: ProductSize, quantity = 1) => {
-    const chosenSize = size ?? selectedSizes?.[product?.id ?? ''] ?? getDefaultSize(product);
-    setSelectedSize(product?.id ?? '', chosenSize);
-    setItems((prev) => {
-      const existing = prev.find((item) => item?.productId === product?.id && item?.size === chosenSize);
+  const addItem = useCallback((product: Product, size: string, color?: string | null, quantity = 1) => {
+    if (!product?.id || !size) return;
+    setItems((current) => {
+      const key = normalizeKey(product.id, size, color);
+      const existing = current.find((item) => normalizeKey(item.productId, item.size, item.color) === key);
       if (existing) {
-        return prev.map((item) =>
-          item?.productId === product?.id && item?.size === chosenSize
-            ? { ...item, quantity: Math.min((item?.quantity ?? 0) + quantity, 10) }
-            : item
+        return current.map((item) =>
+          normalizeKey(item.productId, item.size, item.color) === key
+            ? { ...item, quantity: Math.min(MAX_QTY, item.quantity + quantity) }
+            : item,
         );
       }
-      return [
-        ...prev,
-        {
-          productId: product?.id ?? '',
-          quantity: Math.max(1, Math.min(quantity, 10)),
-          size: chosenSize,
-          price: product?.price ?? 0,
-          name: product?.name ?? '',
-          image: product?.image ?? '',
-          slug: product?.slug ?? '',
-        },
-      ];
+      return [...current, { productId: product.id, size, color: color ?? null, quantity: Math.min(MAX_QTY, Math.max(1, quantity)) }];
     });
-    setCartOpen(true);
-  };
+    setIsOpen(true);
+  }, []);
 
-  const updateQuantity = (productId: string, size: ProductSize, quantity: number) => {
-    const product = findProduct(productId);
-    const maxStock = product?.inStock === false ? 0 : 10;
-    const nextQuantity = Math.max(0, Math.min(quantity, maxStock || 10));
-    setItems((prev) =>
-      nextQuantity <= 0
-        ? prev.filter((item) => !(item?.productId === productId && item?.size === size))
-        : prev.map((item) => (item?.productId === productId && item?.size === size ? { ...item, quantity: nextQuantity } : item))
+  const updateQuantity = useCallback((productId: string, size: string, quantity: number, color?: string | null) => {
+    const nextQty = Math.min(MAX_QTY, Math.max(0, quantity));
+    setItems((current) =>
+      current
+        .map((item) =>
+          normalizeKey(item.productId, item.size, item.color) === normalizeKey(productId, size, color)
+            ? { ...item, quantity: nextQty }
+            : item,
+        )
+        .filter((item) => item.quantity > 0),
     );
-  };
+  }, []);
 
-  const removeFromCart = (productId: string, size: ProductSize) => {
-    setItems((prev) => prev.filter((item) => !(item?.productId === productId && item?.size === size)));
-  };
+  const removeItem = useCallback((productId: string, size: string, color?: string | null) => {
+    setItems((current) => current.filter((item) => normalizeKey(item.productId, item.size, item.color) !== normalizeKey(productId, size, color)));
+  }, []);
 
-  const clearCart = () => {
-    setItems([]);
-    setSelectedSizes({});
-    setCartOpen(false);
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem(SIZE_KEY);
-    } catch {}
-  };
+  const clearCart = useCallback(() => setItems([]), []);
 
-  const subtotal = useMemo(() => items.reduce((sum, item) => sum + (item?.price ?? 0) * (item?.quantity ?? 0), 0), [items]);
-  const shipping = useMemo(() => (subtotal > 0 && subtotal < 5000 ? 250 : 0), [subtotal]);
-  const total = subtotal + shipping;
-  const itemCount = useMemo(() => items.reduce((sum, item) => sum + (item?.quantity ?? 0), 0), [items]);
+  const openCart = useCallback(() => setIsOpen(true), []);
+  const closeCart = useCallback(() => setIsOpen(false), []);
+  const toggleCart = useCallback(() => setIsOpen((current) => !current), []);
+  const openCheckout = useCallback(() => setIsCheckoutOpen(true), []);
+  const closeCheckout = useCallback(() => setIsCheckoutOpen(false), []);
 
-  const checkout = async (shippingInfo: ShippingInfo, paymentInfo: PaymentInfo) => {
-    const order: Order = {
-      id: crypto.randomUUID(),
-      orderNumber: `JT-${Math.floor(100000 + Math.random() * 900000)}`,
-      items,
-      subtotal,
-      shipping,
-      total,
-      shippingInfo,
-      paymentInfo,
-      status: 'confirmed',
-      createdAt: new Date().toISOString(),
-    };
-    clearCart();
-    return order;
-  };
+  const subtotal = useMemo(
+    () =>
+      items.reduce((sum, item) => {
+        const product = products.find((entry) => entry.id === item.productId);
+        return sum + (product?.price ?? 0) * item.quantity;
+      }, 0),
+    [items],
+  );
+
+  const itemCount = useMemo(() => items.reduce((sum, item) => sum + item.quantity, 0), [items]);
+
+  const getItemQuantity = useCallback(
+    (productId: string, size: string, color?: string | null) =>
+      items.find((item) => normalizeKey(item.productId, item.size, item.color) === normalizeKey(productId, size, color))?.quantity ?? 0,
+    [items],
+  );
 
   const value = useMemo<CartContextValue>(
     () => ({
       items,
-      selectedSizes,
-      isCartOpen,
-      subtotal,
-      shipping,
-      total,
-      itemCount,
-      setCartOpen,
-      toggleCart: () => setCartOpen((prev) => !prev),
-      setSelectedSize,
-      addToCart,
+      isOpen,
+      isCheckoutOpen,
+      hydrated,
+      addItem,
       updateQuantity,
-      removeFromCart,
+      removeItem,
       clearCart,
-      checkout,
+      openCart,
+      closeCart,
+      toggleCart,
+      openCheckout,
+      closeCheckout,
+      subtotal,
+      itemCount,
+      getItemQuantity,
     }),
-    [items, selectedSizes, isCartOpen, subtotal, shipping, total, itemCount]
+    [
+      items,
+      isOpen,
+      isCheckoutOpen,
+      hydrated,
+      addItem,
+      updateQuantity,
+      removeItem,
+      clearCart,
+      openCart,
+      closeCart,
+      toggleCart,
+      openCheckout,
+      closeCheckout,
+      subtotal,
+      itemCount,
+      getItemQuantity,
+    ],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
@@ -175,7 +170,7 @@ export function CartProvider({ children }: { children?: React.ReactNode } = {}) 
 
 export function useCart() {
   const context = useContext(CartContext);
-  if (!context) throw new Error('useCart must be used within CartProvider');
+  if (!context) throw new Error('useCart must be used within a CartProvider');
   return context;
 }
 

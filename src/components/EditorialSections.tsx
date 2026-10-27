@@ -1,59 +1,58 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import * as Dialog from '@radix-ui/react-dialog';
-import { ArrowRight, Check, ChevronDown, MapPin, Sparkles, Star, Truck, X } from 'lucide-react';
-import { toast } from 'sonner';
-import { useCart } from '@/context/CartContext';
-import { sizeGuide, products, artisans, editorialContent } from '@/data/mockData';
-import type { Product, Artisan } from '@/types';
+import { ArrowRight, Sparkles, Leaf, Award, MapPin, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import ProductCard from '@/components/ProductCard';
+import { artisans, editorialCopy, products } from '@/data/mockData';
 
-export function HeroBanner({ className = '' }: { className?: string }) {
-  const hero = products?.[0];
+type SectionProps = { className?: string };
+
+const fadeUp = { initial: { opacity: 0, y: 24 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, amount: 0.35 }, transition: { duration: 0.7, ease: 'easeOut' } };
+
+export function AtelierTriptych({ className = '' }: SectionProps) {
+  const hero = products?.find((p) => p?.featured) ?? products?.[0] ?? null;
+  const artisan = artisans?.[0] ?? null;
+  const copy = editorialCopy?.home?.hero ?? {};
   return (
-    <section className={cn('relative min-h-[92vh] overflow-hidden bg-[#1a1a1a] text-white', className)}>
-      <div className="absolute inset-0">
-        <img src={hero?.image ?? 'https://images.unsplash.com/photo-1552346154-21d32810aba3?auto=format&fit=crop&w=800&q=80'} alt={hero?.name ?? 'Jootiya hero'} crossOrigin="anonymous" className="h-full w-full object-cover opacity-70" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/30 to-black/10" />
-      </div>
-      <div className="relative mx-auto flex min-h-[92vh] max-w-7xl items-end px-5 py-10 sm:px-8 lg:px-10">
-        <div className="grid w-full gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
-          <div className="max-w-3xl">
-            <p className="mb-4 text-xs font-semibold uppercase tracking-[0.35em] text-white/75">{editorialContent?.heroEyebrow ?? 'Authentic Jodhpuri Mojris'}</p>
-            <h1 className="font-[Playfair_Display] text-5xl font-light leading-[0.92] tracking-tight sm:text-6xl lg:text-7xl">{editorialContent?.heroTitle ?? 'Crafted for the ceremonial walk, refined for every day.'}</h1>
-            <p className="mt-5 max-w-xl text-sm leading-7 text-white/80 sm:text-base">{editorialContent?.heroCopy ?? 'Warm ivory canvases, terracotta accents, and hand-finished silhouettes shaped by artisans in Jodhpur.'}</p>
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Link to="/shop" className="inline-flex items-center gap-2 bg-[#A94721] px-5 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-white transition hover:bg-[#873619]">
-                Explore Collection <ArrowRight size={16} />
-              </Link>
-              <Dialog.Root>
-                <Dialog.Trigger asChild>
-                  <button className="inline-flex items-center gap-2 border border-white/30 bg-white/10 px-5 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-white backdrop-blur-sm transition hover:bg-white/15">
-                    Size Guide <ChevronDown size={16} />
-                  </button>
-                </Dialog.Trigger>
-                <Dialog.Portal>
-                  <Dialog.Overlay className="fixed inset-0 bg-black/55" />
-                  <Dialog.Content className="fixed left-1/2 top-1/2 w-[92vw] max-w-lg -translate-x-1/2 -translate-y-1/2 border border-[#D8CDBD] bg-[#FAF9F6] p-6 text-[#1A1A1A] shadow-2xl focus:outline-none">
-                    <div className="flex items-start justify-between gap-4">
-                      <Dialog.Title className="font-[Playfair_Display] text-2xl">Size Guide</Dialog.Title>
-                      <Dialog.Close asChild><button className="text-[#675F56]"><X size={18} /></button></Dialog.Close>
-                    </div>
-                    <div className="mt-4 space-y-3 text-sm text-[#675F56]">
-                      {(sizeGuide?.map((row: string, i: number) => <p key={i}>{row}</p>)) ?? null}
-                    </div>
-                  </Dialog.Content>
-                </Dialog.Portal>
-              </Dialog.Root>
-            </div>
+    <section className={cn('relative overflow-hidden border-b border-[#D8CDBE] bg-[#F5F1EB]', className)}>
+      <div className="mx-auto grid min-h-[88vh] max-w-7xl grid-cols-1 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="relative min-h-[56vh] lg:min-h-[88vh]">
+          <motion.img {...fadeUp} src={hero?.image ?? ''} alt={hero?.name ?? 'Atelier hero'} crossOrigin="anonymous" className="h-full w-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/35 via-black/10 to-transparent" />
+          <div className="absolute left-4 top-4 flex flex-col gap-2 text-[10px] uppercase tracking-[0.35em] text-white/80 md:left-8 md:top-8">
+            <span>Collection 01</span>
+            <span className="h-16 w-px bg-white/40" />
+            <span>Jodhpur Atelier</span>
           </div>
-          <div className="border border-white/20 bg-black/20 p-5 backdrop-blur-sm">
-            <p className="text-xs uppercase tracking-[0.3em] text-white/70">Provenance</p>
-            <div className="mt-4 space-y-4 text-sm text-white/85">
-              <p className="flex items-center gap-2"><MapPin size={16} /> Jodhpur atelier lineage</p>
-              <p className="flex items-center gap-2"><Truck size={16} /> Pan-India delivery</p>
-              <p className="flex items-center gap-2"><Sparkles size={16} /> Hand-finished detailing</p>
+          <div className="absolute bottom-4 left-4 max-w-[18rem] border border-white/30 bg-[#FFFCF7]/90 p-4 text-[#2B2B2B] shadow-[0_18px_50px_rgba(0,0,0,0.12)] backdrop-blur-sm md:bottom-8 md:left-8 md:max-w-[22rem]">
+            <p className="font-serif text-3xl leading-none md:text-5xl">{copy?.title ?? 'Jootiya'}</p>
+            <p className="mt-3 text-sm leading-6 text-[#6E665D]">{copy?.subtitle ?? 'Hand-finished Mojris shaped by heritage, patience, and a precise editorial eye.'}</p>
+            <Link to="/shop" className="mt-4 inline-flex items-center gap-2 border border-[#C9A66B] bg-[#C9A66B] px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-black transition hover:bg-[#B38A4E]">
+              Explore Collection <ArrowRight size={14} />
+            </Link>
+          </div>
+        </div>
+        <div className="relative flex min-h-[32vh] flex-col justify-between border-t border-[#D8CDBE] bg-[#FFFCF7] lg:min-h-[88vh] lg:border-l lg:border-t-0">
+          <div className="grid grid-cols-2 gap-3 p-4 md:p-8">
+            <motion.img {...fadeUp} transition={{ duration: 0.8, delay: 0.1 }} src={products?.[1]?.image ?? ''} alt={products?.[1]?.name ?? 'Mojri detail'} crossOrigin="anonymous" className="aspect-[4/5] w-full object-cover" />
+            <motion.img {...fadeUp} transition={{ duration: 0.8, delay: 0.2 }} src={products?.[2]?.image ?? ''} alt={products?.[2]?.name ?? 'Mojri detail'} crossOrigin="anonymous" className="mt-10 aspect-[4/5] w-full object-cover" />
+          </div>
+          <div className="border-t border-[#D8CDBE] p-4 md:p-8">
+            <div className="flex items-center gap-3 text-xs uppercase tracking-[0.3em] text-[#6E665D]">
+              <Sparkles size={14} />
+              <span>Crafted for ceremony and daily ritual</span>
+            </div>
+            <p className="mt-4 max-w-md font-serif text-2xl leading-tight text-[#2B2B2B] md:text-4xl">{copy?.headline ?? 'A collectible wardrobe of Jodhpuri craft, rendered with restraint.'}</p>
+            <div className="mt-6 flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-xs uppercase tracking-[0.28em] text-[#6E665D]">Featured artisan</p>
+                <p className="mt-1 truncate text-sm font-semibold text-[#2B2B2B]">{artisan?.name ?? 'Master artisan'}</p>
+                <p className="truncate text-sm text-[#6E665D]">{artisan?.location ?? 'Jodhpur, Rajasthan'}</p>
+              </div>
+              <div className="h-14 w-14 overflow-hidden rounded-full border border-[#D8CDBE]">
+                <img src={artisan?.portraitUrl ?? ''} alt={artisan?.name ?? 'Artisan portrait'} crossOrigin="anonymous" className="h-full w-full object-cover" />
+              </div>
             </div>
           </div>
         </div>
@@ -62,60 +61,145 @@ export function HeroBanner({ className = '' }: { className?: string }) {
   );
 }
 
-export function ProductExperience({ className = '' }: { className?: string }) {
-  const featured = (products ?? []).slice(0, 6);
+export function FeaturedMasonry({ className = '' }: SectionProps) {
+  const featured = products?.filter((p) => p?.featured)?.slice(0, 4) ?? [];
   return (
-    <section className={cn('mx-auto max-w-7xl px-5 py-14 sm:px-8 lg:px-10', className)}>
-      <div className="mb-8 flex items-end justify-between gap-4">
+    <section className={cn('mx-auto max-w-7xl px-4 py-10 md:px-8 md:py-16', className)}>
+      <div className="mb-6 flex items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#675F56]">Featured edit</p>
-          <h2 className="mt-2 font-[Playfair_Display] text-3xl font-light text-[#1A1A1A] sm:text-4xl">A staggered composition of signature pairs.</h2>
+          <p className="text-xs uppercase tracking-[0.35em] text-[#6E665D]">Featured drop</p>
+          <h2 className="mt-2 font-serif text-3xl text-[#2B2B2B] md:text-5xl">Masonry of signature pairs</h2>
         </div>
-        <Link to="/shop" className="hidden text-xs font-semibold uppercase tracking-[0.28em] text-[#A94721] sm:inline-flex items-center gap-2">View all <ArrowRight size={16} /></Link>
+        <Link to="/shop" className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#2B2B2B]">
+          View all <ArrowRight size={14} />
+        </Link>
       </div>
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {featured.map((p: Product, i: number) => (
-          <motion.article key={p.id} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={{ duration: 0.55, delay: i * 0.05 }} className={cn('group overflow-hidden border border-[#D8CDBD] bg-white', i % 3 === 0 ? 'md:translate-y-8' : i % 3 === 1 ? 'md:-translate-y-2' : '')}>
-            <div className="aspect-[3/4] overflow-hidden bg-[#F5F1E9]">
-              <img src={p.image} alt={p.name} crossOrigin="anonymous" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+      <div className="grid gap-4 md:grid-cols-12">
+        <div className="md:col-span-7">
+          <ProductCard product={featured?.[0] ?? null} />
+        </div>
+        <div className="md:col-span-5">
+          <div className="grid gap-4">
+            <ProductCard product={featured?.[1] ?? null} />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <ProductCard product={featured?.[2] ?? null} />
+              <ProductCard product={featured?.[3] ?? null} />
             </div>
-            <div className="flex items-start justify-between gap-4 p-4">
-              <div className="min-w-0">
-                <p className="truncate text-xs uppercase tracking-[0.28em] text-[#675F56]">{p.category}</p>
-                <h3 className="mt-1 truncate font-[Playfair_Display] text-xl text-[#1A1A1A]">{p.name}</h3>
-                <p className="mt-1 text-sm font-semibold text-[#1A1A1A]">₹{p.price.toLocaleString('en-IN')}</p>
-              </div>
-              <button onClick={() => toast.success(`${p.name} added to cart`)} className="inline-flex h-10 items-center justify-center border border-[#A94721] px-3 text-xs font-semibold uppercase tracking-[0.25em] text-[#A94721] transition group-hover:bg-[#A94721] group-hover:text-white">
-                Quick Add
-              </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function CategoryShowcase({ className = '' }: SectionProps) {
+  const categories = ['Mojri', 'Jutti', 'Kolhapuri', 'Accessories'] as const;
+  return (
+    <section className={cn('border-y border-[#D8CDBE] bg-[#FFFCF7]', className)}>
+      <div className="mx-auto grid max-w-7xl gap-4 px-4 py-10 md:grid-cols-4 md:px-8 md:py-14">
+        {categories.map((category, index) => (
+          <Link key={category} to={`/shop?category=${encodeURIComponent(category)}`} className="group flex min-h-40 flex-col justify-between border border-[#D8CDBE] bg-[#F5F1EB] p-5 transition hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(0,0,0,0.08)]">
+            <div className="flex items-center justify-between gap-3">
+              <p className="min-w-0 truncate text-xs uppercase tracking-[0.32em] text-[#6E665D]">{String(index + 1).padStart(2, '0')}</p>
+              <Leaf size={16} className="text-[#C9A66B]" />
             </div>
-          </motion.article>
+            <div>
+              <h3 className="font-serif text-2xl text-[#2B2B2B]">{category}</h3>
+              <p className="mt-2 text-sm leading-6 text-[#6E665D]">Refined silhouettes with hand-finished edges and quiet ornament.</p>
+            </div>
+          </Link>
         ))}
       </div>
     </section>
   );
 }
 
-export function CheckoutForm({ className = '' }: { className?: string }) {
-  return <section className={cn('mx-auto max-w-7xl px-5 py-14 sm:px-8 lg:px-10', className)}><div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]"><div className="border border-[#D8CDBD] bg-white p-6"><p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#675F56]">Guest checkout</p><h2 className="mt-2 font-[Playfair_Display] text-3xl font-light text-[#1A1A1A]">A calm, guided purchase.</h2><div className="mt-6 grid gap-4 sm:grid-cols-2"><input className="border border-[#D8CDBD] bg-[#FAF9F6] px-4 py-3 text-sm outline-none" placeholder="Full name" /><input className="border border-[#D8CDBD] bg-[#FAF9F6] px-4 py-3 text-sm outline-none" placeholder="Email address" /><input className="border border-[#D8CDBD] bg-[#FAF9F6] px-4 py-3 text-sm outline-none sm:col-span-2" placeholder="Shipping address" /><button onClick={() => toast.success('Checkout details saved')} className="bg-[#A94721] px-5 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-white transition hover:bg-[#873619]">Continue</button></div></div><div className="border border-[#D8CDBD] bg-[#F5F1E9] p-6"><p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#675F56]">Why Jootiya</p><ul className="mt-5 space-y-3 text-sm text-[#1A1A1A]">{['Authentic artisan sourcing','Secure payment options','Carefully packed delivery'].map((item) => <li key={item} className="flex items-center gap-2"><Check size={16} className="text-[#A94721]" />{item}</li>)}</ul></div></div></section>;
+export function CraftManifesto({ className = '' }: SectionProps) {
+  const copy = editorialCopy?.home?.manifesto ?? {};
+  return (
+    <section className={cn('bg-[#1F1B17] text-[#FFFCF7]', className)}>
+      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 md:grid-cols-[0.9fr_1.1fr] md:px-8 md:py-20">
+        <div className="flex flex-col justify-between gap-6">
+          <div>
+            <p className="text-xs uppercase tracking-[0.35em] text-white/60">Craft manifesto</p>
+            <h2 className="mt-3 font-serif text-3xl leading-tight md:text-5xl">{copy?.title ?? 'Built slowly, worn often, remembered always.'}</h2>
+          </div>
+          <div className="flex items-center gap-3 text-sm text-white/70">
+            <Award size={16} className="text-[#C9A66B]" />
+            <span>{copy?.subtitle ?? 'A disciplined balance of comfort, ceremony, and enduring form.'}</span>
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {[
+            { icon: MapPin, title: 'Jodhpur rooted', text: 'Made with regional knowledge and a measured hand.' },
+            { icon: Sparkles, title: 'Soft-gold finish', text: 'Subtle detailing that catches light without noise.' },
+            { icon: Mail, title: 'Direct atelier access', text: 'Speak to the studio for sizing, gifting, and curation.' },
+          ].map((item) => {
+            const Icon = item.icon;
+            return (
+              <div key={item.title} className="border border-white/10 bg-white/5 p-5">
+                <Icon size={18} className="text-[#C9A66B]" />
+                <h3 className="mt-4 font-serif text-xl">{item.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-white/70">{item.text}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
 }
 
-export function ArtisanList({ className = '' }: { className?: string }) {
-  return <section className={cn('mx-auto max-w-7xl px-5 py-14 sm:px-8 lg:px-10', className)}><div className="grid gap-5 lg:grid-cols-3">{(artisans ?? []).slice(0, 3).map((a: Artisan) => <ArtisanProfile key={a.id} artisan={a} />)}</div></section>;
+export function ArtisanRibbon({ className = '' }: SectionProps) {
+  return (
+    <section className={cn('mx-auto max-w-7xl px-4 py-10 md:px-8 md:py-16', className)}>
+      <div className="flex gap-4 overflow-x-auto pb-2">
+        {(artisans ?? []).slice(0, 4).map((artisan) => (
+          <article key={artisan.id} className="min-w-[16rem] flex-1 border border-[#D8CDBE] bg-[#FFFCF7] p-4">
+            <img src={artisan.portraitUrl} alt={artisan.name} crossOrigin="anonymous" className="aspect-[4/5] w-full object-cover" />
+            <div className="mt-4">
+              <p className="text-xs uppercase tracking-[0.3em] text-[#6E665D]">{artisan.location}</p>
+              <h3 className="mt-2 font-serif text-2xl text-[#2B2B2B]">{artisan.name}</h3>
+              <p className="mt-2 text-sm leading-6 text-[#6E665D]">{artisan.story}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
 }
 
-export function ArtisanProfile({ artisan = null, className = '' }: { artisan?: Artisan | null; className?: string }) {
-  return <article className={cn('border border-[#D8CDBD] bg-white p-5', className)}><div className="flex items-start gap-4"><img src={artisan?.image ?? 'https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=800&q=80'} alt={artisan?.name ?? 'Artisan'} crossOrigin="anonymous" className="h-24 w-20 object-cover" /><div className="min-w-0"><p className="text-xs uppercase tracking-[0.28em] text-[#675F56]">Master artisan</p><h3 className="mt-1 font-[Playfair_Display] text-2xl text-[#1A1A1A]">{artisan?.name ?? 'Unnamed artisan'}</h3><p className="mt-1 text-sm text-[#675F56]">{artisan?.location ?? 'Jodhpur, Rajasthan'}</p></div></div><p className="mt-4 text-sm leading-7 text-[#1A1A1A]">{artisan?.story ?? 'A lineage of hand-finished craftsmanship, preserving the silhouette and soul of the mojri.'}</p></article>;
+export function NewsletterPanel({ className = '' }: SectionProps) {
+  return (
+    <section className={cn('border-t border-[#D8CDBE] bg-[#F5F1EB]', className)}>
+      <div className="mx-auto grid max-w-7xl gap-6 px-4 py-12 md:grid-cols-[1.1fr_0.9fr] md:px-8 md:py-16">
+        <div>
+          <p className="text-xs uppercase tracking-[0.35em] text-[#6E665D]">Newsletter</p>
+          <h2 className="mt-3 font-serif text-3xl text-[#2B2B2B] md:text-5xl">Receive atelier notes, early drops, and private restocks.</h2>
+        </div>
+        <form className="flex flex-col gap-3 border border-[#D8CDBE] bg-[#FFFCF7] p-4 md:p-6">
+          <label className="text-xs uppercase tracking-[0.28em] text-[#6E665D]" htmlFor="newsletter-email">Email address</label>
+          <input id="newsletter-email" type="email" placeholder="name@example.com" className="border border-[#D8CDBE] bg-transparent px-4 py-3 text-sm text-[#2B2B2B] outline-none placeholder:text-[#9A9186]" />
+          <button type="button" className="inline-flex items-center justify-center gap-2 bg-[#C9A66B] px-4 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-black transition hover:bg-[#B38A4E]">
+            Subscribe <ArrowRight size={14} />
+          </button>
+        </form>
+      </div>
+    </section>
+  );
 }
 
-export function ManifestoSection({ className = '' }: { className?: string }) {
-  return <section className={cn('mx-auto max-w-7xl px-5 py-14 sm:px-8 lg:px-10', className)}><div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]"><div className="border border-[#D8CDBD] bg-[#1A1A1A] p-6 text-white"><p className="text-xs uppercase tracking-[0.35em] text-white/70">Manifesto</p><h2 className="mt-3 font-[Playfair_Display] text-3xl font-light">Made with restraint, worn with ceremony.</h2><p className="mt-4 text-sm leading-7 text-white/80">{editorialContent?.manifesto ?? 'Each pair is shaped to honor the ritual of dressing well: quiet luxury, tactile depth, and enduring comfort.'}</p></div><div className="grid gap-4 sm:grid-cols-2">{(editorialContent?.manifestoPoints ?? ['Hand-finished uppers','Supple leather lining','Traditional silhouette','Modern comfort']).map((point: string) => <div key={point} className="border border-[#D8CDBD] bg-white p-5"><p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#675F56]">{point}</p></div>)}</div></div></section>;
+export function EditorialHomeSections({ className = '' }: SectionProps) {
+  return (
+    <div className={cn('bg-[#F5F1EB]', className)}>
+      <AtelierTriptych />
+      <FeaturedMasonry />
+      <CategoryShowcase />
+      <CraftManifesto />
+      <ArtisanRibbon />
+      <NewsletterPanel />
+    </div>
+  );
 }
 
-export function NewsletterBand({ className = '' }: { className?: string }) {
-  return <section className={cn('bg-[#F5F1E9]', className)}><div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-10 sm:px-8 lg:flex-row lg:items-center lg:justify-between lg:px-10"><div><p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#675F56]">Newsletter</p><h2 className="mt-2 font-[Playfair_Display] text-3xl font-light text-[#1A1A1A]">Receive the next drop, quietly.</h2></div><div className="flex w-full max-w-xl gap-3"><input className="min-w-0 flex-1 border border-[#D8CDBD] bg-white px-4 py-3 text-sm outline-none" placeholder="Email address" /><button onClick={() => toast.success('Subscribed')} className="bg-[#A94721] px-5 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-white transition hover:bg-[#873619]">Join</button></div></div></section>;
-}
-
-const sections = { HeroBanner, ProductExperience, CheckoutForm, ArtisanList, ArtisanProfile, ManifestoSection, NewsletterBand };
-export default sections;
-export { sections };
+export default EditorialHomeSections;

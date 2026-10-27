@@ -1,109 +1,98 @@
-export type ProductSize = 'UK 5' | 'UK 6' | 'UK 7' | 'UK 8' | 'UK 9' | 'UK 10';
+export type ProductCategory = 'Mojri' | 'Jutti' | 'Kolhapuri' | 'Accessories' | 'New In' | 'Best Sellers';
 
-export interface Product {
+export type ShippingMethod = {
+  id: string;
+  label: string;
+  eta: string;
+  price: number;
+};
+
+export type PaymentMethod = 'card' | 'upi' | 'cod' | 'wallet';
+
+export type FilterState = {
+  query: string;
+  categories: ProductCategory[];
+  priceRange: [number, number];
+  sortBy: 'featured' | 'newest' | 'price-asc' | 'price-desc';
+};
+
+export type Artisan = {
   id: string;
   name: string;
+  location: string;
+  specialty: string;
+  portraitUrl: string;
+  story: string;
+};
+
+export type Product = {
+  id: string;
   slug: string;
+  name: string;
+  category: ProductCategory;
   price: number;
   compareAtPrice?: number | null;
-  category: string;
-  collection: string;
   description: string;
   image: string;
-  gallery: string[];
-  artisanId: string;
+  gallery?: string[];
+  artisanId?: string | null;
+  sizes: string[];
+  colors?: string[];
+  inStock: boolean;
   featured?: boolean;
   newArrival?: boolean;
-  inStock?: boolean;
-  sizes: ProductSize[];
-  materials: string[];
-  color: string;
   rating?: number;
   reviewCount?: number;
-}
+  material?: string;
+  care?: string;
+};
 
-export interface Artisan {
-  id: string;
-  name: string;
-  title: string;
-  location: string;
-  story: string;
-  image: string;
-  specialties: string[];
-  yearsActive?: number;
-}
-
-export interface Review {
-  id: string;
-  productId: string;
-  author: string;
-  rating: number;
-  title: string;
-  body: string;
-  createdAt: string;
-}
-
-export interface CartItem {
+export type CartItem = {
   productId: string;
   quantity: number;
-  size: ProductSize;
-  price: number;
-  name: string;
-  image: string;
-  slug: string;
-}
+  size: string;
+  color?: string | null;
+};
 
-export interface ShippingInfo {
-  fullName: string;
-  phone: string;
-  email: string;
-  addressLine1: string;
-  addressLine2?: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: 'India';
-}
-
-export interface PaymentInfo {
-  method: 'card' | 'upi' | 'cod';
-  cardHolderName?: string;
-  cardNumber?: string;
-  expiryMonth?: string;
-  expiryYear?: string;
-  cvv?: string;
-  upiId?: string;
-}
-
-export interface Order {
+export type CustomerProfile = {
   id: string;
-  orderNumber: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+};
+
+export type OrderStatus = 'pending' | 'paid' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+
+export type Order = {
+  id: string;
+  customer: CustomerProfile;
   items: CartItem[];
   subtotal: number;
   shipping: number;
   total: number;
-  shippingInfo: ShippingInfo;
-  paymentInfo: PaymentInfo;
-  status: 'pending' | 'confirmed' | 'shipped' | 'delivered';
+  shippingMethod: ShippingMethod;
+  paymentMethod: PaymentMethod;
+  status: OrderStatus;
   createdAt: string;
-}
+};
 
-export interface AuthUser {
+export type AuthSessionUser = {
   id: string;
   name: string;
   email: string;
   image?: string | null;
-}
+};
 
-export interface SessionUser {
-  user: AuthUser | null;
-  expires?: string | null;
-}
+export type AuthCredentials = {
+  email: string;
+  password: string;
+  name?: string;
+};
 
-export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  message?: string;
-}
+export type AuthResponse = {
+  user: AuthSessionUser | null;
+  token?: string | null;
+  error?: string | null;
+};
 
-export default {} as const;
+export default {};

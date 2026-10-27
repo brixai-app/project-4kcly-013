@@ -1,88 +1,143 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Eye, ShoppingBag } from 'lucide-react';
+import { ArrowRight, Heart, ShoppingBag, Star } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import type { Product } from '@/types';
+import type { FilterState, Product } from '@/types';
+import { useCart } from '@/context/CartContext';
 import ProductDetailModal from '@/components/ProductDetailModal';
 
 type ProductCardProps = {
   product?: Product | null;
-  masonrySpan?: 'sm' | 'md' | 'lg';
   className?: string;
 };
 
-export function ProductCard({ product = null, masonrySpan = 'md', className = '' }: ProductCardProps) {
-  const [open, setOpen] = React.useState(false);
-  const safeProduct = product ?? null;
-  if (!safeProduct) return null;
+type ProductGridProps = {
+  products?: Product[];
+  className?: string;
+  onQuickAdd?: (product: Product) => void;
+};
 
-  const spanClass =
-    masonrySpan === 'lg' ? 'md:col-span-2 md:row-span-2' : masonrySpan === 'sm' ? 'md:row-span-1' : 'md:row-span-2';
+type FiltersPanelProps = {
+  filters?: FilterState;
+  onChange?: (next: FilterState) => void;
+  categories?: string[];
+  className?: string;
+};
+
+export function ProductCard({ product = null, className = '' }: ProductCardProps) {
+  const { addItem } = useCart?.() ?? { addItem: () => undefined };
+  const [open, setOpen] = useState(false);
+  const [size, setSize] = useState(product?.sizes?.[0] ?? 'UK 7');
+
+  const image = product?.image ?? 'https://images.unsplash.com/photo-1509967419530-da38b4704bc6?auto=format&fit=crop&w=800&q=80';
+  const priceLabel = useMemo(() => `₹${Number(product?.price ?? 0).toLocaleString('en-IN')}`, [product?.price]);
+  const rating = product?.rating ?? 4.8;
+
+  if (!product?.id) return null;
+
+  const handleQuickAdd = () => {
+    addItem?.({ productId: product.id, quantity: 1, size, color: product?.colors?.[0] ?? null });
+    toast.success(`${product.name} added to cart`);
+  };
 
   return (
     <>
-      <motion.article
-        layout
-        initial={{ opacity: 0, y: 18 }}
-        animate={{ opacity: 1, y: 0 }}
-        whileHover={{ y: -4 }}
-        transition={{ duration: 0.45, ease: 'easeOut' }}
-        className={cn('group relative overflow-hidden border border-[#D8CCB9] bg-[#F5F1E9] shadow-[0_1px_0_rgba(0,0,0,0.04)]', spanClass, className)}
-      >
-        <Link to={`/shop/${safeProduct.slug}`} className="block">
-          <div className="relative aspect-[3/4] overflow-hidden bg-[#FAF9F6]">
-            <img
-              src={safeProduct.image ?? ''}
-              alt={safeProduct.name ?? 'Product image'}
-              crossOrigin="anonymous"
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/18 via-transparent to-transparent opacity-80" />
-            {safeProduct.newArrival ? (
-              <div className="absolute left-3 top-3 border border-white/70 bg-white/85 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#1A1A1A]">
-                New
+      <motion.article layout className={cn('group overflow-hidden rounded-md border border-[#D8CDBE] bg-[#FFFCF7] shadow-[0_10px_30px_rgba(43,43,43,0.06)]', className)}>
+        <button type="button" onClick={() => setOpen(true)} className="block w-full text-left">
+          <div className="relative aspect-[3/4] overflow-hidden bg-[#F5F1EB]">
+            <img src={image} alt={product.name} crossOrigin="anonymous" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+            <div className="absolute left-3 top-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-[#2B2B2B]">
+              <span className="h-px w-8 bg-[#C9A66B]" />
+              <span>{product.category}</span>
+            </div>
+            <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between gap-3">
+              <div className="min-w-0 rounded-sm bg-[#FFFCF7]/90 px-3 py-2 backdrop-blur-sm">
+                <p className="truncate text-sm font-semibold text-[#2B2B2B]">{product.name}</p>
+                <p className="text-xs uppercase tracking-[0.24em] text-[#6E665D]">{priceLabel}</p>
               </div>
-            ) : null}
+              <div className="flex items-center gap-1 rounded-sm bg-[#FFFCF7]/90 px-2 py-1 text-xs font-semibold text-[#2B2B2B] backdrop-blur-sm">
+                <Star className="h-3.5 w-3.5 fill-[#C9A66B] text-[#C9A66B]" />
+                <span>{rating.toFixed(1)}</span>
+              </div>
+            </div>
+            <div className="absolute inset-x-3 bottom-3 translate-y-12 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+              <div className="flex gap-2">
+                <button type="button" onClick={handleQuickAdd} className="flex-1 rounded-md bg-[#C9A66B] px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-black transition-colors hover:bg-[#B38A4E]">
+                  Quick Add
+                </button>
+                <button type="button" onClick={() => setOpen(true)} className="rounded-md border border-[#D8CDBE] bg-[#FFFCF7] px-3 py-2 text-[#2B2B2B] transition-colors hover:bg-[#F5F1EB]">
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
           </div>
-        </Link>
-
-        <div className="flex items-start justify-between gap-3 p-4">
+        </button>
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
           <div className="min-w-0">
-            <Link to={`/shop/${safeProduct.slug}`} className="block">
-              <h3 className="truncate font-['Playfair_Display'] text-lg font-medium leading-tight text-[#1A1A1A]">
-                {safeProduct.name}
-              </h3>
-            </Link>
-            <p className="mt-1 truncate text-[11px] font-semibold uppercase tracking-[0.22em] text-[#675F56]">
-              {safeProduct.collection ?? safeProduct.category}
-            </p>
-            <p className="mt-3 text-sm font-semibold text-[#1A1A1A]">₹{safeProduct.price.toLocaleString('en-IN')}</p>
+            <p className="truncate text-sm font-medium text-[#2B2B2B]">{product.description}</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-[#6E665D]">{product.inStock ? 'In stock' : 'Sold out'}</p>
           </div>
-
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="inline-flex h-10 shrink-0 items-center gap-2 border border-[#D8CCB9] bg-white px-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#1A1A1A] opacity-0 transition-all duration-300 group-hover:opacity-100 hover:border-[#A94720] hover:bg-[#A94720] hover:text-white"
-          >
-            <Eye className="h-4 w-4" />
-            Quick View
+          <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.22em] text-[#2B2B2B]">
+            Details <ArrowRight className="h-3.5 w-3.5" />
           </button>
         </div>
-
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex translate-y-3 items-center justify-between border-t border-[#D8CCB9] bg-[#FAF9F6]/95 px-4 py-3 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#675F56]">
-            {safeProduct.category ?? 'Mojri'}
-          </span>
-          <span className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#A94720]">
-            <ShoppingBag className="h-3.5 w-3.5" />
-            View Details
-          </span>
-        </div>
       </motion.article>
-
-      <ProductDetailModal product={safeProduct} open={open} onOpenChange={setOpen} />
+      <ProductDetailModal product={product} open={open} onOpenChange={setOpen} />
     </>
+  );
+}
+
+export function ProductGrid({ products = [], className = '', onQuickAdd }: ProductGridProps) {
+  return (
+    <div className={cn('grid gap-5 sm:grid-cols-2 xl:grid-cols-3', className)}>
+      {products?.map((product) => (
+        <div key={product.id} className="min-w-0">
+          <ProductCard product={product} />
+          {onQuickAdd ? (
+            <button type="button" onClick={() => onQuickAdd(product)} className="sr-only">
+              Add {product.name}
+            </button>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function FiltersPanel({ filters = { query: '', categories: [], priceRange: [0, 0], sortBy: 'featured' }, onChange, categories = [], className = '' }: FiltersPanelProps) {
+  const next = (patch: Partial<FilterState>) => onChange?.({ ...filters, ...patch });
+  return (
+    <aside className={cn('flex flex-col gap-2.5 rounded-md border border-[#D8CDBE] bg-[#FFFCF7] p-4', className)}>
+      <div className="min-w-0">
+        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#6E665D]">Filter</p>
+        <h3 className="min-w-0 truncate text-lg font-medium text-[#2B2B2B]">Refine the edit</h3>
+      </div>
+      <input value={filters.query ?? ''} onChange={(e) => next({ query: e.target.value })} placeholder="Search mojris, juttis..." className="w-full rounded-md border border-[#D8CDBE] bg-white px-3 py-2 text-sm text-[#2B2B2B] outline-none placeholder:text-[#6E665D]" />
+      <div className="flex flex-wrap gap-2">
+        {categories?.map((category) => {
+          const active = filters.categories?.includes(category) ?? false;
+          return (
+            <button key={category} type="button" onClick={() => next({ categories: active ? filters.categories.filter((c) => c !== category) : [...filters.categories, category] })} className={cn('min-w-0 rounded-sm border px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition-colors', active ? 'border-[#C9A66B] bg-[#C9A66B] text-black' : 'border-[#D8CDBE] bg-white text-[#2B2B2B]')}>
+              <span className="block truncate">{category}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-2">
+        <ShoppingBag className="h-4 w-4 text-[#6E665D]" />
+        <select value={filters.sortBy ?? 'featured'} onChange={(e) => next({ sortBy: e.target.value as FilterState['sortBy'] })} className="w-full rounded-md border border-[#D8CDBE] bg-white px-3 py-2 text-sm text-[#2B2B2B] outline-none">
+          <option value="featured">Featured</option>
+          <option value="newest">Newest</option>
+          <option value="price-asc">Price: Low to High</option>
+          <option value="price-desc">Price: High to Low</option>
+        </select>
+      </div>
+      <Link to="/shop" className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#2B2B2B]">
+        Explore all <ArrowRight className="h-3.5 w-3.5" />
+      </Link>
+    </aside>
   );
 }
 

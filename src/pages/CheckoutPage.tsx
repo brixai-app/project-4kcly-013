@@ -1,59 +1,137 @@
-import { Link } from 'react-router-dom';
-import { ArrowLeft, Shield, Truck, CheckCircle2 } from 'lucide-react';
+import React from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowLeft, CheckCircle2, Shield, Truck } from 'lucide-react';
 import { motion } from 'framer-motion';
-import CheckoutForm from '@/components/CheckoutForm';
+import { CheckoutForm } from '@/components/CartDrawer';
+import { useCart } from '@/context/CartContext';
+import { shippingMethods } from '@/data/mockData';
+import type { Order } from '@/types';
 
-export function CheckoutPage() {
-  return (
-    <main className="min-h-screen bg-[#F5F0E6] text-[#2B2B2B]">
-      <section className="border-b border-[#C9A66B]/70 bg-[#FFF9F0]">
-        <div className="mx-auto grid max-w-7xl gap-10 px-4 py-8 md:grid-cols-[1.1fr_0.9fr] md:px-6 lg:px-8">
-          <div className="space-y-6">
-            <Link
-              to="/shop"
-              className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#6F655B] transition-colors hover:text-[#7B2D26]"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Continue shopping
-            </Link>
-            <div className="space-y-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#7B2D26]">Secure checkout</p>
-              <h1 className="max-w-2xl font-['Playfair_Display'] text-5xl font-light tracking-tight text-[#2B2B2B] md:text-6xl">
-                Complete your Jodhpuri order with quiet precision.
-              </h1>
-              <p className="max-w-xl font-['Lora'] text-base leading-7 text-[#6F655B]">
-                Review your selected mojris, enter shipping details, and confirm a handcrafted pair prepared for dispatch from our atelier.
+type CheckoutPageProps = {
+  className?: string;
+};
+
+export function CheckoutPage({ className = '' }: CheckoutPageProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { items, subtotal, shipping, total, clearCart } = useCart() as {
+    items?: unknown[];
+    subtotal?: number;
+    shipping?: number;
+    total?: number;
+    clearCart?: () => void;
+  };
+  const [order, setOrder] = React.useState<Order | null>(null);
+
+  const isConfirmation = location.pathname?.includes('/confirmation') ?? false;
+
+  const handleSubmit = React.useCallback(
+    (payload?: Order) => {
+      if (payload) setOrder(payload);
+      clearCart?.();
+      navigate('/checkout/confirmation', { replace: true, state: { order: payload ?? order } });
+    },
+    [clearCart, navigate, order]
+  );
+
+  const activeOrder = (location.state as { order?: Order } | null)?.order ?? order ?? null;
+
+  if (isConfirmation) {
+    return (
+      <div className={`mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 lg:px-8 ${className}`}>
+        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="rounded-md border border-[#D8CDBE] bg-[#FFFCF7] p-6 shadow-[0_18px_50px_rgba(43,43,43,0.08)]">
+          <div className="flex items-start gap-4">
+            <div className="mt-1 rounded-md border border-[#D8CDBE] bg-[#F5F1EB] p-3">
+              <CheckCircle2 className="h-5 w-5 text-[#C9A66B]" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6E665D]">Order confirmed</p>
+              <h1 className="mt-2 font-['Playfair_Display'] text-3xl font-light tracking-tight text-[#2B2B2B]">Your Jootiya order is being prepared</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-[#6E665D]">
+                {activeOrder ? `Order ${activeOrder.id} has been received. We will share shipping updates shortly.` : 'Your checkout is complete. We will share shipping updates shortly.'}
               </p>
             </div>
           </div>
 
-          <motion.aside
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, ease: 'easeOut' }}
-            className="grid gap-4 self-end border border-[#C9A66B] bg-[#FFF9F0] p-5"
-          >
-            {[
-              { icon: Shield, title: 'Protected payment flow', text: 'Your details are handled through a streamlined, secure checkout experience.' },
-              { icon: Truck, title: 'Careful dispatch', text: 'Orders are packed with heritage-grade attention and shipped with tracking.' },
-              { icon: CheckCircle2, title: 'Order confirmation', text: 'Receive a confirmation summary immediately after submission.' },
-            ].map((item) => (
-              <div key={item.title} className="flex gap-3">
-                <item.icon className="mt-0.5 h-5 w-5 shrink-0 text-[#7B2D26]" />
-                <div>
-                  <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-[#2B2B2B]">{item.title}</h2>
-                  <p className="mt-1 text-sm leading-6 text-[#6F655B]">{item.text}</p>
-                </div>
-              </div>
-            ))}
-          </motion.aside>
-        </div>
-      </section>
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            <div className="rounded-md border border-[#D8CDBE] bg-white p-4">
+              <Truck className="h-5 w-5 text-[#C9A66B]" />
+              <p className="mt-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#6E665D]">Shipping</p>
+              <p className="mt-2 text-sm text-[#2B2B2B]">{activeOrder?.shippingMethod?.label ?? shippingMethods?.[0]?.label ?? 'Standard delivery'}</p>
+            </div>
+            <div className="rounded-md border border-[#D8CDBE] bg-white p-4">
+              <Shield className="h-5 w-5 text-[#C9A66B]" />
+              <p className="mt-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#6E665D]">Payment</p>
+              <p className="mt-2 text-sm text-[#2B2B2B]">{activeOrder?.paymentMethod?.toUpperCase?.() ?? 'UPI'}</p>
+            </div>
+            <div className="rounded-md border border-[#D8CDBE] bg-white p-4">
+              <CheckCircle2 className="h-5 w-5 text-[#C9A66B]" />
+              <p className="mt-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#6E665D]">Total</p>
+              <p className="mt-2 text-sm text-[#2B2B2B]">₹{Number(activeOrder?.total ?? total ?? 0).toLocaleString('en-IN')}</p>
+            </div>
+          </div>
 
-      <section className="mx-auto max-w-7xl px-4 py-8 md:px-6 lg:px-8">
-        <CheckoutForm className="mx-auto max-w-5xl" />
-      </section>
-    </main>
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            <Link to="/shop" className="inline-flex items-center gap-2 rounded-md border border-[#2B2B2B] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#2B2B2B] transition-colors hover:bg-[#2B2B2B] hover:text-white">
+              Continue shopping
+            </Link>
+            <button type="button" onClick={() => navigate('/')} className="inline-flex items-center gap-2 rounded-md border border-[#D8CDBE] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#6E665D] transition-colors hover:border-[#C9A66B] hover:text-[#2B2B2B]">
+              <ArrowLeft className="h-4 w-4" />
+              Return home
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8 ${className}`}>
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6E665D]">Checkout</p>
+          <h1 className="mt-2 font-['Playfair_Display'] text-4xl font-light tracking-tight text-[#2B2B2B]">Finalize your order</h1>
+        </div>
+        <Link to="/shop" className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#6E665D] transition-colors hover:text-[#2B2B2B]">
+          <ArrowLeft className="h-4 w-4" />
+          Back to shop
+        </Link>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="rounded-md border border-[#D8CDBE] bg-[#FFFCF7] p-5 shadow-[0_18px_50px_rgba(43,43,43,0.06)]">
+          <CheckoutForm
+            shippingMethod={shippingMethods?.[0] ?? null}
+            subtotal={subtotal ?? 0}
+            shipping={shipping ?? 0}
+            total={total ?? 0}
+            onSubmit={handleSubmit}
+          />
+        </div>
+
+        <aside className="rounded-md border border-[#D8CDBE] bg-[#F5F1EB] p-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6E665D]">Order summary</p>
+          <div className="mt-4 space-y-3 text-sm text-[#2B2B2B]">
+            <div className="flex items-center justify-between gap-4">
+              <span>Items</span>
+              <span>{items?.length ?? 0}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span>Subtotal</span>
+              <span>₹{Number(subtotal ?? 0).toLocaleString('en-IN')}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span>Shipping</span>
+              <span>₹{Number(shipping ?? 0).toLocaleString('en-IN')}</span>
+            </div>
+            <div className="border-t border-[#D8CDBE] pt-3 flex items-center justify-between gap-4 font-semibold">
+              <span>Total</span>
+              <span>₹{Number(total ?? 0).toLocaleString('en-IN')}</span>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
   );
 }
 

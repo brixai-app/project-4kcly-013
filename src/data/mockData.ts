@@ -1,198 +1,211 @@
-import type { Artisan, Product, Review } from '@/types';
+import type { Artisan, Product, ProductCategory, ShippingMethod } from '@/types';
+
+export const imageAssets = {
+  heroPrimary: 'https://images.unsplash.com/photo-1590874103328-eac38a683ce7?auto=format&fit=crop&w=800&q=80',
+  heroSecondary: 'https://images.unsplash.com/photo-1533867617858-e7b97e060509?auto=format&fit=crop&w=800&q=80',
+  heroAccent: 'https://images.unsplash.com/photo-1560769629-975ec94e6a86?auto=format&fit=crop&w=800&q=80',
+  artisanOne: 'https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&w=1400&q=85',
+  artisanTwo: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1400&q=85',
+  artisanThree: 'https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&w=1400&q=85',
+} as const;
+
+export const categories: ProductCategory[] = ['Mojri', 'Jutti', 'Kolhapuri', 'Accessories', 'New In', 'Best Sellers'];
+
+export const shippingMethods: ShippingMethod[] = [
+  { id: 'standard', label: 'Standard Delivery', eta: '4-6 business days', price: 0 },
+  { id: 'express', label: 'Express Delivery', eta: '2-3 business days', price: 249 },
+  { id: 'priority', label: 'Priority Hand Delivery', eta: '1-2 business days', price: 499 },
+];
 
 export const artisans: Artisan[] = [
   {
     id: 'artisan-1',
     name: 'Rafiq Khan',
-    title: 'Master Mojri Cutter',
     location: 'Jodhpur, Rajasthan',
-    story:
-      'Rafiq shapes each pair with a measured hand, balancing heritage patterning with a clean, modern silhouette refined for long wear.',
-    image: 'https://images.unsplash.com/photo-1590874103328-eac38a683ce7?auto=format&fit=crop&w=800&q=80',
-    specialties: ['Hand-cut uppers', 'Leather finishing', 'Thread detailing'],
-    yearsActive: 24,
+    specialty: 'Hand-stitched men’s mojris',
+    portraitUrl: imageAssets.artisanOne,
+    story: 'Rafiq shapes supple uppers with a quiet precision inherited across three generations of workshop craft.',
   },
   {
     id: 'artisan-2',
     name: 'Amina Bano',
-    title: 'Embroidery Atelier Lead',
-    location: 'Jodhpur, Rajasthan',
-    story:
-      'Amina translates floral and geometric motifs into restrained surface work, giving every pair a quiet, couture-like depth.',
-    image: 'https://images.unsplash.com/photo-1533867617858-e7b97e060509?auto=format&fit=crop&w=800&q=80',
-    specialties: ['Zardozi accents', 'Mirror work', 'Surface embroidery'],
-    yearsActive: 18,
+    location: 'Bikaner, Rajasthan',
+    specialty: 'Mirror-work and embroidered juttis',
+    portraitUrl: imageAssets.artisanTwo,
+    story: 'Amina balances delicate embroidery with durable construction, creating pieces that feel ceremonial yet wearable.',
   },
   {
     id: 'artisan-3',
     name: 'Salim Noor',
-    title: 'Lasting & Sole Artisan',
-    location: 'Jodhpur, Rajasthan',
-    story:
-      'Salim finishes the structure from inside out, ensuring the sole, arch, and toe line remain elegant without sacrificing comfort.',
-    image: 'https://images.unsplash.com/photo-1560769629-975ec94e6a86?auto=format&fit=crop&w=800&q=80',
-    specialties: ['Sole shaping', 'Comfort lasting', 'Edge burnishing'],
-    yearsActive: 21,
+    location: 'Jaipur, Rajasthan',
+    specialty: 'Vegetable-tanned finishing and dyeing',
+    portraitUrl: imageAssets.artisanThree,
+    story: 'Salim finishes each pair with natural dyes and burnished edges that deepen beautifully with time.',
   },
 ];
 
 export const products: Product[] = [
   {
-    id: 'prod-1',
-    name: 'Mehrab Ivory Mojri',
-    slug: 'mehrab-ivory-mojri',
-    price: 3490,
-    compareAtPrice: 4290,
-    category: 'Wedding Edit',
-    collection: 'The Heritage Edit',
-    description:
-      'An ivory mojri with hand-finished edges, subtle tonal embroidery, and a softened profile designed for ceremonial dressing.',
-    image: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1400&q=85',
-    gallery: [
-      'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&w=1400&q=85',
-    ],
+    id: 'prod-001',
+    slug: 'maharaja-ivory-mojri',
+    name: 'Maharaja Ivory Mojri',
+    category: 'Mojri',
+    price: 3499,
+    compareAtPrice: 4299,
+    description: 'An ivory leather mojri with hand-finished piping, a softly pointed toe, and a refined ceremonial silhouette.',
+    image: imageAssets.heroPrimary,
+    gallery: [imageAssets.heroPrimary, imageAssets.heroSecondary, imageAssets.heroAccent],
     artisanId: 'artisan-1',
-    featured: true,
-    newArrival: true,
+    sizes: ['6', '7', '8', '9', '10', '11'],
+    colors: ['Ivory', 'Sand'],
     inStock: true,
-    sizes: ['UK 5', 'UK 6', 'UK 7', 'UK 8', 'UK 9'],
-    materials: ['Genuine leather', 'Cotton lining', 'Hand embroidery'],
-    color: 'Ivory',
+    featured: true,
+    newArrival: false,
     rating: 4.9,
     reviewCount: 128,
+    material: 'Vegetable-tanned leather',
+    care: 'Store in a dust bag and condition lightly after wear.',
   },
   {
-    id: 'prod-2',
-    name: 'Noor Terracotta Mojri',
-    slug: 'noor-terracotta-mojri',
-    price: 2890,
-    compareAtPrice: null,
-    category: 'Occasion Wear',
-    collection: 'Sunset Atelier',
-    description:
-      'A terracotta-toned pair with a sculpted toe and understated threadwork that pairs easily with festive tailoring.',
-    image: 'https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&w=1400&q=85',
-    gallery: [
-      'https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80',
-    ],
+    id: 'prod-002',
+    slug: 'noor-ember-jutti',
+    name: 'Noor Ember Jutti',
+    category: 'Jutti',
+    price: 2899,
+    description: 'A deep ember jutti with tonal embroidery and a cushioned footbed for long evenings and formal occasions.',
+    image: imageAssets.heroSecondary,
+    gallery: [imageAssets.heroSecondary, imageAssets.heroAccent],
     artisanId: 'artisan-2',
-    featured: true,
+    sizes: ['5', '6', '7', '8', '9'],
+    colors: ['Ember', 'Wine'],
     inStock: true,
-    sizes: ['UK 6', 'UK 7', 'UK 8', 'UK 9', 'UK 10'],
-    materials: ['Suede leather', 'Silk thread', 'Leather sole'],
-    color: 'Terracotta',
+    featured: true,
+    newArrival: true,
     rating: 4.8,
     reviewCount: 94,
+    material: 'Leather upper with textile embroidery',
+    care: 'Wipe gently with a dry cloth and avoid direct moisture.',
   },
   {
-    id: 'prod-3',
-    name: 'Saffron Court Mojri',
-    slug: 'saffron-court-mojri',
-    price: 3190,
-    compareAtPrice: 3790,
-    category: 'Festive Classics',
-    collection: 'The Court Series',
-    description:
-      'A saffron mojri with antique-gold accents and a polished finish that reads refined from day ceremony to evening reception.',
-    image: 'https://images.unsplash.com/photo-1533867617858-e7b97e060509?auto=format&fit=crop&w=800&q=80',
-    gallery: [
-      'https://images.unsplash.com/photo-1533867617858-e7b97e060509?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1590874103328-eac38a683ce7?auto=format&fit=crop&w=800&q=80',
-    ],
+    id: 'prod-003',
+    slug: 'sandstone-kolhapuri',
+    name: 'Sandstone Kolhapuri',
+    category: 'Kolhapuri',
+    price: 2199,
+    description: 'A pared-back Kolhapuri with braided straps, a matte finish, and a grounded everyday profile.',
+    image: imageAssets.heroAccent,
+    gallery: [imageAssets.heroAccent, imageAssets.heroPrimary],
     artisanId: 'artisan-3',
+    sizes: ['6', '7', '8', '9', '10'],
+    colors: ['Sandstone', 'Cocoa'],
+    inStock: true,
     featured: false,
     newArrival: true,
-    inStock: true,
-    sizes: ['UK 5', 'UK 6', 'UK 7', 'UK 8'],
-    materials: ['Full-grain leather', 'Hand-stitched upper', 'Padded insole'],
-    color: 'Saffron',
     rating: 4.7,
     reviewCount: 61,
+    material: 'Natural leather',
+    care: 'Keep away from prolonged sun exposure and polish sparingly.',
   },
   {
-    id: 'prod-4',
-    name: 'Obsidian Dusk Mojri',
-    slug: 'obsidian-dusk-mojri',
-    price: 3690,
-    compareAtPrice: null,
-    category: 'Evening Edit',
-    collection: 'Midnight Loom',
-    description:
-      'A charcoal-black silhouette with a sleek profile, designed to anchor formal looks with quiet authority.',
-    image: 'https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&w=1400&q=85',
-    gallery: [
-      'https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1400&q=85',
-    ],
-    artisanId: 'artisan-1',
-    featured: true,
+    id: 'prod-004',
+    slug: 'heritage-thread-clutch',
+    name: 'Heritage Thread Clutch',
+    category: 'Accessories',
+    price: 1799,
+    description: 'A compact accessory pouch with woven detailing, ideal for gifting, travel, and ceremonial dressing.',
+    image: imageAssets.artisanOne,
+    gallery: [imageAssets.artisanOne, imageAssets.artisanTwo],
+    artisanId: 'artisan-2',
+    sizes: ['One Size'],
+    colors: ['Natural', 'Charcoal'],
     inStock: true,
-    sizes: ['UK 6', 'UK 7', 'UK 8', 'UK 9', 'UK 10'],
-    materials: ['Polished leather', 'Soft lining', 'Leather outsole'],
-    color: 'Charcoal',
+    featured: false,
+    newArrival: false,
+    rating: 4.6,
+    reviewCount: 37,
+    material: 'Textile and leather trim',
+    care: 'Spot clean only and store flat.',
+  },
+  {
+    id: 'prod-005',
+    slug: 'desert-loom-mojri',
+    name: 'Desert Loom Mojri',
+    category: 'Best Sellers',
+    price: 3199,
+    compareAtPrice: 3799,
+    description: 'A bestselling mojri with subtle loom texture, softened lining, and a versatile profile for daily wear.',
+    image: imageAssets.artisanTwo,
+    gallery: [imageAssets.artisanTwo, imageAssets.artisanThree],
+    artisanId: 'artisan-1',
+    sizes: ['6', '7', '8', '9', '10', '11'],
+    colors: ['Taupe', 'Clay'],
+    inStock: true,
+    featured: true,
+    newArrival: false,
     rating: 4.9,
-    reviewCount: 83,
+    reviewCount: 201,
+    material: 'Full-grain leather',
+    care: 'Use a neutral conditioner and air dry naturally.',
+  },
+  {
+    id: 'prod-006',
+    slug: 'atelier-midnight-jutti',
+    name: 'Atelier Midnight Jutti',
+    category: 'New In',
+    price: 3699,
+    description: 'A midnight-toned jutti with restrained metallic accents and a sculpted, elegant finish.',
+    image: imageAssets.artisanThree,
+    gallery: [imageAssets.artisanThree, imageAssets.heroPrimary, imageAssets.heroAccent],
+    artisanId: 'artisan-3',
+    sizes: ['5', '6', '7', '8', '9', '10'],
+    colors: ['Midnight', 'Graphite'],
+    inStock: false,
+    featured: true,
+    newArrival: true,
+    rating: 4.8,
+    reviewCount: 48,
+    material: 'Leather with metallic threadwork',
+    care: 'Keep in breathable storage and avoid abrasive surfaces.',
   },
 ];
 
-export const reviews: Review[] = [
-  {
-    id: 'rev-1',
-    productId: 'prod-1',
-    author: 'Aarav S.',
-    rating: 5,
-    title: 'Elegant and exceptionally comfortable',
-    body:
-      'The finish is immaculate and the fit feels tailored. It looked refined with sherwani and remained comfortable through the evening.',
-    createdAt: '2026-01-12T10:20:00.000Z',
-  },
-  {
-    id: 'rev-2',
-    productId: 'prod-2',
-    author: 'Meera K.',
-    rating: 5,
-    title: 'Beautiful color and craftsmanship',
-    body:
-      'The terracotta tone is richer in person and the embroidery is subtle, which makes it feel luxurious rather than ornate.',
-    createdAt: '2026-02-03T14:05:00.000Z',
-  },
-  {
-    id: 'rev-3',
-    productId: 'prod-4',
-    author: 'Kabir M.',
-    rating: 4,
-    title: 'Sharp silhouette, premium feel',
-    body:
-      'The pair has a clean line and a polished look that works beautifully for formal evenings. Packaging was also excellent.',
-    createdAt: '2026-02-18T08:45:00.000Z',
-  },
-];
+export const editorialCopy = {
+  heroTitle: 'Jootiya',
+  heroSubtitle: 'Luxury Jodhpuri mojris, shaped by hand and framed like collectible fashion.',
+  heroBody:
+    'Warm parchment surfaces, deep charcoal typography, and soft-gold detailing guide a modern editorial storefront rooted in authentic craft.',
+  heroCta: 'Explore Collection',
+  manifestoTitle: 'Craft, carried forward',
+  manifestoBody:
+    'Every pair is selected for silhouette, finish, and the quiet authority of workmanship that improves with wear.',
+  newsletterTitle: 'Receive the next drop',
+  newsletterBody:
+    'Early access to new arrivals, artisan stories, and seasonal edits from the Jootiya atelier.',
+} as const;
 
-export const navigation = [
-  { label: 'Home', href: '/' },
-  { label: 'Shop', href: '/shop' },
-  { label: 'Craft', href: '/#craft' },
-  { label: 'Journal', href: '/#journal' },
-];
-
-export const editorial = {
-  hero: {
-    eyebrow: 'Jodhpur atelier / handcrafted mojris',
-    title: 'Crafted for ceremonial presence, refined for modern dressing.',
-    description:
-      'A luxury commerce experience shaped by ivory light, terracotta warmth, and the disciplined hand of Jodhpuri artisans.',
-    ctaLabel: 'Explore Collection',
-    ctaHref: '/shop',
-    image: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1400&q=85',
-  },
-  manifesto: {
-    title: 'Heritage, edited with restraint.',
-    body:
-      'Each pair is cut, stitched, and finished in small batches, preserving the tactile character of traditional mojri making while presenting it through a contemporary editorial lens.',
-  },
+const mockData = {
+  imageAssets,
+  categories,
+  shippingMethods,
+  artisans,
+  products,
+  editorialCopy,
 };
 
-export const mockData = { products, artisans, reviews, navigation, editorial };
 export default mockData;
+export { mockData };
+
+export const sizeGuide: any = [
+  { size: 'XS', chest: '34-36', waist: '28-30' },
+  { size: 'S', chest: '36-38', waist: '30-32' },
+  { size: 'M', chest: '38-40', waist: '32-34' },
+  { size: 'L', chest: '40-42', waist: '34-36' },
+  { size: 'XL', chest: '42-44', waist: '36-38' },
+];
+
+export const editorialContent: any = {
+  title: 'Crafted with Purpose',
+  subtitle: 'Modern Aesthetics & Timeless Form',
+  description: 'Every collection is meticulously designed to merge functional utility with striking visual hierarchy.',
+  sections: [],
+};

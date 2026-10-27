@@ -1,186 +1,148 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronDown, Filter, Search, Sliders } from 'lucide-react';
-import { products } from '@/data/mockData';
-import { ProductMasonryGrid } from '@/components/ProductCard';
+import { ArrowLeft, Filter, Search } from 'lucide-react';
+import { ProductGrid, FiltersPanel } from '@/components/ProductCard';
+import { ProductDetailModal } from '@/components/ProductDetailModal';
+import { products, categories } from '@/data/mockData';
+import type { FilterState, Product } from '@/types';
 import { cn } from '@/lib/utils';
-import type { Product, ProductFilters } from '@/types';
 
 export function ShopPage({ className = '' }: { className?: string }) {
-  const [query, setQuery] = useState('');
-  const [category, setCategory] = useState('all');
-  const [size, setSize] = useState('all');
-  const [color, setColor] = useState('all');
-  const [style, setStyle] = useState('all');
-  const [sortBy, setSortBy] = useState<ProductFilters['sortBy']>('featured');
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 25000]);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const params = useParams<{ productId?: string }>();
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [filters, setFilters] = useState<FilterState>({
+    query: '',
+    categories: [],
+    priceRange: [0, 0],
+    sortBy: 'featured',
+  });
+
+  const activeProduct = useMemo(() => {
+    const slug = params?.productId ?? '';
+    return products.find((product) => product?.slug === slug) ?? null;
+  }, [params?.productId]);
+
+  useEffect(() => {
+    setDetailOpen(Boolean(activeProduct));
+  }, [activeProduct]);
+
+  useEffect(() => {
+    const prices = products.map((product) => product?.price ?? 0);
+    const min = prices.length ? Math.min(...prices) : 0;
+    const max = prices.length ? Math.max(...prices) : 0;
+    setFilters((prev) => ({
+      ...prev,
+      priceRange: prev.priceRange?.[0] === 0 && prev.priceRange?.[1] === 0 ? [min, max] : prev.priceRange,
+    }));
+  }, []);
 
   const filteredProducts = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return (products ?? []).filter((product: Product) => {
-      const matchesQuery =
-        !q ||
-        [product.name, product.description, product.category, product.material, product.color, product.artisan]
-          .filter(Boolean)
-          .some((value) => String(value ?? '').toLowerCase().includes(q));
-      const matchesCategory = category === 'all' || String(product.category ?? '').toLowerCase() === category;
-      const matchesSize = size === 'all' || (product.sizes ?? []).includes(size);
-      const matchesColor = color === 'all' || String(product.color ?? '').toLowerCase().includes(color);
-      const matchesStyle = style === 'all' || String(product.material ?? '').toLowerCase().includes(style);
-      const matchesPrice = product.price >= priceRange[0] && product.price <= priceRange[1];
-      return matchesQuery && matchesCategory && matchesSize && matchesColor && matchesStyle && matchesPrice;
-    }).sort((a, b) => {
-      if (sortBy === 'price-asc') return a.price - b.price;
-      if (sortBy === 'price-desc') return b.price - a.price;
-      if (sortBy === 'newest') return Number(b.featured ?? false) - Number(a.featured ?? false);
-      return Number(b.featured ?? false) - Number(a.featured ?? false) || (b.rating ?? 0) - (a.rating ?? 0);
-    });
-  }, [query, category, size, color, style, sortBy, priceRange]);
+    const query = filters?.query?.trim().toLowerCase() ?? '';
+    const [minPrice, maxPrice] = filters?.priceRange ?? [0, 0];
+    const selected = filters?.categories ?? [];
 
-  const categories = ['all', 'mojri', 'bridal', 'festive', 'classic', 'limited'];
-  const sizes = ['all', '6', '7', '8', '9', '10', '11'];
-  const colors = ['all', 'tan', 'brown', 'ivory', 'gold', 'black'];
-  const styles = ['all', 'leather', 'embroidered', 'handcrafted', 'suede'];
+    const list = products.filter((product) => {
+      const matchesQuery =
+        !query ||
+        [product?.name, product?.description, product?.category, product?.material]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(query));
+      const matchesCategory = !selected.length || selected.includes(product?.category ?? 'Mojri');
+      const price = product?.price ?? 0;
+      const matchesPrice = price >= minPrice && price <= maxPrice;
+      return matchesQuery && matchesCategory && matchesPrice;
+    });
+
+    const sortBy = filters?.sortBy ?? 'featured';
+    return [...list].sort((a, b) => {
+      if (sortBy === 'price-asc') return (a?.price ?? 0) - (b?.price ?? 0);
+      if (sortBy === 'price-desc') return (b?.price ?? 0) - (a?.price ?? 0);
+      if (sortBy === 'newest') return Number(Boolean(b?.newArrival)) - Number(Boolean(a?.newArrival));
+      return Number(Boolean(b?.featured)) - Number(Boolean(a?.featured));
+    });
+  }, [filters]);
+
+  const handleQuickAdd = (product: Product) => {
+    if (product?.slug) navigate(`/products/${product.slug}`);
+  };
+
+  const handleFiltersChange = (next: FilterState) => setFilters(next);
+
+  const handleOpenChange = (open: boolean) => {
+    setDetailOpen(open);
+    if (!open && params?.productId) navigate('/products');
+  };
 
   return (
-    <div className={cn('bg-[#FAF9F6] text-[#1A1A1A]', className)}>
-      <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <main className={cn('bg-[#F5F1EB] text-[#2B2B2B]', className)}>
+      <section className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mb-6 flex items-center justify-between gap-4 border-b border-[#D8CDBE] pb-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#6E665D]">
+              <Filter className="h-4 w-4" />
+              <span>Curated Catalog</span>
+            </div>
+            <h1 className="mt-2 font-['Playfair_Display'] text-3xl font-light tracking-tight sm:text-4xl">
+              Jodhpuri Mojris
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6E665D]">
+              Explore handcrafted silhouettes, refined leathers, and artisan-made pairs selected for ceremonial and everyday wear.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="inline-flex items-center gap-2 border border-[#D8CDBE] bg-[#FFFCF7] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#2B2B2B] transition hover:border-[#C9A66B] hover:text-black"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
+        </div>
+
         <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-          <aside className="rounded-sm border border-[#D8CDBD] bg-white p-4">
-            <div className="mb-4 flex items-center gap-2">
-              <Filter className="h-4 w-4 text-[#A94721]" />
-              <h1 className="min-w-0 truncate font-['Playfair_Display'] text-2xl font-medium">Shop Jootiya</h1>
+          <aside className="min-w-0 border border-[#D8CDBE] bg-[#FFFCF7] p-4 shadow-[0_10px_30px_rgba(43,43,43,0.06)]">
+            <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#6E665D]">
+              <Search className="h-4 w-4" />
+              <span>Filters</span>
             </div>
-
-            <div className="space-y-4">
-              <label className="block">
-                <span className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-[#675F56]">
-                  <Search className="h-3.5 w-3.5" />
-                  Search
-                </span>
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search mojris, colors, artisans"
-                  className="w-full rounded-sm border border-[#D8CDBD] bg-[#FAF9F6] px-3 py-2 text-sm outline-none transition focus:border-[#A94721]"
-                />
-              </label>
-
-              <div>
-                <span className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-[#675F56]">
-                  <Sliders className="h-3.5 w-3.5" />
-                  Category
-                </span>
-                <div className="flex flex-col gap-2.5">
-                  {categories.map((item) => (
-                    <button
-                      key={item}
-                      onClick={() => setCategory(item)}
-                      className={cn(
-                        'min-w-0 truncate rounded-sm border px-3 py-2 text-left text-xs font-semibold uppercase tracking-widest transition',
-                        category === item
-                          ? 'border-[#A94721] bg-[#A94721] text-white'
-                          : 'border-[#D8CDBD] bg-white text-[#1A1A1A] hover:border-[#A94721]'
-                      )}
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <span className="mb-2 block text-xs font-semibold uppercase tracking-widest text-[#675F56]">Size</span>
-                <div className="flex flex-wrap gap-2">
-                  {sizes.map((item) => (
-                    <button
-                      key={item}
-                      onClick={() => setSize(item)}
-                      className={cn(
-                        'rounded-sm border px-3 py-2 text-xs font-semibold uppercase tracking-widest transition',
-                        size === item
-                          ? 'border-[#A94721] bg-[#A94721] text-white'
-                          : 'border-[#D8CDBD] bg-white text-[#1A1A1A] hover:border-[#A94721]'
-                      )}
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <span className="mb-2 block text-xs font-semibold uppercase tracking-widest text-[#675F56]">Color</span>
-                <div className="flex flex-wrap gap-2">
-                  {colors.map((item) => (
-                    <button
-                      key={item}
-                      onClick={() => setColor(item)}
-                      className={cn(
-                        'rounded-sm border px-3 py-2 text-xs font-semibold uppercase tracking-widest transition',
-                        color === item
-                          ? 'border-[#A94721] bg-[#A94721] text-white'
-                          : 'border-[#D8CDBD] bg-white text-[#1A1A1A] hover:border-[#A94721]'
-                      )}
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <span className="mb-2 block text-xs font-semibold uppercase tracking-widest text-[#675F56]">Style</span>
-                <div className="flex flex-wrap gap-2">
-                  {styles.map((item) => (
-                    <button
-                      key={item}
-                      onClick={() => setStyle(item)}
-                      className={cn(
-                        'rounded-sm border px-3 py-2 text-xs font-semibold uppercase tracking-widest transition',
-                        style === item
-                          ? 'border-[#A94721] bg-[#A94721] text-white'
-                          : 'border-[#D8CDBD] bg-white text-[#1A1A1A] hover:border-[#A94721]'
-                      )}
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <span className="mb-2 block text-xs font-semibold uppercase tracking-widest text-[#675F56]">Price Sort</span>
-                <button
-                  onClick={() => setSortBy(sortBy === 'price-asc' ? 'price-desc' : 'price-asc')}
-                  className="flex w-full items-center justify-between rounded-sm border border-[#D8CDBD] bg-white px-3 py-2 text-xs font-semibold uppercase tracking-widest transition hover:border-[#A94721]"
-                >
-                  <span>{sortBy === 'price-asc' ? 'Price Low to High' : 'Price High to Low'}</span>
-                  <ChevronDown className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
+            <FiltersPanel filters={filters} onChange={handleFiltersChange} categories={categories} className="min-w-0" />
           </aside>
 
-          <div className="min-w-0">
-            <motion.div
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="mb-6 flex flex-col gap-3 border-b border-[#D8CDBD] pb-4 sm:flex-row sm:items-end sm:justify-between"
-            >
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-[#675F56]">Curated catalog</p>
-                <h2 className="font-['Playfair_Display'] text-3xl font-medium">Hand-finished Jodhpuri Mojris</h2>
-              </div>
-              <p className="text-sm text-[#675F56]">{filteredProducts.length} pieces refined for your edit</p>
-            </motion.div>
+          <section className="min-w-0">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <p className="text-sm text-[#6E665D]">
+                {filteredProducts.length} piece{filteredProducts.length === 1 ? '' : 's'} selected
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate(`${location.pathname}`)}
+                className="text-xs font-semibold uppercase tracking-[0.22em] text-[#C9A66B] transition hover:text-[#B38A4E]"
+              >
+                Reset view
+              </button>
+            </div>
 
-            <ProductMasonryGrid products={filteredProducts} className="pb-8" />
-          </div>
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, ease: 'easeOut' }}
+            >
+              <ProductGrid products={filteredProducts} onQuickAdd={handleQuickAdd} className="min-w-0" />
+            </motion.div>
+          </section>
         </div>
       </section>
-    </div>
+
+      <ProductDetailModal
+        open={detailOpen}
+        onOpenChange={handleOpenChange}
+        product={activeProduct}
+        slug={params?.productId ?? ''}
+      />
+    </main>
   );
 }
 
