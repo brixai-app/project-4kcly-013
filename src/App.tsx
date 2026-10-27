@@ -1,16 +1,13 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { CartProvider } from '@/context/CartContext';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import CartDrawer from '@/components/CartDrawer';
-import ProductDetailModal from '@/components/ProductDetailModal';
 import Home from '@/pages/Home';
 import ShopPage from '@/pages/ShopPage';
 import SecondaryPages from '@/pages/SecondaryPages';
-import { products } from '@/data/mockData';
-import type { Product } from '@/types';
 
 function ScrollToTop() {
   const location = useLocation();
@@ -22,29 +19,7 @@ function ScrollToTop() {
 
 function AppShell() {
   const location = useLocation();
-  const [cartOpen, setCartOpen] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-
-  const productBySlug = useMemo(() => {
-    const map = new Map<string, Product>();
-    (products ?? []).forEach((product) => {
-      const key = product?.slug ?? product?.id ?? '';
-      if (key) map.set(key, product);
-    });
-    return map;
-  }, []);
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const productId = params.get('product') ?? '';
-    const productSlug = params.get('slug') ?? '';
-    const found = productBySlug.get(productId) ?? productBySlug.get(productSlug) ?? null;
-    if (found) {
-      setSelectedProduct(found);
-      setDetailOpen(true);
-    }
-  }, [location.search, productBySlug]);
+  const [cartOpen, setCartOpen] = React.useState(false);
 
   useEffect(() => {
     setCartOpen(location.pathname === '/cart');
@@ -70,7 +45,6 @@ function AppShell() {
       </main>
       <Footer />
       <CartDrawer open={cartOpen} onOpenChange={handleCartOpenChange} />
-      <ProductDetailModal open={detailOpen} onOpenChange={setDetailOpen} product={selectedProduct} />
     </div>
   );
 }
