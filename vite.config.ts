@@ -77,6 +77,6 @@ export default defineConfig({
       exclude: [/^(?!\/api).*/],
     }),
   ],
-  server: { host: true, port: 5173, strictPort: true },
+  server: { host: true, port: 5173, strictPort: true, cors: true },
   resolve: { alias: { '@': path.resolve(__dirname, './src') } },
 })

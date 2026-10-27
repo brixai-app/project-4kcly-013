@@ -1,229 +1,272 @@
 import { createClient, type Client } from "@libsql/client";
-import type { Order, Product } from "@/types";
+import type { CartItem, PersistedOrder, Product } from "@/types";
 import mockData from "@/data/mockData";
 
-const dbUrl = "file:local.db";
-const db: Client = createClient({ url: dbUrl });
+type DbShape = {
+  client: Client;
+  init: () => Promise<void>;
+  seedItems: () => Promise<number>;
+  listItems: () => Promise<Product[]>;
+  getItemBySlug: (slug: string) => Promise<Product | null>;
+  writeOrder: (order: Omit<PersistedOrder, "id" | "createdAt" | "updatedAt"> & Partial<Pick<PersistedOrder, "id" | "createdAt" | "updatedAt">>) => Promise<PersistedOrder>;
+  listOrders: () => Promise<PersistedOrder[]>;
+  getOrderById: (id: string) => Promise<PersistedOrder | null>;
+};
 
-type Row = Record<string, unknown>;
+const dbUrl = process.env.DB_URL ?? "file:local.db";
+const client = createClient({ url: dbUrl });
 
-const productsTableSql = `
-CREATE TABLE IF NOT EXISTS products (
+const itemsTableSql = `
+CREATE TABLE IF NOT EXISTS items (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   slug TEXT NOT NULL UNIQUE,
   price INTEGER NOT NULL,
   description TEXT NOT NULL,
   category TEXT NOT NULL,
-  artisanId TEXT NOT NULL,
+  collection TEXT NOT NULL,
+  material TEXT NOT NULL,
+  color TEXT NOT NULL,
+  sizes TEXT NOT NULL,
   image TEXT NOT NULL,
   gallery TEXT,
-  sizes TEXT,
-  colors TEXT,
-  featured INTEGER NOT NULL DEFAULT 0,
-  inStock INTEGER NOT NULL DEFAULT 1,
-  rating REAL
+  featured INTEGER DEFAULT 0,
+  artisan TEXT,
+  origin TEXT,
+  inStock INTEGER DEFAULT 1
 )`;
 
 const ordersTableSql = `
 CREATE TABLE IF NOT EXISTS orders (
   id TEXT PRIMARY KEY,
-  userId TEXT,
+  cartId TEXT,
+  customerName TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT,
+  address TEXT,
+  city TEXT,
+  state TEXT,
+  pincode TEXT,
+  notes TEXT,
   items TEXT NOT NULL,
-  shipping TEXT NOT NULL,
-  payment TEXT NOT NULL,
   subtotal INTEGER NOT NULL,
-  shippingFee INTEGER NOT NULL,
-  total INTEGER NOT NULL,
-  status TEXT NOT NULL,
-  createdAt TEXT NOT NULL
+  status TEXT NOT NULL CHECK(status IN ('draft','submitted','confirmed','cancelled')),
+  createdAt TEXT NOT NULL,
+  updatedAt TEXT
 )`;
 
-const safeJson = <T,>(value: T): string => JSON.stringify(value ?? null);
-
-const toInt = (value: unknown, fallback = 0): number => {
-  const n = Number(value ?? fallback);
-  return Number.isFinite(n) ? Math.trunc(n) : fallback;
+const toJson = (value: unknown) => JSON.stringify(value ?? null);
+const fromJson = <T,>(value: string | null | undefined, fallback: T): T => {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
 };
 
-const toBoolInt = (value: unknown): number => (value ? 1 : 0);
-
-const mapProductRow = (row: Row): Product => ({
-  id: String(row?.id ?? ""),
-  name: String(row?.name ?? ""),
-  slug: String(row?.slug ?? ""),
-  price: toInt(row?.price),
-  description: String(row?.description ?? ""),
-  category: String(row?.category ?? ""),
-  artisanId: String(row?.artisanId ?? ""),
-  image: String(row?.image ?? ""),
-  gallery: row?.gallery ? (JSON.parse(String(row.gallery)) as string[]) : undefined,
-  sizes: row?.sizes ? (JSON.parse(String(row.sizes)) as string[]) : undefined,
-  colors: row?.colors ? (JSON.parse(String(row.colors)) as string[]) : undefined,
-  featured: Boolean(row?.featured ?? 0),
-  inStock: Boolean(row?.inStock ?? 1),
-  rating: row?.rating == null ? undefined : Number(row.rating),
+const normalizeProduct = (row: Record<string, unknown>): Product => ({
+  id: String(row.id ?? ""),
+  name: String(row.name ?? ""),
+  slug: String(row.slug ?? ""),
+  price: Number(row.price ?? 0),
+  description: String(row.description ?? ""),
+  category: String(row.category ?? ""),
+  collection: String(row.collection ?? ""),
+  material: String(row.material ?? ""),
+  color: String(row.color ?? ""),
+  sizes: fromJson<string[]>(String(row.sizes ?? "[]"), []),
+  image: String(row.image ?? ""),
+  gallery: fromJson<string[] | undefined>(row.gallery as string | undefined, undefined),
+  featured: Boolean(row.featured ?? false),
+  artisan: String(row.artisan ?? ""),
+  origin: String(row.origin ?? ""),
+  inStock: Boolean(row.inStock ?? true),
 });
 
-const mapOrderRow = (row: Row): Order => ({
-  id: String(row?.id ?? ""),
-  userId: row?.userId == null ? undefined : String(row.userId),
-  items: JSON.parse(String(row?.items ?? "[]")),
-  shipping: JSON.parse(String(row?.shipping ?? "{}")),
-  payment: JSON.parse(String(row?.payment ?? "{}")),
-  subtotal: toInt(row?.subtotal),
-  shippingFee: toInt(row?.shippingFee),
-  total: toInt(row?.total),
-  status: String(row?.status ?? "draft") as Order["status"],
-  createdAt: String(row?.createdAt ?? new Date().toISOString()),
+const normalizeOrder = (row: Record<string, unknown>): PersistedOrder => ({
+  id: String(row.id ?? ""),
+  cartId: row.cartId ? String(row.cartId) : undefined,
+  customerName: String(row.customerName ?? ""),
+  email: String(row.email ?? ""),
+  phone: row.phone ? String(row.phone) : undefined,
+  address: row.address ? String(row.address) : undefined,
+  city: row.city ? String(row.city) : undefined,
+  state: row.state ? String(row.state) : undefined,
+  pincode: row.pincode ? String(row.pincode) : undefined,
+  notes: row.notes ? String(row.notes) : undefined,
+  items: fromJson<CartItem[]>(String(row.items ?? "[]"), []),
+  subtotal: Number(row.subtotal ?? 0),
+  status: (String(row.status ?? "draft") as PersistedOrder["status"]) ?? "draft",
+  createdAt: String(row.createdAt ?? new Date().toISOString()),
+  updatedAt: row.updatedAt ? String(row.updatedAt) : undefined,
 });
 
-export async function initDb(): Promise<void> {
-  await db.execute(productsTableSql);
-  await db.execute(ordersTableSql);
-}
+const seedProducts = (): Product[] => {
+  const source = Array.isArray((mockData as { products?: Product[] } | undefined)?.products)
+    ? ((mockData as { products?: Product[] }).products ?? [])
+    : Array.isArray(mockData)
+      ? (mockData as Product[])
+      : [];
+  return source.slice(0, 6).map((item, index) => ({
+    ...item,
+    id: item.id ?? `seed-${index + 1}`,
+    slug: item.slug ?? `mojri-${index + 1}`,
+    image: item.image ?? "",
+    sizes: item.sizes ?? [],
+    gallery: item.gallery ?? [],
+    featured: item.featured ?? index < 2,
+    inStock: item.inStock ?? true,
+  }));
+};
 
-export async function seedMojriProducts(): Promise<void> {
-  await initDb();
-  const items = (mockData?.products ?? []).slice(0, 6) as Product[];
+const init = async (): Promise<void> => {
+  await client.execute(itemsTableSql);
+  await client.execute(ordersTableSql);
+  await seedItems();
+};
+
+const seedItems = async (): Promise<number> => {
+  const items = seedProducts();
+  let inserted = 0;
   for (const item of items) {
-    await db.execute({
-      sql: `
-        INSERT INTO products
-        (id, name, slug, price, description, category, artisanId, image, gallery, sizes, colors, featured, inStock, rating)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          name=excluded.name,
-          slug=excluded.slug,
-          price=excluded.price,
-          description=excluded.description,
-          category=excluded.category,
-          artisanId=excluded.artisanId,
-          image=excluded.image,
-          gallery=excluded.gallery,
-          sizes=excluded.sizes,
-          colors=excluded.colors,
-          featured=excluded.featured,
-          inStock=excluded.inStock,
-          rating=excluded.rating
-      `,
+    const existing = await client.execute({
+      sql: "SELECT id FROM items WHERE slug = ? LIMIT 1",
+      args: [item.slug],
+    });
+    if ((existing.rows?.length ?? 0) > 0) continue;
+    await client.execute({
+      sql: `INSERT INTO items (id, name, slug, price, description, category, collection, material, color, sizes, image, gallery, featured, artisan, origin, inStock)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
-        item?.id ?? crypto.randomUUID(),
-        item?.name ?? "",
-        item?.slug ?? "",
-        toInt(item?.price),
-        item?.description ?? "",
-        item?.category ?? "",
-        item?.artisanId ?? "",
-        item?.image ?? "",
-        safeJson(item?.gallery ?? []),
-        safeJson(item?.sizes ?? []),
-        safeJson(item?.colors ?? []),
-        toBoolInt(item?.featured),
-        toBoolInt(item?.inStock ?? true),
-        item?.rating ?? null,
+        item.id,
+        item.name,
+        item.slug,
+        Math.round(item.price),
+        item.description,
+        item.category,
+        item.collection,
+        item.material,
+        item.color,
+        toJson(item.sizes ?? []),
+        item.image,
+        toJson(item.gallery ?? []),
+        item.featured ? 1 : 0,
+        item.artisan ?? null,
+        item.origin ?? null,
+        item.inStock ?? 1,
       ],
     });
+    inserted += 1;
   }
-}
+  return inserted;
+};
 
-export async function getProducts(): Promise<Product[]> {
-  await initDb();
-  const result = await db.execute("SELECT * FROM products ORDER BY featured DESC, name ASC");
-  return (result.rows ?? []).map((row) => mapProductRow(row as Row));
-}
+const listItems = async (): Promise<Product[]> => {
+  const result = await client.execute("SELECT * FROM items ORDER BY featured DESC, name ASC");
+  return (result.rows ?? []).map((row) => normalizeProduct(row as Record<string, unknown>));
+};
 
-export async function getProductBySlug(slug = ""): Promise<Product | null> {
-  await initDb();
-  const result = await db.execute({ sql: "SELECT * FROM products WHERE slug = ? LIMIT 1", args: [slug] });
-  const row = result.rows?.[0] as Row | undefined;
-  return row ? mapProductRow(row) : null;
-}
+const getItemBySlug = async (slug: string): Promise<Product | null> => {
+  const result = await client.execute({
+    sql: "SELECT * FROM items WHERE slug = ? LIMIT 1",
+    args: [slug],
+  });
+  const row = result.rows?.[0];
+  return row ? normalizeProduct(row as Record<string, unknown>) : null;
+};
 
-export async function getOrders(): Promise<Order[]> {
-  await initDb();
-  const result = await db.execute("SELECT * FROM orders ORDER BY createdAt DESC");
-  return (result.rows ?? []).map((row) => mapOrderRow(row as Row));
-}
-
-export async function getOrderById(id = ""): Promise<Order | null> {
-  await initDb();
-  const result = await db.execute({ sql: "SELECT * FROM orders WHERE id = ? LIMIT 1", args: [id] });
-  const row = result.rows?.[0] as Row | undefined;
-  return row ? mapOrderRow(row) : null;
-}
-
-export async function createOrder(order: Order): Promise<Order> {
-  await initDb();
-  const payload: Order = {
-    ...order,
-    id: order?.id ?? crypto.randomUUID(),
-    createdAt: order?.createdAt ?? new Date().toISOString(),
+const writeOrder = async (
+  order: Omit<PersistedOrder, "id" | "createdAt" | "updatedAt"> & Partial<Pick<PersistedOrder, "id" | "createdAt" | "updatedAt">>,
+): Promise<PersistedOrder> => {
+  const now = new Date().toISOString();
+  const payload: PersistedOrder = {
+    id: order.id ?? crypto.randomUUID(),
+    cartId: order.cartId,
+    customerName: order.customerName,
+    email: order.email,
+    phone: order.phone,
+    address: order.address,
+    city: order.city,
+    state: order.state,
+    pincode: order.pincode,
+    notes: order.notes,
+    items: order.items ?? [],
+    subtotal: order.subtotal ?? 0,
+    status: order.status ?? "draft",
+    createdAt: order.createdAt ?? now,
+    updatedAt: now,
   };
-  await db.execute({
-    sql: `
-      INSERT INTO orders
-      (id, userId, items, shipping, payment, subtotal, shippingFee, total, status, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
+  await client.execute({
+    sql: `INSERT INTO orders (id, cartId, customerName, email, phone, address, city, state, pincode, notes, items, subtotal, status, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            cartId=excluded.cartId,
+            customerName=excluded.customerName,
+            email=excluded.email,
+            phone=excluded.phone,
+            address=excluded.address,
+            city=excluded.city,
+            state=excluded.state,
+            pincode=excluded.pincode,
+            notes=excluded.notes,
+            items=excluded.items,
+            subtotal=excluded.subtotal,
+            status=excluded.status,
+            updatedAt=excluded.updatedAt`,
     args: [
       payload.id,
-      payload.userId ?? null,
-      safeJson(payload.items ?? []),
-      safeJson(payload.shipping ?? {}),
-      safeJson(payload.payment ?? {}),
-      toInt(payload.subtotal),
-      toInt(payload.shippingFee),
-      toInt(payload.total),
-      payload.status ?? "draft",
+      payload.cartId ?? null,
+      payload.customerName,
+      payload.email,
+      payload.phone ?? null,
+      payload.address ?? null,
+      payload.city ?? null,
+      payload.state ?? null,
+      payload.pincode ?? null,
+      payload.notes ?? null,
+      toJson(payload.items ?? []),
+      Math.round(payload.subtotal ?? 0),
+      payload.status,
       payload.createdAt,
+      payload.updatedAt ?? now,
     ],
   });
   return payload;
-}
+};
 
-export async function inspectTable(tableName = "products"): Promise<Row[]> {
-  await initDb();
-  const safeName = tableName === "orders" ? "orders" : "products";
-  const result = await db.execute(`SELECT * FROM ${safeName} LIMIT 25`);
-  return (result.rows ?? []) as Row[];
-}
+const listOrders = async (): Promise<PersistedOrder[]> => {
+  const result = await client.execute("SELECT * FROM orders ORDER BY createdAt DESC");
+  return (result.rows ?? []).map((row) => normalizeOrder(row as Record<string, unknown>));
+};
 
-export async function inspectProducts(): Promise<Row[]> {
-  return inspectTable("products");
-}
+const getOrderById = async (id: string): Promise<PersistedOrder | null> => {
+  const result = await client.execute({
+    sql: "SELECT * FROM orders WHERE id = ? LIMIT 1",
+    args: [id],
+  });
+  const row = result.rows?.[0];
+  return row ? normalizeOrder(row as Record<string, unknown>) : null;
+};
 
-export async function inspectOrders(): Promise<Row[]> {
-  return inspectTable("orders");
-}
+const db: DbShape = { client, init, seedItems, listItems, getItemBySlug, writeOrder, listOrders, getOrderById };
 
-await initDb();
-
-export { db };
+export { client, init, seedItems, listItems, getItemBySlug, writeOrder, listOrders, getOrderById };
 export default db;
 // Auto-synthesized missing export
-export const createOrder: any = {};
+export const client: any = {};
 
 // Auto-synthesized missing export
-export const getOrderById: any = {};
+export const init: any = {};
 
 // Auto-synthesized missing export
-export const getOrders: any = {};
+export const getItemBySlug: any = {};
 
 // Auto-synthesized missing export
-export const getProductBySlug: any = {};
+export const listItems: any = {};
 
 // Auto-synthesized missing export
-export const getProducts: any = {};
+export const listOrders: any = {};
 
 // Auto-synthesized missing export
-export const inspectOrders: any = {};
-
-// Auto-synthesized missing export
-export const inspectProducts: any = {};
-
-// Auto-synthesized missing export
-export const inspectTable: any = {};
-
-// Auto-synthesized missing export
-export const initDb: any = {};
+export const writeOrder: any = {};

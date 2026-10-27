@@ -1,32 +1,22 @@
 import { betterAuth } from "better-auth";
-import { db } from "./db";
+import { libsqlAdapter } from "better-auth/adapters/libsql";
+import { client } from "./db";
 
-const auth = betterAuth({
-  database: {
+export const auth = betterAuth({
+  database: libsqlAdapter(client, {
     provider: "sqlite",
-    db,
-  },
+  }),
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,
-    minPasswordLength: 8,
-  },
-  user: {
-    additionalFields: {
-      name: {
-        type: "string",
-        required: false,
-      },
-    },
   },
   session: {
     expiresIn: 60 * 60 * 24 * 30,
     updateAge: 60 * 60 * 24,
   },
-  advanced: {
-    cookiePrefix: "jootiya",
+  user: {
+    additionalFields: {},
   },
 });
 
-export { auth };
 export default auth;

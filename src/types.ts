@@ -5,73 +5,78 @@ export type Product = {
   price: number;
   description: string;
   category: string;
-  artisanId: string;
+  collection: string;
+  material: string;
+  color: string;
+  sizes: string[];
   image: string;
   gallery?: string[];
-  sizes?: string[];
-  colors?: string[];
   featured?: boolean;
+  artisan?: string;
+  origin?: string;
   inStock?: boolean;
-  rating?: number;
 };
 
-export type Artisan = {
+export type ArtisanStory = {
   id: string;
   name: string;
   title: string;
-  location: string;
-  bio: string;
+  story: string;
   image: string;
-  specialties?: string[];
+  location?: string;
+  years?: number;
 };
 
 export type CartItem = {
   productId: string;
+  name: string;
+  slug: string;
+  price: number;
+  image: string;
   quantity: number;
   size?: string;
   color?: string;
 };
 
-export type ShippingInfo = {
-  fullName: string;
-  email: string;
-  phone: string;
-  addressLine1: string;
-  addressLine2?: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
-};
-
-export type PaymentInfo = {
-  method: "cod" | "upi" | "card" | "wallet";
-  transactionId?: string;
-  last4?: string;
-  status?: "pending" | "authorized" | "paid" | "failed";
-};
-
-export type Order = {
-  id: string;
-  userId?: string;
+export type Cart = {
   items: CartItem[];
-  shipping: ShippingInfo;
-  payment: PaymentInfo;
   subtotal: number;
-  shippingFee: number;
-  total: number;
-  status: "draft" | "placed" | "processing" | "shipped" | "delivered" | "cancelled";
-  createdAt: string;
+  itemCount: number;
 };
 
 export type Filter = {
   categories: string[];
-  artisans: string[];
+  collections: string[];
+  materials: string[];
+  sizes: string[];
+  colors: string[];
   priceRange: [number, number];
   search: string;
-  sortBy: "featured" | "newest" | "price-asc" | "price-desc";
 };
 
-export type CheckoutStep = "cart" | "shipping" | "payment" | "review" | "confirmation";
+export type Variant = {
+  id: string;
+  label: string;
+  value: string;
+  available?: boolean;
+};
 
-export default Product;
+export type PersistedOrder = {
+  id: string;
+  cartId?: string;
+  customerName: string;
+  email: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  notes?: string;
+  items: CartItem[];
+  subtotal: number;
+  status: "draft" | "submitted" | "confirmed" | "cancelled";
+  createdAt: string;
+  updatedAt?: string;
+};
+
+export default {};

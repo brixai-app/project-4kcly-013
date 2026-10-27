@@ -1,147 +1,98 @@
-import { Hono } from "hono";
-import { cors } from "hono/cors";
-import auth from "./auth";
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import auth from './auth';
 import {
-  createOrder,
+  init,
+  getItemBySlug,
   getOrderById,
-  getOrders,
-  getProductBySlug,
-  getProducts,
-  inspectOrders,
-  inspectProducts,
-  inspectTable,
-  initDb,
-} from "./db";
-import type { Order } from "../src/types";
+  listItems,
+  listOrders,
+  writeOrder,
+} from './db';
 
-const index = new Hono();
+const app = new Hono();
 
-index.use("*", cors({ origin: "*", allowHeaders: ["Content-Type", "Authorization"], allowMethods: ["GET", "POST", "OPTIONS"] }));
+app.use('*', cors({ origin: '*', allowMethods: ['GET', 'POST', 'OPTIONS'], allowHeaders: ['Content-Type', 'Authorization'] }));
 
-index.get("/api/health", (c) => c.json({ ok: true, service: "jootiya" }));
+app.get('/api/health', (c) => c.json({ ok: true, service: 'jootiya' }));
 
-index.route("/api/auth", auth);
-
-index.get("/api/products", async (c) => {
-  try {
-    const products = await getProducts();
-    return c.json({ ok: true, products });
-  } catch {
-    return c.json({ ok: false, error: "Unable to load products" }, 500);
-  }
+app.all('/api/auth/*', async (c) => {
+  const handler = auth?.handler ?? auth;
+  return handler(c);
 });
 
-index.get("/api/products/:slug", async (c) => {
-  try {
-    const slug = c.req.param("slug") ?? "";
-    const product = await getProductBySlug(slug);
-    if (!product) return c.json({ ok: false, error: "Product not found" }, 404);
-    return c.json({ ok: true, product });
-  } catch {
-    return c.json({ ok: false, error: "Unable to load product" }, 500);
-  }
+app.get('/api/items', async (c) => {
+  const items = await listItems();
+  return c.json({ items });
 });
 
-index.get("/api/orders", async (c) => {
-  try {
-    const orders = await getOrders();
-    return c.json({ ok: true, orders });
-  } catch {
-    return c.json({ ok: false, error: "Unable to load orders" }, 500);
-  }
+app.get('/api/items/:slug', async (c) => {
+  const slug = c.req.param('slug') ?? '';
+  const item = await getItemBySlug(slug);
+  if (!item) return c.json({ error: 'Item not found' }, 404);
+  return c.json({ item });
 });
 
-index.get("/api/orders/:id", async (c) => {
-  try {
-    const id = c.req.param("id") ?? "";
-    const order = await getOrderById(id);
-    if (!order) return c.json({ ok: false, error: "Order not found" }, 404);
-    return c.json({ ok: true, order });
-  } catch {
-    return c.json({ ok: false, error: "Unable to load order" }, 500);
-  }
+app.get('/api/orders', async (c) => {
+  const orders = await listOrders();
+  return c.json({ orders });
 });
 
-index.post("/api/orders", async (c) => {
-  try {
-    const body = (await c.req.json().catch(() => null)) as Partial<Order> | null;
-    const items = Array.isArray(body?.items) ? body?.items : [];
-    const shipping = body?.shipping;
-    const payment = body?.payment;
-    const subtotal = Number(body?.subtotal ?? 0);
-    const shippingFee = Number(body?.shippingFee ?? 0);
-    const total = Number(body?.total ?? subtotal + shippingFee);
+app.post('/api/orders', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const customerName = String(body?.customerName ?? '').trim();
+  const email = String(body?.email ?? '').trim();
+  const items = Array.isArray(body?.items) ? body.items : [];
+  const subtotal = Number(body?.subtotal ?? 0);
 
-    if (!items.length || !shipping?.fullName || !shipping?.email || !shipping?.addressLine1 || !shipping?.city || !shipping?.state || !shipping?.postalCode || !shipping?.country || !payment?.method) {
-      return c.json({ ok: false, error: "Invalid order payload" }, 400);
-    }
-
-    const order: Order = {
-      id: body?.id ?? crypto.randomUUID(),
-      userId: body?.userId,
-      items,
-      shipping: {
-        fullName: shipping.fullName,
-        email: shipping.email,
-        phone: shipping.phone ?? "",
-        addressLine1: shipping.addressLine1,
-        addressLine2: shipping.addressLine2,
-        city: shipping.city,
-        state: shipping.state,
-        postalCode: shipping.postalCode,
-        country: shipping.country,
-      },
-      payment: {
-        method: payment.method,
-        transactionId: payment.transactionId,
-        last4: payment.last4,
-        status: payment.status ?? "pending",
-      },
-      subtotal,
-      shippingFee,
-      total,
-      status: body?.status ?? "placed",
-      createdAt: body?.createdAt ?? new Date().toISOString(),
-    };
-
-    const saved = await createOrder(order);
-    return c.json({ ok: true, order: saved }, 201);
-  } catch {
-    return c.json({ ok: false, error: "Unable to create order" }, 500);
+  if (!customerName || !email || items.length === 0 || !Number.isFinite(subtotal) || subtotal < 0) {
+    return c.json({ error: 'Invalid order payload' }, 400);
   }
+
+  const order = await writeOrder({
+    id: String(body?.id ?? crypto.randomUUID()),
+    cartId: body?.cartId ? String(body.cartId) : undefined,
+    customerName,
+    email,
+    phone: body?.phone ? String(body.phone) : undefined,
+    address: body?.address ? String(body.address) : undefined,
+    city: body?.city ? String(body.city) : undefined,
+    state: body?.state ? String(body.state) : undefined,
+    pincode: body?.pincode ? String(body.pincode) : undefined,
+    notes: body?.notes ? String(body.notes) : undefined,
+    items,
+    subtotal,
+    status: body?.status === 'confirmed' || body?.status === 'cancelled' ? body.status : 'submitted',
+    createdAt: String(body?.createdAt ?? new Date().toISOString()),
+    updatedAt: body?.updatedAt ? String(body.updatedAt) : undefined,
+  });
+
+  return c.json({ order }, 201);
 });
 
-index.get("/api/_admin/db/:table", async (c) => {
-  try {
-    const table = c.req.param("table") ?? "products";
-    if (!["products", "orders"].includes(table)) return c.json({ ok: false, error: "Table not allowed" }, 403);
-    const rows = await inspectTable(table);
-    return c.json({ ok: true, table, rows });
-  } catch {
-    return c.json({ ok: false, error: "Unable to inspect table" }, 500);
-  }
+app.get('/api/orders/:id', async (c) => {
+  const id = c.req.param('id') ?? '';
+  const order = await getOrderById(id);
+  if (!order) return c.json({ error: 'Order not found' }, 404);
+  return c.json({ order });
 });
 
-index.get("/api/_admin/db/products", async (c) => {
-  try {
-    const rows = await inspectProducts();
-    return c.json({ ok: true, rows });
-  } catch {
-    return c.json({ ok: false, error: "Unable to inspect products" }, 500);
-  }
+app.get('/api/_admin/db/items', async (c) => {
+  const items = await listItems();
+  return c.json({ count: items.length, items });
 });
 
-index.get("/api/_admin/db/orders", async (c) => {
-  try {
-    const rows = await inspectOrders();
-    return c.json({ ok: true, rows });
-  } catch {
-    return c.json({ ok: false, error: "Unable to inspect orders" }, 500);
-  }
+app.get('/api/_admin/db/orders', async (c) => {
+  const orders = await listOrders();
+  return c.json({ count: orders.length, orders });
 });
 
-index.onError((err, c) => c.json({ ok: false, error: err?.message ?? "Internal server error" }, 500));
+app.get('/api/_admin/db/inspect', async (c) => {
+  const [items, orders] = await Promise.all([listItems(), listOrders()]);
+  return c.json({ ok: true, items: items.length, orders: orders.length });
+});
 
-void initDb();
+await init();
 
-export default index;
+export { app };
+export default app;

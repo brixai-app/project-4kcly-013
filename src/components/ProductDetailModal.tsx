@@ -1,247 +1,188 @@
+import { useEffect, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, Check, Circle as ChevronLeft, ChevronRight, Heart, Minus, Plus, X } from 'lucide-react';
-import React, { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import { useCart } from "@/context/CartContext";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, X } from 'lucide-react';
 import { cn } from "@/lib/utils";
-import type { Product } from "@/types";
+import { useCart } from "@/context/CartContext";
+import type { ArtisanStory, Product } from "@/types";
+import { artisanStories } from "@/data/mockData";
 
-type ProductDetailModalProps = {
+export type ProductDetailModalProps = {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   product?: Product | null;
 };
 
-export function ProductDetailModal({
-  open = false,
-  onOpenChange = () => {},
-  product = null,
-}: ProductDetailModalProps) {
-  const { addItem } = useCart() as any;
-  const [selectedSize, setSelectedSize] = useState("");
-  const [selectedColor, setSelectedColor] = useState("");
-  const [quantity, setQuantity] = useState(1);
-  const [added, setAdded] = useState(false);
+type ProductDetailViewProps = {
+  product?: Product | null;
+  onAddToCart?: () => void;
+  loading?: boolean;
+  artisan?: ArtisanStory | null;
+};
 
-  const sizes = product?.sizes?.length ? product.sizes : ["7", "8", "9", "10", "11"];
-  const colors = product?.colors?.length ? product.colors : ["Ivory", "Tan", "Black"];
-  const gallery = useMemo(
-    () => [product?.image, ...(product?.gallery ?? [])].filter(Boolean) as string[],
-    [product]
-  );
+const fallbackProduct: Product = {
+  id: "",
+  name: "Mojri",
+  slug: "mojri",
+  price: 0,
+  description: "",
+  category: "",
+  collection: "",
+  material: "",
+  color: "",
+  sizes: [],
+  image: "",
+  gallery: [],
+  featured: false,
+  artisan: "",
+  origin: "",
+  inStock: true,
+};
+
+export function ProductDetailView({ product = fallbackProduct, onAddToCart = () => {}, loading = false, artisan = null }: ProductDetailViewProps) {
+  const images = useMemo(() => [product?.image, ...(product?.gallery ?? [])].filter(Boolean) as string[], [product]);
+  const [index, setIndex] = useState(0);
+  const [size, setSize] = useState(product?.sizes?.[0] ?? "");
+  const [color, setColor] = useState(product?.color ?? "");
 
   useEffect(() => {
-    if (!open) return;
-    setSelectedSize(sizes?.[0] ?? "");
-    setSelectedColor(colors?.[0] ?? "");
-    setQuantity(1);
-    setAdded(false);
-  }, [open, product?.id]);
+    setIndex(0);
+    setSize(product?.sizes?.[0] ?? "");
+    setColor(product?.color ?? "");
+  }, [product?.id, product?.sizes, product?.color]);
+
+  const canAdd = Boolean(product?.inStock ?? true) && Boolean(size) && Boolean(color);
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+      <div className="space-y-3">
+        <div className="relative overflow-hidden rounded-[18px] border border-[#C9A66B] bg-[#FFFBF4]">
+          <div className="aspect-[4/5] w-full">
+            <AnimatePresence mode="wait">
+              <motion.img
+                key={images?.[index] ?? product?.image ?? ""}
+                src={images?.[index] ?? product?.image ?? ""}
+                alt={product?.name ?? "Product image"}
+                crossOrigin="anonymous"
+                className="h-full w-full object-cover"
+                initial={{ opacity: 0, scale: 1.02 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.35 }}
+              />
+            </AnimatePresence>
+          </div>
+          {images.length > 1 ? (
+            <div className="absolute inset-x-0 bottom-0 flex items-center justify-between p-3">
+              <button type="button" onClick={() => setIndex((v) => (v - 1 + images.length) % images.length)} className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#C9A66B] bg-[#FFFBF4]/90 text-[#2B2B2B] backdrop-blur">
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => setIndex((v) => (v + 1) % images.length)} className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#C9A66B] bg-[#FFFBF4]/90 text-[#2B2B2B] backdrop-blur">
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          ) : null}
+        </div>
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {images.map((src, i) => (
+            <button key={`${src}-${i}`} type="button" onClick={() => setIndex(i)} className={cn("h-20 w-16 shrink-0 overflow-hidden rounded-md border transition", i === index ? "border-[#B04E2C]" : "border-[#C9A66B]/60")}>
+              <img src={src} alt={`${product?.name ?? "Product"} thumbnail ${i + 1}`} crossOrigin="anonymous" className="h-full w-full object-cover" />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-5">
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#6D6257]">{product?.collection ?? "Collection"}</p>
+          <h2 className="font-['Playfair_Display',serif] text-3xl font-light tracking-tight text-[#2B2B2B]">{product?.name ?? "Product"}</h2>
+          <p className="text-lg font-semibold text-[#2B2B2B]">₹{Number(product?.price ?? 0).toLocaleString("en-IN")}</p>
+          <p className="text-sm leading-6 text-[#6D6257]">{product?.description ?? ""}</p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6D6257]">Size</span>
+            <div className="relative">
+              <select value={size} onChange={(e) => setSize(e.target.value)} className="w-full appearance-none rounded-md border border-[#C9A66B] bg-[#FFFBF4] px-4 py-3 pr-10 text-sm text-[#2B2B2B] outline-none">
+                {(product?.sizes ?? []).map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6D6257]" />
+            </div>
+          </label>
+
+          <div className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6D6257]">Color</span>
+            <div className="flex flex-wrap gap-2">
+              {(product?.color ? [product.color] : []).map((c) => (
+                <button key={c} type="button" onClick={() => setColor(c)} className={cn("inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em]", color === c ? "border-[#B04E2C] bg-[#B04E2C] text-white" : "border-[#C9A66B] bg-[#FFFBF4] text-[#2B2B2B]")}>
+                  <span className="h-3 w-3 rounded-full border border-white/70" style={{ backgroundColor: c?.toLowerCase?.() ?? "#b04e2c" }} />
+                  <span className="min-w-0 truncate">{c}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-[18px] border border-[#C9A66B] bg-[#faf9f6] p-4">
+          <div className="flex items-center gap-2 text-sm text-[#2B2B2B]">
+            <Check className="h-4 w-4 text-[#B04E2C]" />
+            <span>{product?.inStock ?? true ? "In stock and ready to ship" : "Currently unavailable"}</span>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-[#6D6257]">{artisan?.story ?? "Hand-finished by artisans in Jodhpur."}</p>
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <button type="button" onClick={onAddToCart} disabled={!canAdd || loading} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#B04E2C] px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-white transition hover:bg-[#8F3C22] disabled:cursor-not-allowed disabled:opacity-60">
+            {loading ? "Adding..." : "Add to Cart"}
+          </button>
+          <p className="text-sm leading-6 text-[#6D6257]">Selected: {size || "—"} / {color || "—"}</p>
+        </div>
+
+        {artisan ? (
+          <div className="rounded-[18px] border border-[#C9A66B] bg-[#FFFBF4] p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6D6257]">Artisan</p>
+            <p className="mt-1 font-['Playfair_Display',serif] text-xl text-[#2B2B2B]">{artisan.name}</p>
+            <p className="text-sm text-[#6D6257]">{artisan.title}</p>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export function ProductDetailModal({ open = false, onOpenChange = () => {}, product = null }: ProductDetailModalProps) {
+  const { addItem } = useCart() as { addItem?: (product: Product, options?: { size?: string; color?: string }) => void };
+  const [loading, setLoading] = useState(false);
+  const artisan = useMemo(() => artisanStories?.find((a) => a?.name?.toLowerCase?.() === product?.artisan?.toLowerCase?.()) ?? artisanStories?.[0] ?? null, [product?.artisan]);
 
   const handleAdd = () => {
     if (!product) return;
-    if (!selectedSize) {
-      toast.error("Please select a size.");
-      return;
-    }
-    addItem?.(product.id, quantity, selectedSize, selectedColor);
-    setAdded(true);
-    toast.success("Added to cart");
-    window.setTimeout(() => setAdded(false), 1400);
+    setLoading(true);
+    addItem?.(product, { size: product?.sizes?.[0] ?? "", color: product?.color ?? "" });
+    window.setTimeout(() => setLoading(false), 350);
   };
-
-  const price = useMemo(
-    () => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(product?.price ?? 0),
-    [product?.price]
-  );
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <AnimatePresence>
-        {open ? (
-          <Dialog.Portal forceMount>
-            <Dialog.Overlay asChild>
-              <motion.div
-                className="fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px]"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              />
-            </Dialog.Overlay>
-            <Dialog.Content asChild>
-              <motion.div
-                className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:p-6"
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 24 }}
-                transition={{ duration: 0.28, ease: "easeOut" }}
-              >
-                <div className="w-full max-w-6xl overflow-hidden border border-[#D8CBBB] bg-[#FFFDFC] text-[#2B2B2B] shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
-                  <div className="flex items-center justify-between border-b border-[#D8CBBB] px-4 py-3 sm:px-6">
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#6D6259]">Quick preview</p>
-                      <Dialog.Title className="truncate font-['Bodoni_Moda',serif] text-xl font-light tracking-tight sm:text-2xl">
-                        {product?.name ?? "Product"}
-                      </Dialog.Title>
-                    </div>
-                    <Dialog.Close asChild>
-                      <button
-                        type="button"
-                        className="inline-flex h-10 w-10 items-center justify-center border border-[#D8CBBB] text-[#2B2B2B] transition-colors hover:bg-[#BFA06E] hover:text-black"
-                        aria-label="Close product preview"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </Dialog.Close>
-                  </div>
-
-                  <div className="grid max-h-[85vh] overflow-y-auto lg:grid-cols-[1.1fr_0.9fr]">
-                    <div className="border-b border-[#D8CBBB] lg:border-b-0 lg:border-r">
-                      <div className="grid gap-2 p-3 sm:grid-cols-[1.2fr_0.8fr] sm:p-4">
-                        <div className="overflow-hidden bg-[#faf9f6]">
-                          <img
-                            src={gallery?.[0] ?? ""}
-                            alt={product?.name ?? "Product image"}
-                            crossOrigin="anonymous"
-                            className="h-full w-full object-cover"
-                          />
-                        </div>
-                        <div className="grid gap-2">
-                          {(gallery?.slice(1, 3) ?? []).map((src, index) => (
-                            <div key={`${src}-${index}`} className="overflow-hidden bg-[#faf9f6]">
-                              <img
-                                src={src}
-                                alt={`${product?.name ?? "Product"} detail ${index + 2}`}
-                                crossOrigin="anonymous"
-                                className="h-full w-full object-cover"
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-5 p-4 sm:p-6">
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#6D6259]">
-                            {product?.category ?? "Mojri"}
-                          </p>
-                          <div className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.22em] text-[#6D6259]">
-                            <Heart className="h-3.5 w-3.5" />
-                            Save
-                          </div>
-                        </div>
-                        <p className="font-['Bodoni_Moda',serif] text-3xl font-light tracking-tight sm:text-4xl">
-                          {price}
-                        </p>
-                        <p className="max-w-xl text-sm leading-6 text-[#6D6259]">
-                          {product?.description ?? "Hand-finished Jodhpuri craftsmanship with a refined, heritage-led silhouette."}
-                        </p>
-                      </div>
-
-                      <div className="grid gap-4">
-                        <div>
-                          <div className="mb-2 flex items-center justify-between">
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#6D6259]">Size</p>
-                            <p className="text-xs text-[#6D6259]">{selectedSize || "Select one"}</p>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {sizes.map((size) => (
-                              <button
-                                key={size}
-                                type="button"
-                                onClick={() => setSelectedSize(size)}
-                                className={cn(
-                                  "min-w-0 border px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition-colors",
-                                  selectedSize === size
-                                    ? "border-[#BFA06E] bg-[#BFA06E] text-black"
-                                    : "border-[#D8CBBB] bg-white text-[#2B2B2B] hover:border-[#A88650]"
-                                )}
-                              >
-                                {size}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="mb-2 flex items-center justify-between">
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#6D6259]">Color</p>
-                            <p className="text-xs text-[#6D6259]">{selectedColor || "Select one"}</p>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {colors.map((color) => (
-                              <button
-                                key={color}
-                                type="button"
-                                onClick={() => setSelectedColor(color)}
-                                className={cn(
-                                  "min-w-0 border px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition-colors",
-                                  selectedColor === color
-                                    ? "border-[#BFA06E] bg-[#BFA06E] text-black"
-                                    : "border-[#D8CBBB] bg-white text-[#2B2B2B] hover:border-[#A88650]"
-                                )}
-                              >
-                                {color}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between border-y border-[#D8CBBB] py-4">
-                          <div>
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#6D6259]">Quantity</p>
-                            <p className="text-sm text-[#6D6259]">Bounded to 1–5</p>
-                          </div>
-                          <div className="flex items-center border border-[#D8CBBB]">
-                            <button
-                              type="button"
-                              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                              className="inline-flex h-10 w-10 items-center justify-center text-[#2B2B2B] transition-colors hover:bg-[#faf9f6]"
-                              aria-label="Decrease quantity"
-                            >
-                              <Minus className="h-4 w-4" />
-                            </button>
-                            <span className="w-10 text-center text-sm font-semibold">{quantity}</span>
-                            <button
-                              type="button"
-                              onClick={() => setQuantity((q) => Math.min(5, q + 1))}
-                              className="inline-flex h-10 w-10 items-center justify-center text-[#2B2B2B] transition-colors hover:bg-[#faf9f6]"
-                              aria-label="Increase quantity"
-                            >
-                              <Plus className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-3">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-[#6D6259]">Artisan</span>
-                          <span className="font-medium">{product?.artisanId ?? "Jodhpur atelier"}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleAdd}
-                          className="inline-flex items-center justify-center gap-2 border border-[#BFA06E] bg-[#BFA06E] px-4 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-black transition-colors hover:bg-[#A88650]"
-                        >
-                          {added ? <Check className="h-4 w-4" /> : <ArrowRight className="h-4 w-4" />}
-                          {added ? "Added" : "Add to cart"}
-                        </button>
-                        <p className="text-xs leading-5 text-[#6D6259]">
-                          Securely reserved in your cart. Checkout remains a calm, mocked flow for this storefront.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            </Dialog.Content>
-          </Dialog.Portal>
-        ) : null}
-      </AnimatePresence>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px]" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[92vh] w-[min(96vw,1100px)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[18px] border border-[#C9A66B] bg-[#F5F0E6] shadow-2xl outline-none">
+          <div className="flex items-center justify-between border-b border-[#C9A66B] px-4 py-3">
+            <Dialog.Title className="text-xs font-semibold uppercase tracking-[0.28em] text-[#6D6257]">Product Detail</Dialog.Title>
+            <Dialog.Close className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#C9A66B] text-[#2B2B2B]">
+              <X className="h-4 w-4" />
+            </Dialog.Close>
+          </div>
+          <div className="max-h-[calc(92vh-56px)] overflow-y-auto p-4 sm:p-6">
+            <ProductDetailView product={product} onAddToCart={handleAdd} loading={loading} artisan={artisan} />
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
     </Dialog.Root>
   );
 }

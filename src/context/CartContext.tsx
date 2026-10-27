@@ -1,149 +1,153 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import type { CartItem, Product } from "@/types";
-import { products as catalogProducts } from "@/data/mockData";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import type { Cart, CartItem, PersistedOrder, Product } from '@/types';
 
 type CartContextValue = {
   items: CartItem[];
-  isOpen: boolean;
   subtotal: number;
-  shippingFee: number;
-  total: number;
   itemCount: number;
-  shippingProgress: number;
+  isOpen: boolean;
   openCart: () => void;
   closeCart: () => void;
   toggleCart: () => void;
-  addItem: (productId: string, quantity?: number, size?: string, color?: string) => void;
-  updateItem: (productId: string, quantity: number, size?: string, color?: string) => void;
+  addItem: (product: Product, quantity?: number, size?: string, color?: string) => void;
+  updateQuantity: (productId: string, quantity: number, size?: string, color?: string) => void;
   removeItem: (productId: string, size?: string, color?: string) => void;
   clearCart: () => void;
-  getProduct: (productId: string) => Product | undefined;
-  getItemQuantity: (productId: string, size?: string, color?: string) => number;
+  submitOrder: (order: Omit<PersistedOrder, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'items' | 'subtotal'> & { items?: CartItem[]; subtotal?: number }) => Promise<PersistedOrder | null>;
 };
 
-const STORAGE_KEY = "jootiya-cart-v1";
 const CartContext = createContext<CartContextValue | undefined>(undefined);
+const STORAGE_KEY = 'jootiya-cart-v1';
+const ORDER_KEY = 'jootiya-orders-v1';
 
-const getKey = (productId = "", size = "", color = "") => `${productId}::${size}::${color}`;
-
-const getProduct = (productId = "") => catalogProducts?.find((product) => product?.id === productId);
-
-const readStoredItems = (): CartItem[] => {
-  if (typeof window === "undefined") return [];
+const safeParse = <T,>(value: string | null, fallback: T): T => {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    const parsed = raw ? (JSON.parse(raw) as CartItem[]) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    return value ? (JSON.parse(value) as T) : fallback;
   } catch {
-    return [];
+    return fallback;
   }
 };
 
-export function CartProvider({ children }: { children?: React.ReactNode } = {}) {
+const keyOf = (productId: string, size?: string, color?: string) => `${productId}::${size ?? ''}::${color ?? ''}`;
+
+const clampQty = (quantity: number) => Math.min(5, Math.max(1, Math.floor(quantity || 1)));
+
+const toCart = (items: CartItem[]): Cart => ({
+  items,
+  subtotal: items.reduce((sum, item) => sum + item.price * item.quantity, 0),
+  itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
+});
+
+export function CartProvider({ children }: { children?: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    setItems(readStoredItems());
+    const stored = safeParse<CartItem[]>(localStorage.getItem(STORAGE_KEY), []);
+    setItems(Array.isArray(stored) ? stored.filter((item) => item?.productId && item?.quantity > 0) : []);
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
   }, [items]);
 
-  const subtotal = useMemo(
-    () =>
-      items.reduce((sum, item) => {
-        const product = getProduct(item?.productId);
-        return sum + (product?.price ?? 0) * (item?.quantity ?? 0);
-      }, 0),
-    [items]
-  );
+  const openCart = useCallback(() => setIsOpen(true), []);
+  const closeCart = useCallback(() => setIsOpen(false), []);
+  const toggleCart = useCallback(() => setIsOpen((prev) => !prev), []);
 
-  const shippingFee = subtotal >= 5000 || subtotal === 0 ? 0 : 249;
-  const total = subtotal + shippingFee;
-  const itemCount = items.reduce((sum, item) => sum + (item?.quantity ?? 0), 0);
-  const shippingProgress = Math.min(100, Math.round((subtotal / 5000) * 100));
-
-  const syncItem = (nextItems: CartItem[]) => {
-    setItems(nextItems);
-  };
-
-  const addItem = (productId = "", quantity = 1, size?: string, color?: string) => {
-    const product = getProduct(productId);
-    if (!product) {
-      toast.error("Product not found.");
-      return;
-    }
+  const addItem = useCallback((product: Product, quantity = 1, size?: string, color?: string) => {
+    if (!product?.id) return;
     if (product?.inStock === false) {
-      toast.error("This style is currently out of stock.");
+      toast.error('This style is currently out of stock.');
       return;
     }
-    const safeQty = Math.max(1, quantity ?? 1);
-    const key = getKey(productId, size ?? "", color ?? "");
-    const existing = items.find((item) => getKey(item?.productId, item?.size ?? "", item?.color ?? "") === key);
-    const nextItems = existing
-      ? items.map((item) =>
-          getKey(item?.productId, item?.size ?? "", item?.color ?? "") === key
-            ? { ...item, quantity: (item?.quantity ?? 0) + safeQty }
-            : item
-        )
-      : [...items, { productId, quantity: safeQty, size, color }];
-    syncItem(nextItems);
-    toast.success(`${product?.name ?? "Item"} added to cart.`);
+    const nextQty = clampQty(quantity);
+    setItems((prev) => {
+      const idx = prev.findIndex((item) => keyOf(item.productId, item.size, item.color) === keyOf(product.id, size, color));
+      if (idx >= 0) {
+        const merged = clampQty((prev[idx]?.quantity ?? 1) + nextQty);
+        const next = [...prev];
+        next[idx] = { ...next[idx], quantity: merged };
+        toast.success('Updated cart.');
+        return next;
+      }
+      toast.success('Added to cart.');
+      return [...prev, { productId: product.id, name: product.name, slug: product.slug, price: product.price, image: product.image, quantity: nextQty, size, color }];
+    });
     setIsOpen(true);
-  };
+  }, []);
 
-  const updateItem = (productId = "", quantity = 1, size?: string, color?: string) => {
-    const nextQty = Math.max(1, quantity ?? 1);
-    const key = getKey(productId, size ?? "", color ?? "");
-    syncItem(items.map((item) => (getKey(item?.productId, item?.size ?? "", item?.color ?? "") === key ? { ...item, quantity: nextQty } : item)));
-  };
+  const updateQuantity = useCallback((productId: string, quantity: number, size?: string, color?: string) => {
+    const nextQty = clampQty(quantity);
+    setItems((prev) => prev.map((item) => (keyOf(item.productId, item.size, item.color) === keyOf(productId, size, color) ? { ...item, quantity: nextQty } : item)));
+  }, []);
 
-  const removeItem = (productId = "", size?: string, color?: string) => {
-    const key = getKey(productId, size ?? "", color ?? "");
-    syncItem(items.filter((item) => getKey(item?.productId, item?.size ?? "", item?.color ?? "") !== key));
-    toast.message("Removed from cart.");
-  };
+  const removeItem = useCallback((productId: string, size?: string, color?: string) => {
+    setItems((prev) => prev.filter((item) => keyOf(item.productId, item.size, item.color) !== keyOf(productId, size, color)));
+    toast.message('Removed from cart.');
+  }, []);
 
-  const clearCart = () => {
-    syncItem([]);
-    toast.message("Cart cleared.");
-  };
+  const clearCart = useCallback(() => {
+    setItems([]);
+    toast.message('Cart cleared.');
+  }, []);
 
-  const getItemQuantity = (productId = "", size?: string, color?: string) =>
-    items.find((item) => getKey(item?.productId, item?.size ?? "", item?.color ?? "") === getKey(productId, size ?? "", color ?? ""))?.quantity ?? 0;
-
-  const value = useMemo<CartContextValue>(
-    () => ({
-      items,
-      isOpen,
+  const submitOrder = useCallback(async (order: Omit<PersistedOrder, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'items' | 'subtotal'> & { items?: CartItem[]; subtotal?: number }) => {
+    const payloadItems = (order?.items?.length ? order.items : items).filter((item) => item?.productId && item?.quantity > 0);
+    if (!payloadItems.length) {
+      toast.error('Your cart is empty.');
+      return null;
+    }
+    const subtotal = order?.subtotal ?? toCart(payloadItems).subtotal;
+    const now = new Date().toISOString();
+    const persisted: PersistedOrder = {
+      id: crypto.randomUUID(),
+      cartId: order?.cartId,
+      customerName: order?.customerName ?? '',
+      email: order?.email ?? '',
+      phone: order?.phone,
+      address: order?.address,
+      city: order?.city,
+      state: order?.state,
+      pincode: order?.pincode,
+      notes: order?.notes,
+      items: payloadItems,
       subtotal,
-      shippingFee,
-      total,
-      itemCount,
-      shippingProgress,
-      openCart: () => setIsOpen(true),
-      closeCart: () => setIsOpen(false),
-      toggleCart: () => setIsOpen((prev) => !prev),
+      status: 'draft',
+      createdAt: now,
+      updatedAt: now,
+    };
+    const orders = safeParse<PersistedOrder[]>(localStorage.getItem(ORDER_KEY), []);
+    localStorage.setItem(ORDER_KEY, JSON.stringify([persisted, ...orders]));
+    toast.success('Order saved.');
+    return persisted;
+  }, [items]);
+
+  const value = useMemo<CartContextValue>(() => {
+    const cart = toCart(items);
+    return {
+      items: cart.items,
+      subtotal: cart.subtotal,
+      itemCount: cart.itemCount,
+      isOpen,
+      openCart,
+      closeCart,
+      toggleCart,
       addItem,
-      updateItem,
+      updateQuantity,
       removeItem,
       clearCart,
-      getProduct,
-      getItemQuantity,
-    }),
-    [items, isOpen, subtotal, shippingFee, total, itemCount, shippingProgress]
-  );
+      submitOrder,
+    };
+  }, [items, isOpen, openCart, closeCart, toggleCart, addItem, updateQuantity, removeItem, clearCart, submitOrder]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
 
 export function useCart() {
   const context = useContext(CartContext);
-  if (!context) throw new Error("useCart must be used within CartProvider");
+  if (!context) throw new Error('useCart must be used within CartProvider');
   return context;
 }
 

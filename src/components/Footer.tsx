@@ -1,111 +1,105 @@
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Facebook, Instagram, Mail, Phone, Twitter, Youtube } from 'lucide-react';
+import { ArrowRight, Mail, MapPin, Phone, Instagram, Facebook, Youtube, Shield, Truck, Sparkles } from 'lucide-react';
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-export function Footer({ className = "" }: { className?: string } = {}) {
+export function Footer({ className = "" }: { className?: string }) {
   const [email, setEmail] = useState("");
-  const links = useMemo(
-    () => ({
-      care: [
-        { label: "Shipping & Delivery", to: "/secondary/shipping" },
-        { label: "Returns & Exchanges", to: "/secondary/returns" },
-        { label: "Size Guide", to: "/secondary/size-guide" },
-      ],
-      social: [
-        { label: "Instagram", href: "https://instagram.com", icon: Instagram },
-        { label: "Facebook", href: "https://facebook.com", icon: Facebook },
-        { label: "Twitter", href: "https://twitter.com", icon: Twitter },
-        { label: "YouTube", href: "https://youtube.com", icon: Youtube },
-      ],
-    }),
-    []
-  );
+  const year = useMemo(() => new Date().getFullYear(), []);
+  const links = [
+    { label: "Shop Mojris", to: "/shop" },
+    { label: "Heritage Stories", to: "/heritage" },
+    { label: "Cart", to: "/shop#cart" },
+  ];
+  const care = ["Hand-finished in Jodhpur", "Free size guidance", "Secure local checkout"];
+  const socials = [
+    { icon: Instagram, href: "https://instagram.com", label: "Instagram" },
+    { icon: Facebook, href: "https://facebook.com", label: "Facebook" },
+    { icon: Youtube, href: "https://youtube.com", label: "YouTube" },
+  ];
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const value = email.trim();
-    if (!value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+    if (!email.trim() || !email.includes("@")) {
       toast.error("Please enter a valid email address.");
       return;
     }
-    toast.success("You’re on the list. Expect atelier notes soon.");
+    toast.success("Subscribed to Jootiya updates.");
     setEmail("");
   };
 
   return (
-    <footer className={cn("border-t border-[#D8CBBB] bg-[#FFFDFC] text-[#2B2B2B]", className)}>
-      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 md:grid-cols-[1.2fr_0.8fr_0.8fr] md:px-6 lg:px-8">
+    <footer className={cn("border-t border-[#C9A66B] bg-[#F5F0E6] text-[#2B2B2B]", className)}>
+      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1.2fr_0.8fr_0.9fr_1fr] lg:px-8">
         <section className="space-y-4">
-          <p className="font-['Bodoni_Moda'] text-3xl leading-none tracking-tight">Jootiya</p>
-          <p className="max-w-md text-sm leading-6 text-[#6D6259]">
-            Authentic Jodhpuri mojris shaped by craft, patience, and a quiet editorial sensibility.
-            Warm ivory canvases, muted gold detailing, and tactile heritage define every release.
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-[#B04E2C]" />
+            <span className="font-serif text-2xl tracking-tight">Jootiya</span>
+          </div>
+          <p className="max-w-md text-sm leading-6 text-[#6D6257]">
+            Handcrafted Rajasthani Mojris from Jodhpur, shaped with patient stitching, warm parchment tones, and a modern editorial eye.
           </p>
-          <div className="flex flex-col gap-2 text-sm text-[#6D6259]">
-            <a className="inline-flex items-center gap-2 transition-colors hover:text-[#BFA06E]" href="mailto:care@jootiya.com">
-              <Mail className="h-4 w-4" /> care@jootiya.com
-            </a>
-            <a className="inline-flex items-center gap-2 transition-colors hover:text-[#BFA06E]" href="tel:+911234567890">
-              <Phone className="h-4 w-4" /> +91 12345 67890
-            </a>
+          <div className="flex flex-wrap gap-3 text-xs uppercase tracking-[0.22em] text-[#6D6257]">
+            {care.map((item) => (
+              <span key={item} className="inline-flex items-center gap-2">
+                <CheckDot />
+                {item}
+              </span>
+            ))}
           </div>
         </section>
 
-        <nav className="space-y-4">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6D6259]">Customer Care</h2>
-          <div className="flex flex-col gap-2.5">
-            {links.care.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                className="group inline-flex min-w-0 items-center justify-between gap-3 border-b border-transparent py-1 text-sm text-[#2B2B2B] transition-colors hover:border-[#D8CBBB] hover:text-[#BFA06E]"
-              >
-                <span className="min-w-0 truncate">{item.label}</span>
+        <section className="space-y-4">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6D6257]">Explore</h2>
+          <nav className="flex flex-col gap-2.5">
+            {links.map((link) => (
+              <Link key={link.label} to={link.to} className="group inline-flex items-center justify-between gap-3 text-sm font-medium text-[#2B2B2B] transition-colors hover:text-[#B04E2C]">
+                <span className="min-w-0 truncate">{link.label}</span>
                 <ArrowRight className="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
               </Link>
             ))}
-          </div>
-        </nav>
+          </nav>
+        </section>
 
         <section className="space-y-4">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6D6259]">Newsletter</h2>
-          <p className="text-sm leading-6 text-[#6D6259]">
-            Receive collection previews, artisan stories, and private access to new drops.
-          </p>
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-            <label className="sr-only" htmlFor="footer-email">
-              Email address
-            </label>
-            <input
-              id="footer-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email address"
-              className="h-11 w-full border border-[#D8CBBB] bg-[#FFFDFC] px-4 text-sm text-[#2B2B2B] outline-none transition-colors placeholder:text-[#6D6259] focus:border-[#BFA06E]"
-            />
-            <button
-              type="submit"
-              className="inline-flex h-11 items-center justify-center gap-2 bg-[#BFA06E] px-4 text-xs font-semibold uppercase tracking-[0.24em] text-black transition-colors hover:bg-[#A88650]"
-            >
-              Join the list
-              <ArrowRight className="h-4 w-4" />
+          <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6D6257]">Customer Care</h2>
+          <div className="flex flex-col gap-2.5 text-sm text-[#2B2B2B]">
+            <a href="tel:+919999999999" className="inline-flex items-center gap-2 hover:text-[#B04E2C]">
+              <Phone className="h-4 w-4 shrink-0" /> +91 99999 99999
+            </a>
+            <a href="mailto:care@jootiya.com" className="inline-flex items-center gap-2 hover:text-[#B04E2C]">
+              <Mail className="h-4 w-4 shrink-0" /> care@jootiya.com
+            </a>
+            <span className="inline-flex items-start gap-2 text-[#6D6257]">
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+              Jodhpur, Rajasthan, India
+            </span>
+          </div>
+          <div className="flex flex-col gap-2.5 text-sm text-[#6D6257]">
+            <span className="inline-flex items-center gap-2"><Truck className="h-4 w-4 shrink-0 text-[#B04E2C]" /> Pan-India shipping</span>
+            <span className="inline-flex items-center gap-2"><Shield className="h-4 w-4 shrink-0 text-[#B04E2C]" /> Secure order handling</span>
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6D6257]">Newsletter</h2>
+          <p className="text-sm leading-6 text-[#6D6257]">Receive new drops, artisan notes, and size guidance in a restrained monthly letter.</p>
+          <form onSubmit={submit} className="space-y-3">
+            <label className="sr-only" htmlFor="footer-email">Email address</label>
+            <div className="flex items-center gap-2 border border-[#C9A66B] bg-[#FFFBF4] px-3 py-2">
+              <Mail className="h-4 w-4 shrink-0 text-[#6D6257]" />
+              <input id="footer-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email address" className="w-full bg-transparent text-sm outline-none placeholder:text-[#6D6257]" />
+            </div>
+            <button type="submit" className="inline-flex items-center gap-2 bg-[#B04E2C] px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-white transition-colors hover:bg-[#8F3C22]">
+              Subscribe <ArrowRight className="h-4 w-4" />
             </button>
           </form>
-          <div className="flex flex-wrap gap-3 pt-2">
-            {links.social.map((item) => {
-              const Icon = item.icon;
+          <div className="flex items-center gap-3 pt-2">
+            {socials.map((social) => {
+              const Icon = social.icon;
               return (
-                <a
-                  key={item.label}
-                  href={item.href}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label={item.label}
-                  className="inline-flex h-10 w-10 items-center justify-center border border-[#D8CBBB] text-[#2B2B2B] transition-colors hover:border-[#BFA06E] hover:text-[#BFA06E]"
-                >
+                <a key={social.label} href={social.href} target="_blank" rel="noreferrer" aria-label={social.label} className="inline-flex h-10 w-10 items-center justify-center border border-[#C9A66B] text-[#2B2B2B] transition-colors hover:bg-[#B04E2C] hover:text-white">
                   <Icon className="h-4 w-4" />
                 </a>
               );
@@ -113,11 +107,15 @@ export function Footer({ className = "" }: { className?: string } = {}) {
           </div>
         </section>
       </div>
-      <div className="border-t border-[#D8CBBB] px-4 py-4 text-center text-xs uppercase tracking-[0.22em] text-[#6D6259] md:px-6 lg:px-8">
-        © {new Date().getFullYear()} Jootiya. Crafted in Jodhpur.
+      <div className="border-t border-[#C9A66B] px-4 py-4 text-center text-xs uppercase tracking-[0.22em] text-[#6D6257] sm:px-6 lg:px-8">
+        © {year} Jootiya. Crafted in Jodhpur.
       </div>
     </footer>
   );
+}
+
+function CheckDot() {
+  return <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-[#B04E2C]" />;
 }
 
 export default Footer;
