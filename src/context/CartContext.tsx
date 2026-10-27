@@ -1,16 +1,16 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
-import { products } from '@/data/mockData';
-import type { CartItem, Order, Product } from '@/types';
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import type { CartItem, Product } from "@/types";
+import { products as catalogProducts } from "@/data/mockData";
 
-type CartLine = CartItem & { product: Product };
 type CartContextValue = {
-  items: CartLine[];
+  items: CartItem[];
   isOpen: boolean;
   subtotal: number;
   shippingFee: number;
   total: number;
   itemCount: number;
+  shippingProgress: number;
   openCart: () => void;
   closeCart: () => void;
   toggleCart: () => void;
@@ -18,133 +18,103 @@ type CartContextValue = {
   updateItem: (productId: string, quantity: number, size?: string, color?: string) => void;
   removeItem: (productId: string, size?: string, color?: string) => void;
   clearCart: () => void;
-  checkout: (shipping: Order['shipping']) => Promise<Order | null>;
   getProduct: (productId: string) => Product | undefined;
+  getItemQuantity: (productId: string, size?: string, color?: string) => number;
 };
 
+const STORAGE_KEY = "jootiya-cart-v1";
 const CartContext = createContext<CartContextValue | undefined>(undefined);
-const STORAGE_KEY = 'jootiya-cart-v1';
 
-const getKey = (productId: string, size?: string, color?: string) => `${productId}::${size ?? ''}::${color ?? ''}`;
-const getStockLimit = (product?: Product) => (product?.inStock === false ? 0 : 10);
+const getKey = (productId = "", size = "", color = "") => `${productId}::${size}::${color}`;
 
-export function CartProvider({ children }: { children?: React.ReactNode }) {
-  const [rawItems, setRawItems] = useState<CartItem[]>([]);
+const getProduct = (productId = "") => catalogProducts?.find((product) => product?.id === productId);
+
+const readStoredItems = (): CartItem[] => {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as CartItem[]) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+export function CartProvider({ children }: { children?: React.ReactNode } = {}) {
+  const [items, setItems] = useState<CartItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored) setRawItems(JSON.parse(stored) as CartItem[]);
-    } catch {
-      setRawItems([]);
-    }
+    setItems(readStoredItems());
   }, []);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(rawItems));
-    } catch {}
-  }, [rawItems]);
-
-  const getProduct = useCallback((productId: string) => products.find((product) => product.id === productId), []);
-
-  const items = useMemo(
-    () =>
-      rawItems
-        .map((item) => {
-          const product = getProduct(item.productId);
-          return product ? { ...item, product } : null;
-        })
-        .filter(Boolean) as CartLine[],
-    [getProduct, rawItems],
-  );
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  }, [items]);
 
   const subtotal = useMemo(
-    () => items.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
-    [items],
+    () =>
+      items.reduce((sum, item) => {
+        const product = getProduct(item?.productId);
+        return sum + (product?.price ?? 0) * (item?.quantity ?? 0);
+      }, 0),
+    [items]
   );
-  const shippingFee = subtotal > 0 && subtotal < 5000 ? 250 : 0;
+
+  const shippingFee = subtotal >= 5000 || subtotal === 0 ? 0 : 249;
   const total = subtotal + shippingFee;
-  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+  const itemCount = items.reduce((sum, item) => sum + (item?.quantity ?? 0), 0);
+  const shippingProgress = Math.min(100, Math.round((subtotal / 5000) * 100));
 
-  const syncItems = useCallback((updater: (current: CartItem[]) => CartItem[]) => {
-    setRawItems((current) => updater(current));
-  }, []);
+  const syncItem = (nextItems: CartItem[]) => {
+    setItems(nextItems);
+  };
 
-  const addItem = useCallback((productId: string, quantity = 1, size?: string, color?: string) => {
+  const addItem = (productId = "", quantity = 1, size?: string, color?: string) => {
     const product = getProduct(productId);
-    const limit = getStockLimit(product);
-    if (!product || limit <= 0) return toast.error('This style is currently unavailable.');
-    syncItems((current) => {
-      const key = getKey(productId, size, color);
-      const existing = current.find((item) => getKey(item.productId, item.size, item.color) === key);
-      if (!existing) return [...current, { productId, quantity: Math.min(quantity, limit), size, color }];
-      return current.map((item) =>
-        getKey(item.productId, item.size, item.color) === key
-          ? { ...item, quantity: Math.min(item.quantity + quantity, limit) }
-          : item,
-      );
-    });
-    setIsOpen(true);
-    toast.success('Added to cart.');
-  }, [getProduct, syncItems]);
-
-  const updateItem = useCallback((productId: string, quantity: number, size?: string, color?: string) => {
-    const product = getProduct(productId);
-    const limit = getStockLimit(product);
-    syncItems((current) =>
-      current
-        .map((item) =>
-          getKey(item.productId, item.size, item.color) === getKey(productId, size, color)
-            ? { ...item, quantity: Math.min(Math.max(quantity, 1), limit) }
-            : item,
+    if (!product) {
+      toast.error("Product not found.");
+      return;
+    }
+    if (product?.inStock === false) {
+      toast.error("This style is currently out of stock.");
+      return;
+    }
+    const safeQty = Math.max(1, quantity ?? 1);
+    const key = getKey(productId, size ?? "", color ?? "");
+    const existing = items.find((item) => getKey(item?.productId, item?.size ?? "", item?.color ?? "") === key);
+    const nextItems = existing
+      ? items.map((item) =>
+          getKey(item?.productId, item?.size ?? "", item?.color ?? "") === key
+            ? { ...item, quantity: (item?.quantity ?? 0) + safeQty }
+            : item
         )
-        .filter((item) => item.quantity > 0),
-    );
-  }, [getProduct, syncItems]);
+      : [...items, { productId, quantity: safeQty, size, color }];
+    syncItem(nextItems);
+    toast.success(`${product?.name ?? "Item"} added to cart.`);
+    setIsOpen(true);
+  };
 
-  const removeItem = useCallback((productId: string, size?: string, color?: string) => {
-    syncItems((current) => current.filter((item) => getKey(item.productId, item.size, item.color) !== getKey(productId, size, color)));
-    toast.message('Removed from cart.');
-  }, [syncItems]);
+  const updateItem = (productId = "", quantity = 1, size?: string, color?: string) => {
+    const nextQty = Math.max(1, quantity ?? 1);
+    const key = getKey(productId, size ?? "", color ?? "");
+    syncItem(items.map((item) => (getKey(item?.productId, item?.size ?? "", item?.color ?? "") === key ? { ...item, quantity: nextQty } : item)));
+  };
 
-  const clearCart = useCallback(() => {
-    setRawItems([]);
-    toast.message('Cart cleared.');
-  }, []);
+  const removeItem = (productId = "", size?: string, color?: string) => {
+    const key = getKey(productId, size ?? "", color ?? "");
+    syncItem(items.filter((item) => getKey(item?.productId, item?.size ?? "", item?.color ?? "") !== key));
+    toast.message("Removed from cart.");
+  };
 
-  const checkout = useCallback(async (shipping: Order['shipping']) => {
-    if (!items.length) {
-      toast.error('Your cart is empty.');
-      return null;
-    }
-    const order: Order = {
-      id: crypto.randomUUID(),
-      items: rawItems,
-      shipping,
-      subtotal,
-      shippingFee,
-      total,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-    };
-    try {
-      const response = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(order),
-      });
-      if (!response.ok) throw new Error('Checkout failed');
-      clearCart();
-      setIsOpen(false);
-      toast.success('Order placed successfully.');
-      return order;
-    } catch {
-      toast.error('Unable to place order right now.');
-      return null;
-    }
-  }, [clearCart, items.length, rawItems, shippingFee, subtotal, total]);
+  const clearCart = () => {
+    syncItem([]);
+    toast.message("Cart cleared.");
+  };
+
+  const getItemQuantity = (productId = "", size?: string, color?: string) =>
+    items.find((item) => getKey(item?.productId, item?.size ?? "", item?.color ?? "") === getKey(productId, size ?? "", color ?? ""))?.quantity ?? 0;
 
   const value = useMemo<CartContextValue>(
     () => ({
@@ -154,17 +124,18 @@ export function CartProvider({ children }: { children?: React.ReactNode }) {
       shippingFee,
       total,
       itemCount,
+      shippingProgress,
       openCart: () => setIsOpen(true),
       closeCart: () => setIsOpen(false),
-      toggleCart: () => setIsOpen((current) => !current),
+      toggleCart: () => setIsOpen((prev) => !prev),
       addItem,
       updateItem,
       removeItem,
       clearCart,
-      checkout,
       getProduct,
+      getItemQuantity,
     }),
-    [addItem, checkout, clearCart, getProduct, isOpen, itemCount, items, removeItem, shippingFee, subtotal, total, updateItem],
+    [items, isOpen, subtotal, shippingFee, total, itemCount, shippingProgress]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
@@ -172,7 +143,7 @@ export function CartProvider({ children }: { children?: React.ReactNode }) {
 
 export function useCart() {
   const context = useContext(CartContext);
-  if (!context) throw new Error('useCart must be used within CartProvider');
+  if (!context) throw new Error("useCart must be used within CartProvider");
   return context;
 }
 

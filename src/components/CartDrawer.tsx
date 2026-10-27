@@ -1,205 +1,131 @@
-import React, { useMemo } from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, Minus, Plus, ShoppingBag, Trash2, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { cn } from '@/lib/utils';
-import { useCart } from '@/context/CartContext';
-import { products } from '@/data/mockData';
+import React from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { useNavigate } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowRight, Check, Minus, Plus, ShoppingBag, Trash2, X } from 'lucide-react';
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { useCart } from "@/context/CartContext";
 
-export interface CartDrawerProps {
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
-}
-
-export function CartDrawer({ open = false, onOpenChange = () => {} }: CartDrawerProps) {
+export function CartDrawer({ open = false, onOpenChange = () => {} }: { open?: boolean; onOpenChange?: (open: boolean) => void } = {}) {
   const navigate = useNavigate();
-  const { items = [], updateQuantity = () => {}, removeItem = () => {}, subtotal = 0 } = useCart() ?? {};
-  const cartItems = Array.isArray(items) ? items : [];
-  const shippingFee = subtotal >= 5000 || subtotal === 0 ? 0 : 250;
-  const total = subtotal + shippingFee;
-  const progress = Math.min((subtotal / 5000) * 100, 100);
+  const { cartItems = [], products = [], updateQuantity, removeFromCart, selectedSize, setSelectedSize } = useCart() as any;
+  const items = cartItems ?? [];
+  const productList = products ?? [];
+  const subtotal = items.reduce((sum: number, item: any) => {
+    const product = productList.find((p: any) => p?.id === item?.productId);
+    return sum + (product?.price ?? 0) * (item?.quantity ?? 0);
+  }, 0);
+  const shippingThreshold = 2500;
+  const remaining = Math.max(shippingThreshold - subtotal, 0);
+  const progress = Math.min((subtotal / shippingThreshold) * 100, 100);
 
-  const enrichedItems = useMemo(
-    () =>
-      cartItems.map((item) => {
-        const product = products?.find((p) => p?.id === item?.productId) ?? null;
-        return { item, product };
-      }),
-    [cartItems]
-  );
+  const handleCheckout = () => {
+    onOpenChange(false);
+    navigate("/checkout");
+    toast.message("Proceeding to checkout");
+  };
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <AnimatePresence>
-          {open ? (
-            <>
-              <Dialog.Overlay asChild>
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="fixed inset-0 z-40 bg-black/35"
-                />
-              </Dialog.Overlay>
-              <Dialog.Content asChild>
-                <motion.aside
-                  initial={{ x: '100%' }}
-                  animate={{ x: 0 }}
-                  exit={{ x: '100%' }}
-                  transition={{ type: 'spring', stiffness: 260, damping: 28 }}
-                  className="fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col border-l border-[#BFA6A0] bg-[#FFFDFC] text-[#2B2B2B] shadow-2xl"
-                >
-                  <div className="flex items-center justify-between border-b border-[#BFA6A0] px-5 py-4">
-                    <div className="min-w-0">
-                      <Dialog.Title className="font-['Playfair_Display'] text-2xl font-medium tracking-tight">
-                        Cart
-                      </Dialog.Title>
-                      <Dialog.Description className="mt-1 text-xs uppercase tracking-[0.24em] text-[#6F625D]">
-                        Your selected mojris
-                      </Dialog.Description>
-                    </div>
-                    <Dialog.Close asChild>
-                      <button
-                        type="button"
-                        className="inline-flex h-10 w-10 items-center justify-center border border-[#BFA6A0] text-[#2B2B2B] transition-colors hover:bg-[#F9F5F0]"
-                        aria-label="Close cart"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </Dialog.Close>
-                  </div>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]" />
+        <Dialog.Content className="fixed right-0 top-0 z-50 h-full w-full max-w-md border-l border-[#D8CBBB] bg-[#FFFDFC] shadow-2xl outline-none">
+          <motion.div initial={{ x: 24, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 24, opacity: 0 }} transition={{ duration: 0.28, ease: "easeOut" }} className="flex h-full flex-col">
+            <div className="flex items-center justify-between border-b border-[#D8CBBB] px-5 py-4">
+              <div className="min-w-0">
+                <Dialog.Title className="font-['Bodoni_Moda'] text-2xl font-light tracking-tight text-[#2B2B2B]">Your Cart</Dialog.Title>
+                <p className="text-xs uppercase tracking-[0.24em] text-[#6D6259]">{items.length} item{items.length === 1 ? "" : "s"}</p>
+              </div>
+              <Dialog.Close className="inline-flex h-10 w-10 items-center justify-center border border-[#D8CBBB] text-[#2B2B2B] transition-colors hover:bg-[#BFA06E] hover:text-black">
+                <X className="h-4 w-4" />
+              </Dialog.Close>
+            </div>
 
-                  <div className="flex-1 overflow-y-auto px-5 py-4">
-                    {cartItems.length === 0 ? (
-                      <div className="flex h-full flex-col items-start justify-center gap-4 py-10">
-                        <div className="flex h-14 w-14 items-center justify-center border border-[#BFA6A0]">
-                          <ShoppingBag className="h-5 w-5" />
-                        </div>
-                        <div className="space-y-2">
-                          <p className="font-['Playfair_Display'] text-2xl font-medium">Your cart is empty</p>
-                          <p className="max-w-xs text-sm leading-6 text-[#6F625D]">
-                            Discover handcrafted Rajasthani mojris and add your preferred pair to continue.
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onOpenChange(false);
-                            navigate('/shop');
-                          }}
-                          className="inline-flex items-center gap-2 border border-[#D9381E] bg-[#D9381E] px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-white transition-colors hover:bg-[#B92B17]"
-                        >
-                          Explore Collection
-                          <ArrowRight className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {enrichedItems.map(({ item, product }) => (
-                          <div key={`${item?.productId ?? 'item'}-${item?.size ?? 'na'}-${item?.color ?? 'na'}`} className="flex gap-3 border-b border-[#BFA6A0] pb-4">
-                            <img
-                              src={product?.image ?? 'https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=800&q=80'}
-                              alt={product?.name ?? 'Cart item'}
-                              crossOrigin="anonymous"
-                              className="h-24 w-20 shrink-0 object-cover"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <p className="truncate font-['Playfair_Display'] text-lg font-medium">{product?.name ?? 'Handcrafted Mojri'}</p>
-                                  <p className="mt-1 truncate text-xs uppercase tracking-[0.2em] text-[#6F625D]">
-                                    {product?.category ?? 'Mojri'}
-                                  </p>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => removeItem?.(item?.productId, item?.size, item?.color)}
-                                  className="inline-flex h-8 w-8 items-center justify-center border border-[#BFA6A0] text-[#2B2B2B] transition-colors hover:bg-[#F9F5F0]"
-                                  aria-label="Remove item"
-                                >
-                                  <Trash2 className="h-4 w-4" />
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              <AnimatePresence initial={false}>
+                {items.length === 0 ? (
+                  <motion.div key="empty" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="flex h-full min-h-[320px] flex-col items-center justify-center text-center">
+                    <div className="mb-4 flex h-16 w-16 items-center justify-center border border-[#D8CBBB] bg-[#F9F5F0] text-[#BFA06E]">
+                      <ShoppingBag className="h-7 w-7" />
+                    </div>
+                    <h3 className="font-['Bodoni_Moda'] text-2xl font-light text-[#2B2B2B]">Your cart is empty</h3>
+                    <p className="mt-2 max-w-xs text-sm leading-6 text-[#6D6259]">Discover handcrafted Jodhpuri Mojris and add a pair to begin your order.</p>
+                    <button onClick={() => { onOpenChange(false); navigate("/shop"); }} className="mt-6 inline-flex items-center gap-2 border border-[#BFA06E] bg-[#BFA06E] px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-black transition-colors hover:bg-[#A88650]">
+                      Explore Collection
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </motion.div>
+                ) : (
+                  <div className="space-y-4">
+                    {items.map((item: any) => {
+                      const product = productList.find((p: any) => p?.id === item?.productId);
+                      if (!product) return null;
+                      const size = item?.size ?? selectedSize?.[product?.id] ?? product?.sizes?.[0] ?? "One Size";
+                      return (
+                        <motion.div key={`${item?.productId}-${size}`} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex gap-3 border border-[#D8CBBB] bg-white p-3">
+                          <img src={product?.image ?? ""} alt={product?.name ?? "Product"} crossOrigin="anonymous" className="h-24 w-20 shrink-0 object-cover" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-[#2B2B2B]">{product?.name ?? ""}</p>
+                                <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#6D6259]">{product?.category ?? ""}</p>
+                              </div>
+                              <button onClick={() => removeFromCart?.(product?.id, size)} className="inline-flex h-8 w-8 items-center justify-center border border-[#D8CBBB] text-[#6D6259] transition-colors hover:bg-[#F9F5F0] hover:text-[#2B2B2B]">
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                            <div className="mt-3 flex items-center gap-2 text-xs text-[#6D6259]">
+                              <span className="border border-[#D8CBBB] px-2 py-1">Size {size}</span>
+                              <span className="border border-[#D8CBBB] px-2 py-1">Qty {item?.quantity ?? 1}</span>
+                            </div>
+                            <div className="mt-3 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <button onClick={() => updateQuantity?.(product?.id, Math.max((item?.quantity ?? 1) - 1, 0), size)} className="inline-flex h-8 w-8 items-center justify-center border border-[#D8CBBB] text-[#2B2B2B] transition-colors hover:bg-[#F9F5F0]">
+                                  <Minus className="h-4 w-4" />
+                                </button>
+                                <span className="min-w-8 text-center text-sm font-medium text-[#2B2B2B]">{item?.quantity ?? 1}</span>
+                                <button onClick={() => updateQuantity?.(product?.id, (item?.quantity ?? 1) + 1, size)} className="inline-flex h-8 w-8 items-center justify-center border border-[#D8CBBB] text-[#2B2B2B] transition-colors hover:bg-[#F9F5F0]">
+                                  <Plus className="h-4 w-4" />
                                 </button>
                               </div>
-
-                              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#6F625D]">
-                                <span className="border border-[#BFA6A0] px-2 py-1">Size {item?.size ?? '—'}</span>
-                                <span className="border border-[#BFA6A0] px-2 py-1">Qty {item?.quantity ?? 1}</span>
-                                {item?.color ? <span className="border border-[#BFA6A0] px-2 py-1">{item?.color}</span> : null}
-                              </div>
-
-                              <div className="mt-3 flex items-center justify-between">
-                                <div className="flex items-center border border-[#BFA6A0]">
-                                  <button
-                                    type="button"
-                                    onClick={() => updateQuantity?.(item?.productId, Math.max(1, (item?.quantity ?? 1) - 1), item?.size, item?.color)}
-                                    className="inline-flex h-9 w-9 items-center justify-center transition-colors hover:bg-[#F9F5F0]"
-                                    aria-label="Decrease quantity"
-                                  >
-                                    <Minus className="h-4 w-4" />
-                                  </button>
-                                  <span className="min-w-10 px-3 text-center text-sm font-medium">{item?.quantity ?? 1}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => updateQuantity?.(item?.productId, (item?.quantity ?? 1) + 1, item?.size, item?.color)}
-                                    className="inline-flex h-9 w-9 items-center justify-center transition-colors hover:bg-[#F9F5F0]"
-                                    aria-label="Increase quantity"
-                                  >
-                                    <Plus className="h-4 w-4" />
-                                  </button>
-                                </div>
-                                <p className="font-['Playfair_Display'] text-lg font-medium">
-                                  ₹{((product?.price ?? 0) * (item?.quantity ?? 1)).toLocaleString('en-IN')}
-                                </p>
-                              </div>
+                              <p className="text-sm font-semibold text-[#2B2B2B]">₹{((product?.price ?? 0) * (item?.quantity ?? 1)).toLocaleString("en-IN")}</p>
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        </motion.div>
+                      );
+                    })}
                   </div>
+                )}
+              </AnimatePresence>
+            </div>
 
-                  <div className="border-t border-[#BFA6A0] bg-[#F9F5F0] px-5 py-4">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-[#6F625D]">Subtotal</span>
-                        <span className="font-medium">₹{subtotal.toLocaleString('en-IN')}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-[#6F625D]">Shipping</span>
-                        <span className="font-medium">{shippingFee === 0 ? 'Free' : `₹${shippingFee.toLocaleString('en-IN')}`}</span>
-                      </div>
-                      <div className="h-1 overflow-hidden bg-white">
-                        <div className="h-full bg-[#D9381E]" style={{ width: `${progress}%` }} />
-                      </div>
-                      <p className="text-xs leading-5 text-[#6F625D]">
-                        {subtotal >= 5000 ? 'You qualify for complimentary shipping.' : `Add ₹${Math.max(0, 5000 - subtotal).toLocaleString('en-IN')} more for free shipping.`}
-                      </p>
-                      <div className="flex items-center justify-between border-t border-[#BFA6A0] pt-3">
-                        <span className="text-sm uppercase tracking-[0.2em] text-[#6F625D]">Total</span>
-                        <span className="font-['Playfair_Display'] text-2xl font-medium">₹{total.toLocaleString('en-IN')}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onOpenChange(false);
-                          navigate('/checkout');
-                        }}
-                        className={cn(
-                          'inline-flex w-full items-center justify-center gap-2 bg-[#D9381E] px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-white transition-colors hover:bg-[#B92B17]'
-                        )}
-                      >
-                        Proceed to Checkout
-                        <ArrowRight className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                </motion.aside>
-              </Dialog.Content>
-            </>
-          ) : null}
-        </AnimatePresence>
+            <div className="border-t border-[#D8CBBB] bg-[#F9F5F0] px-5 py-4">
+              <div className="mb-3 flex items-center justify-between text-sm">
+                <span className="text-[#6D6259]">Subtotal</span>
+                <span className="font-semibold text-[#2B2B2B]">₹{subtotal.toLocaleString("en-IN")}</span>
+              </div>
+              <div className="mb-3">
+                <div className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.18em] text-[#6D6259]">
+                  <span>Complimentary shipping</span>
+                  <span>{remaining > 0 ? `₹${remaining.toLocaleString("en-IN")} away` : "Unlocked"}</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden bg-white">
+                  <div className="h-full bg-[#BFA06E]" style={{ width: `${progress}%` }} />
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <button onClick={() => { onOpenChange(false); navigate("/shop"); }} className="flex-1 border border-[#D8CBBB] bg-white px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#2B2B2B] transition-colors hover:bg-[#F9F5F0]">
+                  Continue Shopping
+                </button>
+                <button onClick={handleCheckout} disabled={items.length === 0} className={cn("flex-1 inline-flex items-center justify-center gap-2 border px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] transition-colors", items.length === 0 ? "cursor-not-allowed border-[#D8CBBB] bg-[#D8CBBB]/40 text-[#6D6259]" : "border-[#BFA06E] bg-[#BFA06E] text-black hover:bg-[#A88650]")}>
+                  Checkout
+                  <Check className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
   );

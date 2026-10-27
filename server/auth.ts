@@ -1,15 +1,15 @@
 import { betterAuth } from "better-auth";
-import { libsqlAdapter } from "better-auth/adapters/libsql";
-import db from "./db";
+import { db } from "./db";
 
 const auth = betterAuth({
-  appName: "Jootiya",
-  database: libsqlAdapter(db, {
+  database: {
     provider: "sqlite",
-  }),
+    db,
+  },
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,
+    minPasswordLength: 8,
   },
   user: {
     additionalFields: {
@@ -23,10 +23,9 @@ const auth = betterAuth({
     expiresIn: 60 * 60 * 24 * 30,
     updateAge: 60 * 60 * 24,
   },
-  trustedOrigins: (process.env?.BETTER_AUTH_TRUSTED_ORIGINS ?? "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean),
+  advanced: {
+    cookiePrefix: "jootiya",
+  },
 });
 
 export { auth };
