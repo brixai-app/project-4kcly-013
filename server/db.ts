@@ -1,178 +1,258 @@
-import { createClient } from '@libsql/client';
+import { createClient, type Client } from '@libsql/client';
 import type { CartItem, Order, Product } from '../src/types';
-import mockData from '../src/data/mockData';
 
-const db = createClient({ url: 'file:local.db' });
+const dbUrl = 'file:local.db';
 
-const productsTableSql = `
-CREATE TABLE IF NOT EXISTS items (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  category TEXT NOT NULL,
-  price INTEGER NOT NULL,
-  image TEXT NOT NULL,
-  description TEXT,
-  artisan TEXT,
-  material TEXT,
-  sizes TEXT,
-  featured INTEGER NOT NULL DEFAULT 0,
-  inStock INTEGER NOT NULL DEFAULT 1,
-  rating REAL,
-  tags TEXT,
-  createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-)`;
+export const db: Client = createClient({ url: dbUrl });
 
-const ordersTableSql = `
-CREATE TABLE IF NOT EXISTS orders (
-  id TEXT PRIMARY KEY,
-  items TEXT NOT NULL,
-  shipping TEXT NOT NULL,
-  paymentMethod TEXT NOT NULL,
-  subtotal INTEGER NOT NULL,
-  shippingFee INTEGER NOT NULL,
-  total INTEGER NOT NULL,
-  status TEXT NOT NULL,
-  createdAt TEXT NOT NULL
-)`;
-
-let schemaReady: Promise<void> | null = null;
-
-export async function initSchema(): Promise<void> {
-  if (!schemaReady) {
-    schemaReady = (async () => {
-      await db.execute(productsTableSql);
-      await db.execute(ordersTableSql);
-    })();
-  }
-  return schemaReady;
+export async function initDb(): Promise<void> {
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS items (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL,
+      price INTEGER NOT NULL,
+      originalPrice INTEGER,
+      description TEXT,
+      imageUrl TEXT NOT NULL,
+      gallery TEXT,
+      artisanId TEXT,
+      sizes TEXT,
+      colors TEXT,
+      material TEXT,
+      inStock INTEGER DEFAULT 1,
+      featured INTEGER DEFAULT 0,
+      newArrival INTEGER DEFAULT 0,
+      limitedEdition INTEGER DEFAULT 0,
+      slug TEXT,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS orders (
+      id TEXT PRIMARY KEY,
+      items TEXT NOT NULL,
+      shipping TEXT NOT NULL,
+      subtotal INTEGER NOT NULL,
+      shippingFee INTEGER NOT NULL,
+      total INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      customerEmail TEXT
+    )
+  `);
 }
 
-export async function seedProducts(): Promise<void> {
-  await initSchema();
-  const products = (mockData?.products ?? []) as Product[];
-  for (const product of products.slice(0, 6)) {
+const seedItems: Product[] = [
+  {
+    id: 'mj-001',
+    name: 'Mehrangarh Ember Mojri',
+    category: 'mojri',
+    price: 2499,
+    originalPrice: 3299,
+    description: 'Hand-finished leather mojri with tonal embroidery and a softened almond toe.',
+    imageUrl: 'https://images.unsplash.com/photo-1533867617858-e7b97e060509?auto=format&fit=crop&w=800&q=80',
+    gallery: ['https://images.unsplash.com/photo-1560769629-975ec94e6a86?auto=format&fit=crop&w=800&q=80'],
+    artisanId: 'art-001',
+    sizes: ['6', '7', '8', '9', '10'],
+    colors: ['ember', 'sand'],
+    material: 'Leather',
+    inStock: true,
+    featured: true,
+    newArrival: true,
+    slug: 'mehrangarh-ember-mojri',
+  },
+  {
+    id: 'mj-002',
+    name: 'Thar Ivory Jutti',
+    category: 'juttis',
+    price: 2199,
+    description: 'Ivory-toned jutti with mirror-thread accents and a supple cushioned lining.',
+    imageUrl: 'https://images.unsplash.com/photo-1543163521-1bf539c55dd2?auto=format&fit=crop&w=800&q=80',
+    artisanId: 'art-002',
+    sizes: ['6', '7', '8', '9'],
+    colors: ['ivory', 'taupe'],
+    material: 'Leather',
+    inStock: true,
+    featured: true,
+    slug: 'thar-ivory-jutti',
+  },
+  {
+    id: 'mj-003',
+    name: 'Jodhpur Loom Bridal Pair',
+    category: 'bridal',
+    price: 4899,
+    originalPrice: 5599,
+    description: 'Bridal mojris with dense zari work, ceremonial sheen, and a sculpted profile.',
+    imageUrl: 'https://images.unsplash.com/photo-1590874103328-eac38a683ce7?auto=format&fit=crop&w=800&q=80',
+    artisanId: 'art-003',
+    sizes: ['6', '7', '8', '9', '10', '11'],
+    colors: ['gold', 'maroon'],
+    material: 'Leather',
+    inStock: true,
+    limitedEdition: true,
+    slug: 'jodhpur-loom-bridal-pair',
+  },
+  {
+    id: 'mj-004',
+    name: 'Desert Walk Everyday Mojri',
+    category: 'everyday',
+    price: 1799,
+    description: 'Lightweight everyday silhouette with breathable lining and understated stitch detail.',
+    imageUrl: 'https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&w=1400&q=85',
+    artisanId: 'art-001',
+    sizes: ['6', '7', '8', '9', '10'],
+    colors: ['tan', 'brown'],
+    material: 'Leather',
+    inStock: true,
+    newArrival: true,
+    slug: 'desert-walk-everyday-mojri',
+  },
+  {
+    id: 'mj-005',
+    name: 'Saffron Court Limited Edition',
+    category: 'limited',
+    price: 3999,
+    originalPrice: 4599,
+    description: 'Limited run pair with saffron embroidery, hand-burnished edges, and artisan signature.',
+    imageUrl: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1400&q=85',
+    artisanId: 'art-004',
+    sizes: ['7', '8', '9', '10'],
+    colors: ['saffron', 'espresso'],
+    material: 'Leather',
+    inStock: true,
+    featured: true,
+    limitedEdition: true,
+    slug: 'saffron-court-limited-edition',
+  },
+  {
+    id: 'mj-006',
+    name: 'Blue Dune Artisan Mojri',
+    category: 'mojri',
+    price: 2699,
+    description: 'Artisan-made mojri with cool indigo threadwork and a refined low vamp.',
+    imageUrl: 'https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&w=1400&q=85',
+    artisanId: 'art-002',
+    sizes: ['6', '7', '8', '9'],
+    colors: ['indigo', 'stone'],
+    material: 'Leather',
+    inStock: true,
+    newArrival: true,
+    slug: 'blue-dune-artisan-mojri',
+  },
+];
+
+function toInt(value: unknown): number | null {
+  const n = typeof value === 'number' ? value : Number(value ?? 0);
+  return Number.isFinite(n) ? Math.trunc(n) : null;
+}
+
+export async function seedDb(): Promise<void> {
+  await initDb();
+  for (const item of seedItems) {
     await db.execute({
-      sql: `INSERT OR IGNORE INTO items
-        (id, name, category, price, image, description, artisan, material, sizes, featured, inStock, rating, tags)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      sql: `
+        INSERT OR IGNORE INTO items
+        (id, name, category, price, originalPrice, description, imageUrl, gallery, artisanId, sizes, colors, material, inStock, featured, newArrival, limitedEdition, slug)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
       args: [
-        product?.id ?? '',
-        product?.name ?? '',
-        product?.category ?? '',
-        Math.round(product?.price ?? 0),
-        product?.image ?? '',
-        product?.description ?? null,
-        product?.artisan ?? null,
-        product?.material ?? null,
-        JSON.stringify(product?.sizes ?? []),
-        product?.featured ? 1 : 0,
-        product?.inStock === false ? 0 : 1,
-        product?.rating ?? null,
-        JSON.stringify(product?.tags ?? []),
+        item.id,
+        item.name,
+        item.category,
+        item.price,
+        item.originalPrice ?? null,
+        item.description ?? null,
+        item.imageUrl,
+        JSON.stringify(item.gallery ?? []),
+        item.artisanId ?? null,
+        JSON.stringify(item.sizes ?? []),
+        JSON.stringify(item.colors ?? []),
+        item.material ?? null,
+        item.inStock ? 1 : 0,
+        item.featured ? 1 : 0,
+        item.newArrival ? 1 : 0,
+        item.limitedEdition ? 1 : 0,
+        item.slug ?? null,
       ],
     });
   }
 }
 
-export async function getItems(): Promise<Product[]> {
-  await initSchema();
-  const result = await db.execute('SELECT * FROM items ORDER BY featured DESC, createdAt DESC');
-  return (result.rows ?? []).map((row: any) => ({
-    id: String(row?.id ?? ''),
-    name: String(row?.name ?? ''),
-    category: String(row?.category ?? ''),
-    price: Number(row?.price ?? 0),
-    image: String(row?.image ?? ''),
-    description: row?.description ?? undefined,
-    artisan: row?.artisan ?? undefined,
-    material: row?.material ?? undefined,
-    sizes: safeParseArray(row?.sizes),
-    featured: Boolean(row?.featured),
-    inStock: row?.inStock !== 0,
-    rating: row?.rating != null ? Number(row.rating) : undefined,
-    tags: safeParseArray(row?.tags),
-  }));
-}
-
 export async function getItemById(id: string): Promise<Product | null> {
-  await initSchema();
-  const result = await db.execute({ sql: 'SELECT * FROM items WHERE id = ? LIMIT 1', args: [id ?? ''] });
-  const row = result.rows?.[0] as any | undefined;
-  if (!row) return null;
-  return {
-    id: String(row?.id ?? ''),
-    name: String(row?.name ?? ''),
-    category: String(row?.category ?? ''),
-    price: Number(row?.price ?? 0),
-    image: String(row?.image ?? ''),
-    description: row?.description ?? undefined,
-    artisan: row?.artisan ?? undefined,
-    material: row?.material ?? undefined,
-    sizes: safeParseArray(row?.sizes),
-    featured: Boolean(row?.featured),
-    inStock: row?.inStock !== 0,
-    rating: row?.rating != null ? Number(row.rating) : undefined,
-    tags: safeParseArray(row?.tags),
-  };
+  const result = await db.execute({ sql: 'SELECT * FROM items WHERE id = ? LIMIT 1', args: [id] });
+  const row = result.rows?.[0] ?? null;
+  return row ? rowToProduct(row) : null;
 }
 
-export async function saveOrder(order: Order): Promise<Order> {
-  await initSchema();
-  const payload = {
-    id: order?.id ?? crypto.randomUUID(),
-    items: order?.items ?? [],
-    shipping: order?.shipping ?? ({} as Order['shipping']),
-    paymentMethod: order?.paymentMethod ?? 'cod',
-    subtotal: Math.round(order?.subtotal ?? 0),
-    shippingFee: Math.round(order?.shippingFee ?? 0),
-    total: Math.round(order?.total ?? 0),
-    status: order?.status ?? 'pending',
-    createdAt: order?.createdAt ?? new Date().toISOString(),
-  };
+export async function getAllItems(): Promise<Product[]> {
+  const result = await db.execute('SELECT * FROM items ORDER BY createdAt DESC');
+  return (result.rows ?? []).map(rowToProduct);
+}
+
+export async function saveOrder(order: Order): Promise<void> {
+  await initDb();
   await db.execute({
-    sql: `INSERT OR REPLACE INTO orders
-      (id, items, shipping, paymentMethod, subtotal, shippingFee, total, status, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `
+      INSERT INTO orders
+      (id, items, shipping, subtotal, shippingFee, total, status, createdAt, customerEmail)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
     args: [
-      payload.id,
-      JSON.stringify(payload.items),
-      JSON.stringify(payload.shipping),
-      payload.paymentMethod,
-      payload.subtotal,
-      payload.shippingFee,
-      payload.total,
-      payload.status,
-      payload.createdAt,
+      order.id,
+      JSON.stringify(order.items ?? []),
+      JSON.stringify(order.shipping ?? {}),
+      order.subtotal,
+      order.shippingFee,
+      order.total,
+      order.status,
+      order.createdAt,
+      order.customerEmail ?? null,
     ],
   });
-  return payload;
 }
 
 export async function getOrderById(id: string): Promise<Order | null> {
-  await initSchema();
-  const result = await db.execute({ sql: 'SELECT * FROM orders WHERE id = ? LIMIT 1', args: [id ?? ''] });
-  const row = result.rows?.[0] as any | undefined;
+  const result = await db.execute({ sql: 'SELECT * FROM orders WHERE id = ? LIMIT 1', args: [id] });
+  const row = result.rows?.[0] ?? null;
   if (!row) return null;
   return {
-    id: String(row?.id ?? ''),
-    items: safeParseJson(row?.items, []),
-    shipping: safeParseJson(row?.shipping, {}),
-    paymentMethod: (row?.paymentMethod ?? 'cod') as Order['paymentMethod'],
-    subtotal: Number(row?.subtotal ?? 0),
-    shippingFee: Number(row?.shippingFee ?? 0),
-    total: Number(row?.total ?? 0),
-    status: (row?.status ?? 'pending') as Order['status'],
-    createdAt: String(row?.createdAt ?? new Date().toISOString()),
+    id: String(row.id ?? ''),
+    items: safeJson<CartItem[]>(row.items, []),
+    shipping: safeJson(row.shipping, {}),
+    subtotal: toInt(row.subtotal) ?? 0,
+    shippingFee: toInt(row.shippingFee) ?? 0,
+    total: toInt(row.total) ?? 0,
+    status: (row.status as Order['status']) ?? 'pending',
+    createdAt: String(row.createdAt ?? new Date().toISOString()),
+    customerEmail: (row.customerEmail as string | null | undefined) ?? undefined,
   };
 }
 
-function safeParseArray(value: unknown): string[] {
-  const parsed = safeParseJson(value, []);
-  return Array.isArray(parsed) ? parsed.map((item) => String(item ?? '')).filter(Boolean) : [];
+function rowToProduct(row: Record<string, unknown>): Product {
+  return {
+    id: String(row.id ?? ''),
+    name: String(row.name ?? ''),
+    category: String(row.category ?? ''),
+    price: toInt(row.price) ?? 0,
+    originalPrice: toInt(row.originalPrice) ?? undefined,
+    description: (row.description as string | null | undefined) ?? undefined,
+    imageUrl: String(row.imageUrl ?? ''),
+    gallery: safeJson<string[]>(row.gallery, []),
+    artisanId: (row.artisanId as string | null | undefined) ?? undefined,
+    sizes: safeJson<string[]>(row.sizes, []),
+    colors: safeJson<string[]>(row.colors, []),
+    material: (row.material as string | null | undefined) ?? undefined,
+    inStock: Boolean(toInt(row.inStock) ?? 1),
+    featured: Boolean(toInt(row.featured) ?? 0),
+    newArrival: Boolean(toInt(row.newArrival) ?? 0),
+    limitedEdition: Boolean(toInt(row.limitedEdition) ?? 0),
+    slug: (row.slug as string | null | undefined) ?? undefined,
+  };
 }
 
-function safeParseJson<T>(value: unknown, fallback: T): T {
-  if (typeof value !== 'string' || !value) return fallback;
+function safeJson<T>(value: unknown, fallback: T): T {
+  if (typeof value !== 'string' || !value.trim()) return fallback;
   try {
     return JSON.parse(value) as T;
   } catch {
@@ -180,18 +260,6 @@ function safeParseJson<T>(value: unknown, fallback: T): T {
   }
 }
 
-await initSchema();
+await initDb();
 
-export { db };
 export default db;
-// Auto-synthesized missing export
-export const getItemById: any = {};
-
-// Auto-synthesized missing export
-export const getItems: any = {};
-
-// Auto-synthesized missing export
-export const initSchema: any = {};
-
-// Auto-synthesized missing export
-export const saveOrder: any = {};

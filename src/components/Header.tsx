@@ -1,185 +1,169 @@
-import { useMemo, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, Search, ShoppingBag, User, X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React from 'react';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { Menu, Search, ShoppingBag, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { categories } from '@/data/mockData';
 import { useCart } from '@/context/CartContext';
-import { useSession } from '@/lib/auth-client';
-import AuthModal from '@/components/AuthModal';
 
-export function Header({ className = '' }: { className?: string }) {
-  const navigate = useNavigate();
+export interface HeaderProps {
+  className?: string;
+  onOpenCart?: () => void;
+  onSearch?: (query: string) => void;
+}
+
+export function Header({ className = '', onOpenCart = () => {}, onSearch = () => {} }: HeaderProps) {
+  const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [query, setQuery] = React.useState('');
+  const { items } = useCart() as { items?: Array<{ quantity?: number }> };
   const location = useLocation();
-  const { items = [] } = useCart?.() ?? { items: [] };
-  const { data: session } = useSession?.() ?? { data: null };
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [authOpen, setAuthOpen] = useState(false);
-  const [query, setQuery] = useState('');
+  const navigate = useNavigate();
 
-  const bagCount = useMemo(
-    () => items.reduce((sum: number, item: any) => sum + (item?.quantity ?? 0), 0),
+  const itemCount = React.useMemo(
+    () => (items ?? []).reduce((sum, item) => sum + (item?.quantity ?? 0), 0),
     [items]
   );
 
-  const navItems = useMemo(
-    () => [
-      { label: 'Home', to: '/' },
-      { label: 'Shop', to: '/shop' },
-      ...(categories ?? []).slice(0, 4).map((category: string) => ({
-        label: category,
-        to: `/shop?category=${encodeURIComponent(category)}`,
-      })),
-    ],
-    []
-  );
-
-  const handleSearch = () => {
-    const trimmed = query.trim();
-    navigate(trimmed ? `/shop?query=${encodeURIComponent(trimmed)}` : '/shop');
+  React.useEffect(() => {
     setMobileOpen(false);
+  }, [location.pathname]);
+
+  const navItems = [
+    { to: '/', label: 'Home' },
+    { to: '/shop', label: 'Shop' },
+    { to: '/story', label: 'Story' },
+    { to: '/custom', label: 'Custom' },
+  ];
+
+  const submitSearch = (value: string) => {
+    const next = value.trim();
+    onSearch(next);
+    if (next) navigate(`/shop?search=${encodeURIComponent(next)}`);
   };
 
   return (
-    <header className={cn('sticky top-0 z-50 border-b border-[#D8CDBB] bg-[#FAF9F6]/95 backdrop-blur-sm', className)}>
+    <header className={cn('sticky top-0 z-50 border-b border-[#CFC2B2] bg-[#F5F1EB]/95 backdrop-blur-md', className)}>
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
-        <button
-          type="button"
-          onClick={() => setMobileOpen((v) => !v)}
-          className="inline-flex h-10 w-10 items-center justify-center border border-[#D8CDBB] bg-white text-[#2B2B2B] transition hover:border-[#9A7135] hover:text-[#9A7135] lg:hidden"
-          aria-label="Toggle navigation"
-        >
-          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
-
-        <Link to="/" className="min-w-0 flex-1 lg:flex-none">
+        <Link to="/" className="min-w-0 shrink-0">
           <div className="flex items-baseline gap-2">
             <span className="font-['Playfair_Display'] text-2xl tracking-tight text-[#2B2B2B]">Jootiya</span>
-            <span className="hidden text-[10px] font-semibold uppercase tracking-[0.28em] text-[#9A7135] sm:inline">
-              Jodhpuri Mojris
+            <span className="hidden text-[10px] font-semibold uppercase tracking-[0.3em] text-[#6F655C] sm:inline">
+              Jodhpur Atelier
             </span>
           </div>
         </Link>
 
+        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-6 md:flex">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                cn(
+                  'text-xs font-semibold uppercase tracking-[0.22em] text-[#6F655C] transition-colors hover:text-[#2B2B2B]',
+                  isActive && 'text-[#2B2B2B]'
+                )
+              }
+            >
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
+
         <form
+          className="hidden min-w-[220px] max-w-[320px] flex-1 md:block"
           onSubmit={(e) => {
             e.preventDefault();
-            handleSearch();
+            submitSearch(query);
           }}
-          className="hidden min-w-0 flex-1 items-center gap-2 lg:flex"
         >
-          <div className="flex min-w-0 flex-1 items-center gap-2 border border-[#D8CDBB] bg-white px-3 py-2">
-            <Search className="h-4 w-4 shrink-0 text-[#6E665C]" />
+          <div className="flex items-center gap-2 border border-[#CFC2B2] bg-[#FFFDF7] px-3 py-2">
+            <Search className="h-4 w-4 text-[#6F655C]" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search mojris, artisans, collections"
-              className="min-w-0 flex-1 bg-transparent text-sm text-[#2B2B2B] outline-none placeholder:text-[#6E665C]/70"
+              placeholder="Search mojris"
+              className="w-full bg-transparent text-sm text-[#2B2B2B] outline-none placeholder:text-[#6F655C]"
             />
           </div>
-          <button
-            type="submit"
-            className="border border-[#9A7135] bg-[#9A7135] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-black transition hover:bg-[#765326]"
-          >
-            Search
-          </button>
         </form>
 
         <div className="ml-auto flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setAuthOpen(true)}
-            className="inline-flex h-10 items-center gap-2 border border-[#D8CDBB] bg-white px-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#2B2B2B] transition hover:border-[#9A7135] hover:text-[#9A7135]"
+            onClick={() => submitSearch(query)}
+            className="inline-flex h-10 w-10 items-center justify-center border border-[#CFC2B2] bg-[#FFFDF7] text-[#2B2B2B] transition-colors hover:border-[#E07A5F] hover:text-[#E07A5F] md:hidden"
+            aria-label="Search"
           >
-            <User className="h-4 w-4" />
-            <span className="hidden sm:inline">{session?.user?.name ?? 'Account'}</span>
+            <Search className="h-4 w-4" />
           </button>
 
           <button
             type="button"
-            onClick={() => navigate('/shop')}
-            className="relative inline-flex h-10 items-center gap-2 border border-[#D8CDBB] bg-white px-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#2B2B2B] transition hover:border-[#9A7135] hover:text-[#9A7135]"
+            onClick={() => onOpenCart()}
+            className="relative inline-flex h-10 w-10 items-center justify-center border border-[#CFC2B2] bg-[#FFFDF7] text-[#2B2B2B] transition-colors hover:border-[#E07A5F] hover:text-[#E07A5F]"
             aria-label="Open cart"
           >
             <ShoppingBag className="h-4 w-4" />
-            <span className="hidden sm:inline">Bag</span>
-            {bagCount > 0 ? (
-              <span className="ml-1 inline-flex min-w-5 items-center justify-center border border-[#9A7135] bg-[#9A7135] px-1.5 text-[10px] font-semibold leading-5 text-black">
-                {bagCount}
+            {itemCount > 0 ? (
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center border border-[#CFC2B2] bg-[#E07A5F] px-1 text-[10px] font-semibold text-black">
+                {itemCount}
               </span>
             ) : null}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMobileOpen((v) => !v)}
+            className="inline-flex h-10 w-10 items-center justify-center border border-[#CFC2B2] bg-[#FFFDF7] text-[#2B2B2B] transition-colors hover:border-[#E07A5F] hover:text-[#E07A5F] md:hidden"
+            aria-label="Toggle menu"
+          >
+            {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
         </div>
       </div>
 
-      <div className="hidden border-t border-[#D8CDBB] lg:block">
-        <nav className="mx-auto flex max-w-7xl items-center gap-6 overflow-x-auto px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#6E665C] sm:px-6 lg:px-8">
-          {navItems.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={cn(
-                'whitespace-nowrap transition hover:text-[#9A7135]',
-                location.pathname === item.to.split('?')[0] ? 'text-[#2B2B2B]' : ''
-              )}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-      </div>
-
-      <AnimatePresence>
-        {mobileOpen ? (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="border-t border-[#D8CDBB] bg-[#FAF9F6] lg:hidden"
-          >
-            <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 sm:px-6">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleSearch();
-                }}
-                className="flex items-center gap-2"
-              >
-                <div className="flex min-w-0 flex-1 items-center gap-2 border border-[#D8CDBB] bg-white px-3 py-2">
-                  <Search className="h-4 w-4 shrink-0 text-[#6E665C]" />
-                  <input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search"
-                    className="min-w-0 flex-1 bg-transparent text-sm text-[#2B2B2B] outline-none placeholder:text-[#6E665C]/70"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="border border-[#9A7135] bg-[#9A7135] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-black"
+      {mobileOpen ? (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          className="border-t border-[#CFC2B2] bg-[#FFFDF7] md:hidden"
+        >
+          <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 sm:px-6">
+            <div className="flex flex-col gap-2.5">
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) =>
+                    cn(
+                      'min-w-0 border border-[#CFC2B2] px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#6F655C] transition-colors hover:border-[#E07A5F] hover:text-[#2B2B2B]',
+                      isActive && 'border-[#E07A5F] text-[#2B2B2B]'
+                    )
+                  }
                 >
-                  Go
-                </button>
-              </form>
-
-              <div className="flex flex-col gap-2.5">
-                {navItems.map((item) => (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    onClick={() => setMobileOpen(false)}
-                    className="min-w-0 border border-[#D8CDBB] bg-white px-3 py-3 text-sm font-medium text-[#2B2B2B] transition hover:border-[#9A7135] hover:text-[#9A7135]"
-                  >
-                    <span className="block truncate">{item.label}</span>
-                  </Link>
-                ))}
-              </div>
+                  {item.label}
+                </NavLink>
+              ))}
             </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-
-      <AuthModal open={authOpen} onOpenChange={setAuthOpen} defaultMode="signin" />
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitSearch(query);
+              }}
+              className="flex items-center gap-2 border border-[#CFC2B2] bg-[#F5F1EB] px-3 py-2"
+            >
+              <Search className="h-4 w-4 text-[#6F655C]" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search mojris"
+                className="w-full bg-transparent text-sm text-[#2B2B2B] outline-none placeholder:text-[#6F655C]"
+              />
+            </form>
+          </div>
+        </motion.div>
+      ) : null}
     </header>
   );
 }

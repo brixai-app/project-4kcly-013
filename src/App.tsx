@@ -1,48 +1,76 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
-import { AnimatePresence, motion } from 'framer-motion';
+import { CartProvider } from '@/context/CartContext';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import CartDrawer from '@/components/CartDrawer';
-import AuthModal from '@/components/AuthModal';
-import { CartProvider } from '@/context/CartContext';
+import ProductDetailModal from '@/components/ProductDetailModal';
 import Home from '@/pages/Home';
 import ShopPage from '@/pages/ShopPage';
-import JourneyPages from '@/pages/JourneyPages';
+import SecondaryPages from '@/pages/SecondaryPages';
+import { products } from '@/data/mockData';
+import type { Product } from '@/types';
+
+function ScrollToTop() {
+  const location = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [location.pathname, location.hash]);
+  return null;
+}
 
 function AppShell() {
   const location = useLocation();
   const [cartOpen, setCartOpen] = useState(false);
-  const [authOpen, setAuthOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
-  const pageKey = useMemo(() => location.pathname + location.hash, [location.pathname, location.hash]);
+  const productBySlug = useMemo(() => {
+    const map = new Map<string, Product>();
+    (products ?? []).forEach((product) => {
+      const key = product?.slug ?? product?.id ?? '';
+      if (key) map.set(key, product);
+    });
+    return map;
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const productId = params.get('product') ?? '';
+    const productSlug = params.get('slug') ?? '';
+    const found = productBySlug.get(productId) ?? productBySlug.get(productSlug) ?? null;
+    if (found) {
+      setSelectedProduct(found);
+      setDetailOpen(true);
+    }
+  }, [location.search, productBySlug]);
+
+  useEffect(() => {
+    setCartOpen(location.pathname === '/cart');
+  }, [location.pathname]);
+
+  const handleCartOpenChange = (open: boolean) => {
+    setCartOpen(open);
+    if (!open && location.pathname === '/cart') window.history.replaceState({}, '', '#/');
+  };
 
   return (
-    <div className="min-h-screen bg-[#FAF9F6] text-[#2B2B2B]">
-      <Header className="sticky top-0 z-40" />
-      <main className="relative">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={pageKey}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.35, ease: 'easeOut' }}
-          >
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/shop" element={<ShopPage />} />
-              <Route path="/journey/*" element={<JourneyPages />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </motion.div>
-        </AnimatePresence>
+    <div className="min-h-screen bg-[#F5F1EB] text-[#2B2B2B]">
+      <Header onOpenCart={() => setCartOpen(true)} />
+      <main>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/shop" element={<ShopPage />} />
+          <Route path="/cart" element={<Navigate to="/" replace />} />
+          <Route path="/stories" element={<SecondaryPages />} />
+          <Route path="/custom" element={<SecondaryPages />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </main>
       <Footer />
-      <CartDrawer open={cartOpen} onOpenChange={setCartOpen} />
-      <AuthModal open={authOpen} onOpenChange={setAuthOpen} />
-      <Toaster position="top-right" richColors closeButton />
+      <CartDrawer open={cartOpen} onOpenChange={handleCartOpenChange} />
+      <ProductDetailModal open={detailOpen} onOpenChange={setDetailOpen} product={selectedProduct} />
     </div>
   );
 }
@@ -51,6 +79,8 @@ export function App() {
   return (
     <HashRouter>
       <CartProvider>
+        <ScrollToTop />
+        <Toaster position="top-right" richColors closeButton />
         <AppShell />
       </CartProvider>
     </HashRouter>

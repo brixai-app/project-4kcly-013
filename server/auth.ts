@@ -1,12 +1,16 @@
 import { betterAuth } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
 
-export const auth = betterAuth({
-  database: memoryAdapter(),
+const auth = betterAuth({
+  appName: 'Jootiya',
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,
   },
+  user: {
+    additionalFields: {},
+  },
+  database: memoryAdapter(),
 });
 
 export default auth;

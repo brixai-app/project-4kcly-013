@@ -1,78 +1,100 @@
-export type PaymentMethod = 'card' | 'upi' | 'cod';
-
-export interface Product {
-  id: string;
-  name: string;
-  category: string;
-  price: number;
-  image: string;
-  description?: string;
-  artisan?: string;
-  material?: string;
-  sizes?: string[];
-  featured?: boolean;
-  inStock?: boolean;
-  rating?: number;
-  tags?: string[];
-}
+export type ProductCategory = 'mojri' | 'juttis' | 'bridal' | 'everyday' | 'limited';
 
 export interface Artisan {
   id: string;
   name: string;
   location: string;
-  specialty: string;
+  specialty?: string;
+  portraitUrl?: string;
   story?: string;
-  image?: string;
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  category: ProductCategory | string;
+  price: number;
+  originalPrice?: number;
+  description?: string;
+  imageUrl: string;
+  gallery?: string[];
+  artisanId?: string;
+  artisan?: Artisan;
+  sizes?: string[];
+  colors?: string[];
+  material?: string;
+  inStock?: boolean;
+  featured?: boolean;
+  newArrival?: boolean;
+  limitedEdition?: boolean;
+  slug?: string;
 }
 
 export interface CartItem {
   productId: string;
   quantity: number;
   size?: string;
+  color?: string;
+  price: number;
   product?: Product;
 }
 
 export interface ShippingInfo {
   fullName: string;
-  phone: string;
   email: string;
+  phone: string;
   addressLine1: string;
   addressLine2?: string;
   city: string;
   state: string;
   postalCode: string;
   country: string;
+  notes?: string;
 }
 
 export interface Order {
   id: string;
   items: CartItem[];
   shipping: ShippingInfo;
-  paymentMethod: PaymentMethod;
   subtotal: number;
   shippingFee: number;
   total: number;
-  status: 'pending' | 'confirmed' | 'packed' | 'shipped' | 'delivered' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
   createdAt: string;
+  customerEmail?: string;
 }
 
-export interface ProductFilters {
-  query: string;
-  category: string;
-  priceRange: [number, number];
-  artisan?: string;
-  inStockOnly?: boolean;
-}
-
-export interface ShopSortOption {
-  label: string;
-  value: 'featured' | 'price-asc' | 'price-desc' | 'newest';
-}
-
-export interface CheckoutFormState {
-  shipping: ShippingInfo;
-  paymentMethod: PaymentMethod;
+export interface CustomOrderRequest {
+  id?: string;
+  name: string;
+  email: string;
+  phone?: string;
+  occasion?: string;
+  size?: string;
+  colorPreference?: string;
+  budget?: string;
   notes?: string;
+  createdAt?: string;
 }
 
-export default {};
+export interface CatalogFilterState {
+  category: string;
+  size: string;
+  color: string;
+  priceRange: string;
+  search: string;
+  sort: string;
+}
+
+export interface CatalogFilterOption {
+  label: string;
+  value: string;
+}
+
+export interface CatalogFilterGroup {
+  key: keyof CatalogFilterState;
+  label: string;
+  options: CatalogFilterOption[];
+}
+
+export default Product;
