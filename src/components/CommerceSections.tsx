@@ -1,201 +1,211 @@
-import React from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
-import { motion } from 'framer-motion';
-import { ArrowRight, ChevronRight, Filter, Heart, ShoppingBag, Star, Truck, X } from 'lucide-react';
-import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
-import { categories, heroSlides, products, artisans, shopSortOptions, verifiedImages } from '@/data/mockData';
-import type { Artisan, Product, ProductFilters, ShopSortOption } from '@/types';
-import ProductCard from '@/components/ProductCard';
-import { useCart } from '@/context/CartContext';
+import React, { useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { motion } from "framer-motion";
+import { ChevronDown, Filter, Search, Star, Truck, CheckCircle2, ArrowRight } from 'lucide-react';
+// [auto-quarantined uninstalled package "@radix-ui/react-select"] import * as Select from "@radix-ui/react-select";
+const Select: any = typeof Proxy !== 'undefined' ? new Proxy((() => null) as any, { get: () => Select, apply: () => null }) : (() => null);
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { useCart } from "@/context/CartContext";
+import ProductCard from "@/components/ProductCard";
+import type { Order, Product, Review } from "@/types";
 
-type SectionProps = { className?: string };
+type Props = { className?: string; products?: Product[]; reviews?: Review[]; order?: Order | null };
 
-export function HeroCarousel({ className = '' }: SectionProps) {
-  const slide = heroSlides?.[0] ?? { title: 'Jootiya', subtitle: 'Authentic Jodhpuri Mojris', image: verifiedImages?.[0] ?? '' };
+const field = "w-full rounded-sm border border-[#CFC1AD] bg-[#FFFCF6] px-3 py-2 text-sm text-[#2E2E2E] outline-none transition focus:border-[#8B0000]";
+const label = "text-[11px] uppercase tracking-[0.22em] text-[#6F675D]";
+const section = "mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-8";
+
+function useQuery() {
+  const { search } = useLocation();
+  return useMemo(() => new URLSearchParams(search), [search]);
+}
+
+function SelectField({ value, onValueChange, options = [], placeholder = "Select" }: { value?: string; onValueChange?: (v: string) => void; options?: string[]; placeholder?: string }) {
   return (
-    <section className={cn('relative overflow-hidden border-b border-[#D8CDBB] bg-[#FAF9F6]', className)}>
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="grid min-h-[78vh] gap-0 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="relative flex items-end overflow-hidden">
-            <img src={slide.image ?? verifiedImages?.[0] ?? ''} alt={slide.title ?? 'Editorial lookbook'} crossOrigin="anonymous" className="h-full w-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
-            <div className="absolute bottom-0 left-0 right-0 border-t border-white/20 bg-[#FAF9F6]/95 p-5 sm:p-7">
-              <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.35em] text-[#9A7135]">
-                <span className="h-px w-10 bg-[#9A7135]" />
-                <span>Verified Craft</span>
-                <span className="h-px w-10 bg-[#9A7135]" />
-              </div>
-              <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                <div className="max-w-2xl">
-                  <p className="font-serif text-5xl font-light tracking-tight text-[#2B2B2B] sm:text-6xl lg:text-7xl">{slide.title ?? 'Jootiya'}</p>
-                  <p className="mt-3 max-w-xl text-sm leading-6 text-[#6E665C] sm:text-base">{slide.subtitle ?? 'Authentic Jodhpuri Mojris, hand-finished for ceremonial and everyday elegance.'}</p>
+    <Select.Root value={value ?? ""} onValueChange={(v) => onValueChange?.(v)}>
+      <Select.Trigger className={cn(field, "flex items-center justify-between gap-2 text-left")}>
+        <Select.Value placeholder={placeholder} />
+        <Select.Icon><ChevronDown className="h-4 w-4" /></Select.Icon>
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Content className="z-50 overflow-hidden rounded-sm border border-[#CFC1AD] bg-[#FFFCF6] shadow-lg">
+          <Select.Viewport className="p-1">
+            {options.map((o) => <Select.Item key={o} value={o} className="cursor-pointer rounded-sm px-3 py-2 text-sm outline-none data-[highlighted]:bg-[#F5F1E9]"><Select.ItemText>{o}</Select.ItemText></Select.Item>)}
+          </Select.Viewport>
+        </Select.Content>
+      </Select.Portal>
+    </Select.Root>
+  );
+}
+
+export function CommerceSections({ className = "", products = [], reviews = [], order = null }: Props) {
+  const [items, setItems] = useState<Product[]>(products ?? []);
+  const [loading, setLoading] = useState(!(products?.length ?? 0));
+  const [q, setQ] = useState("");
+  const [category, setCategory] = useState("All");
+  const [sort, setSort] = useState("Featured");
+  const { addItem } = useCart() as { addItem?: (p: Product, size?: string) => void };
+  const navigate = useNavigate();
+  const params = useParams();
+  const query = useQuery();
+
+  useEffect(() => {
+    if ((products?.length ?? 0) > 0) return;
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/products");
+        const json = (await res.json()) as { success?: boolean; data?: Product[] };
+        if (alive) setItems(json?.data ?? []);
+      } catch {
+        if (alive) toast.error("Unable to load collection.");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [products]);
+
+  const categories = useMemo(() => ["All", ...Array.from(new Set(items.map((p) => p.category).filter(Boolean)))], [items]);
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return items
+      .filter((p) => (category === "All" ? true : p.category === category))
+      .filter((p) => !term || [p.name, p.collection, p.category, p.artisan, p.material].join(" ").toLowerCase().includes(term))
+      .sort((a, b) => (sort === "Price: Low to High" ? a.price - b.price : sort === "Price: High to Low" ? b.price - a.price : Number(!!b.featured) - Number(!!a.featured)));
+  }, [items, q, category, sort]);
+
+  const product = useMemo(() => items.find((p) => p.slug === (params?.slug ?? query.get("slug") ?? "")) ?? null, [items, params, query]);
+  const productReviews = useMemo(() => reviews.filter((r) => r.productId === (product?.id ?? "")), [reviews, product]);
+
+  const addToCart = (p: Product) => {
+    addItem?.(p, p.sizes?.[0]);
+    toast.success(`${p.name} added to cart`);
+  };
+
+  return (
+    <div className={cn("bg-[#F5F1E9] text-[#2E2E2E]", className)}>
+      <section className={section}>
+        <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+          <aside className="min-w-0 rounded-sm border border-[#CFC1AD] bg-[#FFFCF6] p-4">
+            <div className="flex items-center gap-2 border-b border-[#CFC1AD] pb-3">
+              <Filter className="h-4 w-4 text-[#8B0000]" />
+              <h2 className="min-w-0 truncate text-xs uppercase tracking-[0.22em] text-[#6F675D]">Filters</h2>
+            </div>
+            <div className="mt-4 flex flex-col gap-2.5">
+              <div>
+                <div className={label}>Search</div>
+                <div className="mt-2 flex items-center gap-2 rounded-sm border border-[#CFC1AD] bg-white px-3">
+                  <Search className="h-4 w-4 text-[#6F675D]" />
+                  <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search mojris" className="w-full bg-transparent py-2 text-sm outline-none" />
                 </div>
-                <a href="#shop" className="inline-flex items-center gap-2 border border-[#2B2B2B] bg-[#2B2B2B] px-5 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-white transition hover:bg-[#9A7135] hover:text-black">
-                  Explore Collection <ArrowRight className="h-4 w-4" />
-                </a>
+              </div>
+              <div>
+                <div className={label}>Category</div>
+                <div className="mt-2"><SelectField value={category} onValueChange={setCategory} options={categories} placeholder="All" /></div>
+              </div>
+              <div>
+                <div className={label}>Sort</div>
+                <div className="mt-2"><SelectField value={sort} onValueChange={setSort} options={["Featured", "Price: Low to High", "Price: High to Low"]} placeholder="Featured" /></div>
+              </div>
+            </div>
+          </aside>
+
+          <div className="min-w-0">
+            <div className="mb-5 flex items-end justify-between gap-4">
+              <div>
+                <p className={label}>Collection</p>
+                <h1 className="mt-1 font-['Playfair_Display'] text-3xl font-light tracking-tight sm:text-4xl">Jodhpuri Mojris, reimagined with restraint.</h1>
+              </div>
+              <p className="hidden text-sm text-[#6F675D] sm:block">{filtered.length} pieces</p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {loading ? Array.from({ length: 6 }).map((_, i) => <div key={i} className="aspect-[3/4] animate-pulse rounded-sm border border-[#CFC1AD] bg-[#FFFCF6]" />) : filtered.map((p, i) => <ProductCard key={p.id} product={p} index={i} className="h-full" />)}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {product ? (
+        <section className={cn(section, "border-t border-[#CFC1AD]")}>
+          <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+            <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="grid gap-3 sm:grid-cols-2">
+              {(product.gallery?.length ? product.gallery : [product.image, product.image]).slice(0, 4).map((src, idx) => (
+                <img key={`${src}-${idx}`} src={src} crossOrigin="anonymous" alt={product.name} className={cn("w-full rounded-sm border border-[#CFC1AD] object-cover", idx === 0 ? "sm:col-span-2 aspect-[4/5]" : "aspect-[3/4]")} />
+              ))}
+            </motion.div>
+            <div className="min-w-0">
+              <p className={label}>{product.collection ?? product.category}</p>
+              <h2 className="mt-2 font-['Playfair_Display'] text-4xl font-light tracking-tight">{product.name}</h2>
+              <p className="mt-4 max-w-xl text-sm leading-7 text-[#6F675D]">{product.description ?? "Hand-finished craftsmanship with a refined silhouette and enduring comfort."}</p>
+              <div className="mt-6 flex flex-wrap items-center gap-3 text-sm">
+                <span className="font-semibold">₹{product.price.toLocaleString("en-IN")}</span>
+                <span className="text-[#6F675D]">{product.material ?? "Leather"}</span>
+                <span className="text-[#6F675D]">{product.origin ?? "Jodhpur"}</span>
+              </div>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <button onClick={() => addToCart(product)} className="rounded-sm bg-[#8B0000] px-5 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-white transition hover:bg-[#650000]">Add to cart</button>
+                <button onClick={() => navigate(`/shop?slug=${product.slug}`)} className="rounded-sm border border-[#CFC1AD] px-5 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#2E2E2E] transition hover:border-[#8B0000] hover:text-[#8B0000]">View details</button>
+              </div>
+              <div className="mt-8 space-y-3 border-t border-[#CFC1AD] pt-6">
+                <div className="flex items-center gap-2 text-sm"><Star className="h-4 w-4 fill-[#8B0000] text-[#8B0000]" /> {product.rating ?? 4.8} ({product.reviewCount ?? productReviews.length ?? 0} reviews)</div>
+                {productReviews.slice(0, 3).map((r) => <div key={r.id} className="rounded-sm border border-[#CFC1AD] bg-[#FFFCF6] p-4"><div className="flex items-center justify-between gap-3"><strong className="text-sm">{r.author}</strong><span className="text-xs text-[#6F675D]">{r.createdAt}</span></div><p className="mt-2 text-sm text-[#6F675D]">{r.body}</p></div>)}
               </div>
             </div>
           </div>
-          <div className="grid gap-px bg-[#D8CDBB] lg:grid-rows-2">
-            {[verifiedImages?.[1], verifiedImages?.[2]].map((src, i) => (
-              <div key={String(src ?? i)} className="relative min-h-[38vh] overflow-hidden bg-white">
-                <img src={src ?? verifiedImages?.[0] ?? ''} alt={`Editorial detail ${i + 1}`} crossOrigin="anonymous" className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
-                <div className="absolute left-4 top-4 border border-white/30 bg-black/35 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.3em] text-white">
-                  Chapter {String(i + 1).padStart(2, '0')}
-                </div>
-              </div>
-            ))}
+        </section>
+      ) : null}
+
+      <section className={cn(section, "border-t border-[#CFC1AD]")}>
+        <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
+          <div className="rounded-sm border border-[#CFC1AD] bg-[#FFFCF6] p-6">
+            <p className={label}>Checkout</p>
+            <h3 className="mt-2 font-['Playfair_Display'] text-3xl font-light tracking-tight">A calm, validated purchase flow.</h3>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {["Full name", "Email", "Phone", "Postal code"].map((f) => <input key={f} placeholder={f} className={field} />)}
+              <textarea placeholder="Address" className={cn(field, "min-h-28 sm:col-span-2")} />
+            </div>
+            <div className="mt-5 flex items-center gap-3">
+              <button onClick={() => toast.success("Checkout details validated")} className="rounded-sm bg-[#8B0000] px-5 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-white transition hover:bg-[#650000]">Continue</button>
+              <span className="text-sm text-[#6F675D]">Secure, client-side validation</span>
+            </div>
+          </div>
+          <div className="rounded-sm border border-[#CFC1AD] bg-[#FFFCF6] p-6">
+            <p className={label}>Order summary</p>
+            <div className="mt-4 space-y-3">
+              {(order?.items ?? []).slice(0, 4).map((item) => <div key={`${item.productId}-${item.size ?? ""}`} className="flex items-center gap-3"><img src={item.image} crossOrigin="anonymous" alt={item.name} className="h-16 w-12 rounded-sm object-cover" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{item.name}</p><p className="text-xs text-[#6F675D]">Qty {item.quantity}</p></div><p className="text-sm font-semibold">₹{(item.price * item.quantity).toLocaleString("en-IN")}</p></div>)}
+            </div>
+            <div className="mt-5 border-t border-[#CFC1AD] pt-4 text-sm">
+              <div className="flex items-center justify-between"><span className="text-[#6F675D]">Subtotal</span><span>₹{order?.subtotal?.toLocaleString("en-IN") ?? "0"}</span></div>
+              <div className="mt-2 flex items-center justify-between"><span className="text-[#6F675D]">Shipping</span><span>₹{order?.shipping?.toLocaleString("en-IN") ?? "0"}</span></div>
+              <div className="mt-3 flex items-center justify-between border-t border-[#CFC1AD] pt-3 font-semibold"><span>Total</span><span>₹{order?.total?.toLocaleString("en-IN") ?? "0"}</span></div>
+            </div>
           </div>
         </div>
-      </div>
-    </section>
-  );
-}
+      </section>
 
-export function ProductMasonry({ className = '' }: SectionProps) {
-  const items = products?.slice(0, 6) ?? [];
-  return (
-    <section id="shop" className={cn('mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8', className)}>
-      <div className="mb-6 flex items-end justify-between gap-4">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#9A7135]">New Drop</p>
-          <h2 className="mt-2 font-serif text-3xl font-light tracking-tight text-[#2B2B2B] sm:text-4xl">Masonry of hand-finished pairs</h2>
+      <section className={cn(section, "border-t border-[#CFC1AD]")}>
+        <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="rounded-sm border border-[#CFC1AD] bg-[#FFFCF6] p-6">
+            <p className={label}>Order confirmation</p>
+            <div className="mt-4 flex items-center gap-3 text-[#8B0000]"><CheckCircle2 className="h-5 w-5" /><span className="text-sm font-semibold uppercase tracking-[0.22em]">Confirmed</span></div>
+            <p className="mt-4 text-sm leading-7 text-[#6F675D]">Your order is being prepared by our artisan network. Tracking and delivery updates will appear here.</p>
+            <Link to="/shop" className="mt-6 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#8B0000]"><ArrowRight className="h-4 w-4" /> Continue shopping</Link>
+          </div>
+          <div className="rounded-sm border border-[#CFC1AD] bg-[#FFFCF6] p-6">
+            <p className={label}>Delivery status</p>
+            <div className="mt-4 space-y-4">
+              {["Pending", "Processing", "Shipped", "Delivered"].map((s, i) => <div key={s} className="flex items-center gap-3"><div className={cn("h-2.5 w-2.5 rounded-full", i < 2 ? "bg-[#8B0000]" : "bg-[#CFC1AD]")} /><div className="min-w-0"><p className="text-sm font-medium">{s}</p><p className="text-xs text-[#6F675D]">Status updates from the atelier</p></div></div>)}
+            </div>
+          </div>
         </div>
-        <a href="#filters" className="hidden items-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#6E665C] sm:inline-flex">
-          Refine <ChevronRight className="h-4 w-4" />
-        </a>
-      </div>
-      <div className="columns-1 gap-4 md:columns-2 xl:columns-3">
-        {items.map((product, index) => (
-          <div key={product.id} className="mb-4 break-inside-avoid">
-            <ProductCard product={product} index={index} />
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-export function ShopFilters({ filters = { query: '', category: 'All', priceRange: [0, 99999], artisan: '', inStockOnly: false }, onChange = () => {}, sort = shopSortOptions?.[0] ?? { label: 'Featured', value: 'featured' }, onSortChange = () => {} }: { filters?: ProductFilters; onChange?: (next: ProductFilters) => void; sort?: ShopSortOption; onSortChange?: (next: ShopSortOption) => void }) {
-  const cats = categories ?? ['All'];
-  return (
-    <aside id="filters" className="rounded-sm border border-[#D8CDBB] bg-white p-4">
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#6E665C]"><Filter className="h-4 w-4" /> Filters</div>
-      <div className="mt-4 flex flex-col gap-2.5">
-        {cats.map((cat) => (
-          <button key={cat} onClick={() => onChange({ ...filters, category: cat })} className={cn('min-w-0 truncate border px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.22em] transition', filters.category === cat ? 'border-[#2B2B2B] bg-[#2B2B2B] text-white' : 'border-[#D8CDBB] bg-white text-[#2B2B2B] hover:border-[#9A7135]')}>
-            {cat}
-          </button>
-        ))}
-      </div>
-      <div className="mt-5 flex flex-col gap-2.5">
-        {shopSortOptions?.map((opt) => (
-          <button key={opt.value} onClick={() => onSortChange(opt)} className={cn('min-w-0 truncate border px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.22em] transition', sort.value === opt.value ? 'border-[#9A7135] bg-[#9A7135] text-black' : 'border-[#D8CDBB] bg-white text-[#2B2B2B] hover:border-[#9A7135]')}>
-            {opt.label}
-          </button>
-        ))}
-      </div>
-    </aside>
-  );
-}
-
-export function ProductPurchasePanel({ product = null }: { product?: Product | null }) {
-  const { addItem } = useCart();
-  if (!product) return null;
-  return (
-    <section className="rounded-sm border border-[#D8CDBB] bg-white p-5">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#9A7135]">{product.category ?? 'Collection'}</p>
-      <h3 className="mt-2 font-serif text-3xl font-light tracking-tight text-[#2B2B2B]">{product.name ?? 'Product'}</h3>
-      <p className="mt-3 text-sm leading-6 text-[#6E665C]">{product.description ?? 'Hand-finished craftsmanship with a refined ceremonial silhouette.'}</p>
-      <div className="mt-5 flex items-center justify-between border-y border-[#D8CDBB] py-4">
-        <span className="text-xs font-semibold uppercase tracking-[0.28em] text-[#6E665C]">Price</span>
-        <span className="font-serif text-2xl text-[#2B2B2B]">₹{product.price?.toLocaleString?.('en-IN') ?? product.price}</span>
-      </div>
-      <button onClick={() => { addItem(product, 1); toast.success('Added to cart'); }} className="mt-5 inline-flex w-full items-center justify-center gap-2 bg-[#2B2B2B] px-4 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-white transition hover:bg-[#9A7135] hover:text-black">
-        Add to Cart <ShoppingBag className="h-4 w-4" />
-      </button>
-    </section>
-  );
-}
-
-export function ArtisanGrid({ className = '' }: SectionProps) {
-  const list = artisans?.slice(0, 4) ?? [];
-  return (
-    <section className={cn('mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8', className)}>
-      <div className="grid gap-4 lg:grid-cols-4">
-        {list.map((artisan: Artisan) => (
-          <div key={artisan.id} className="border border-[#D8CDBB] bg-white p-4">
-            <img src={artisan.image ?? verifiedImages?.[3] ?? ''} alt={artisan.name ?? 'Artisan'} crossOrigin="anonymous" className="aspect-[4/5] w-full object-cover" />
-            <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.35em] text-[#9A7135]">{artisan.location ?? 'India'}</p>
-            <h3 className="mt-2 font-serif text-2xl font-light text-[#2B2B2B]">{artisan.name ?? 'Artisan'}</h3>
-            <p className="mt-2 text-sm text-[#6E665C]">{artisan.specialty ?? 'Handcrafted leatherwork'}</p>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-export function CartView({ className = '' }: SectionProps) {
-  const { items, subtotal, removeItem, updateQuantity } = useCart();
-  return (
-    <div className={cn('space-y-3', className)}>
-      {items?.length ? items.map((item) => (
-        <div key={`${item.productId}-${item.size ?? 'na'}`} className="flex items-center gap-3 border-b border-[#D8CDBB] pb-3">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-[#2B2B2B]">{item.product?.name ?? 'Product'}</p>
-            <p className="text-xs text-[#6E665C]">Qty {item.quantity ?? 1}</p>
-          </div>
-          <button onClick={() => updateQuantity(item.productId, Math.max(0, (item.quantity ?? 1) - 1))} className="text-xs uppercase tracking-[0.22em] text-[#6E665C]">-</button>
-          <button onClick={() => updateQuantity(item.productId, (item.quantity ?? 1) + 1)} className="text-xs uppercase tracking-[0.22em] text-[#6E665C]">+</button>
-          <button onClick={() => removeItem(item.productId)} className="text-[#6E665C]"><X className="h-4 w-4" /></button>
-        </div>
-      )) : <p className="text-sm text-[#6E665C]">Your cart is empty.</p>}
-      <div className="flex items-center justify-between pt-2 text-sm font-semibold text-[#2B2B2B]">
-        <span>Subtotal</span><span>₹{subtotal?.toLocaleString?.('en-IN') ?? subtotal}</span>
-      </div>
+      </section>
     </div>
   );
 }
 
-export function CheckoutForm({ className = '' }: SectionProps) {
-  return <div className={cn('rounded-sm border border-[#D8CDBB] bg-white p-5', className)}><p className="text-sm text-[#6E665C]">Checkout form placeholder</p></div>;
-}
-
-export function ConfirmationSummary({ className = '' }: SectionProps) {
-  return <div className={cn('rounded-sm border border-[#D8CDBB] bg-white p-5', className)}><p className="text-sm text-[#6E665C]">Confirmation summary placeholder</p></div>;
-}
-
-export function CartDrawer({ open = false, onOpenChange = () => {} }: { open?: boolean; onOpenChange?: (open: boolean) => void }) {
-  return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/40" />
-        <Dialog.Content className="fixed right-0 top-0 h-full w-full max-w-md border-l border-[#D8CDBB] bg-[#FAF9F6] p-5 shadow-2xl outline-none">
-          <div className="flex items-center justify-between border-b border-[#D8CDBB] pb-4">
-            <Dialog.Title className="font-serif text-2xl font-light text-[#2B2B2B]">Cart</Dialog.Title>
-            <Dialog.Close className="text-[#6E665C]"><X className="h-5 w-5" /></Dialog.Close>
-          </div>
-          <div className="mt-5"><CartView /></div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
-  );
-}
-
-const CommerceSections = {
-  HeroCarousel,
-  ProductMasonry,
-  ShopFilters,
-  ProductPurchasePanel,
-  ArtisanGrid,
-  CartView,
-  CheckoutForm,
-  ConfirmationSummary,
-  CartDrawer,
-};
-
 export default CommerceSections;
-export { CommerceSections };

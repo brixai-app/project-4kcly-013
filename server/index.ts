@@ -1,146 +1,122 @@
-import { Hono } from 'hono';
-import { cors } from 'hono/cors';
-import auth from './auth';
-import { db, initDb, seedDb, getAllItems, getItemById, saveOrder, getOrderById } from './db';
-import type { Order, Product } from '../src/types';
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import auth from "./auth";
+import {
+  createOrder,
+  getOrders,
+  getProductBySlug,
+  getProducts,
+  getReviewsByProductId,
+  getTableData,
+  inspectTables,
+} from "./db";
+import type { Order } from "../src/types";
 
-const app = new Hono();
+const index = new Hono();
 
-app.use(
-  '*',
+index.use(
+  "*",
   cors({
-    origin: '*',
-    allowHeaders: ['Content-Type', 'Authorization'],
-    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    exposeHeaders: ['Content-Length', 'X-Request-Id'],
+    origin: "*",
+    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    exposeHeaders: ["Content-Length"],
     maxAge: 86400,
   })
 );
 
-app.all('/api/auth/*', async (c) => auth.handler(c.req.raw));
+index.get("/api/health", (c) => c.json({ success: true, message: "Jootiya API is running" }));
 
-const json = (data: unknown, status = 200) => cResponse(data, status);
-function cResponse(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8' },
-  });
-}
+index.all('/api/auth/*', (c) => auth.handler(c.req.raw));
 
-const safeParse = async <T,>(req: Request): Promise<T | null> => {
+index.get("/api/products", async (c) => {
   try {
-    return (await req.json()) as T;
-  } catch {
-    return null;
+    const products = await getProducts();
+    return c.json({ success: true, data: products });
+  } catch (error) {
+    return c.json({ success: false, error: error instanceof Error ? error.message : "Failed to load products" }, 500);
   }
-};
-
-const normalizeOrder = (payload: Partial<Order> & { items?: unknown; shipping?: unknown }) => {
-  const items = Array.isArray(payload?.items) ? payload.items : [];
-  const shipping = (payload?.shipping ?? {}) as Order['shipping'];
-  const subtotal = Number(payload?.subtotal ?? 0);
-  const shippingFee = Number(payload?.shippingFee ?? 0);
-  const total = Number(payload?.total ?? subtotal + shippingFee);
-  return {
-    id: String(payload?.id ?? crypto.randomUUID()),
-    items,
-    shipping,
-    subtotal,
-    shippingFee,
-    total,
-    status: (payload?.status ?? 'pending') as Order['status'],
-    createdAt: String(payload?.createdAt ?? new Date().toISOString()),
-    customerEmail: payload?.customerEmail,
-  } as Order;
-};
-
-app.get('/api/health', (c) =>
-  c.json({
-    ok: true,
-    service: 'jootiya-api',
-    timestamp: new Date().toISOString(),
-  })
-);
-
-app.get('/api/products', async (c) => {
-  const items = await getAllItems();
-  return c.json({ items });
 });
 
-app.get('/api/products/:id', async (c) => {
-  const id = c.req.param('id') ?? '';
-  const item = await getItemById(id);
-  if (!item) return c.json({ error: 'Product not found' }, 404);
-  return c.json({ item });
-});
-
-app.post('/api/orders', async (c) => {
-  const payload = await safeParse<Partial<Order> & { items?: unknown; shipping?: unknown }>(c.req.raw);
-  if (!payload) return c.json({ error: 'Invalid JSON payload' }, 400);
-
-  const order = normalizeOrder(payload);
-  if (!Array.isArray(order.items) || order.items.length === 0) {
-    return c.json({ error: 'Order items are required' }, 400);
+index.get("/api/products/:slug", async (c) => {
+  try {
+    const slug = c.req.param("slug") ?? "";
+    const product = await getProductBySlug(slug);
+    if (!product) return c.json({ success: false, error: "Product not found" }, 404);
+    return c.json({ success: true, data: product });
+  } catch (error) {
+    return c.json({ success: false, error: error instanceof Error ? error.message : "Failed to load product" }, 500);
   }
-
-  await saveOrder(order);
-  return c.json({ order }, 201);
 });
 
-app.get('/api/orders/:id', async (c) => {
-  const id = c.req.param('id') ?? '';
-  const order = await getOrderById(id);
-  if (!order) return c.json({ error: 'Order not found' }, 404);
-  return c.json({ order });
+index.get("/api/products/:productId/reviews", async (c) => {
+  try {
+    const productId = c.req.param("productId") ?? "";
+    const reviews = await getReviewsByProductId(productId);
+    return c.json({ success: true, data: reviews });
+  } catch (error) {
+    return c.json({ success: false, error: error instanceof Error ? error.message : "Failed to load reviews" }, 500);
+  }
 });
 
-app.get('/api/_admin/db/status', async (c) => {
-  await initDb();
-  return c.json({
-    ok: true,
-    connected: true,
-    database: 'libsql',
-  });
+index.get("/api/orders", async (c) => {
+  try {
+    const orders = await getOrders();
+    return c.json({ success: true, data: orders });
+  } catch (error) {
+    return c.json({ success: false, error: error instanceof Error ? error.message : "Failed to load orders" }, 500);
+  }
 });
 
-app.post('/api/_admin/db/init', async (c) => {
-  await initDb();
-  return c.json({ ok: true, initialized: true });
+index.post("/api/orders", async (c) => {
+  try {
+    const body = (await c.req.json()) as Partial<Order>;
+    const required = ["customerName", "email", "addressLine1", "city", "state", "postalCode", "country", "items"];
+    const missing = required.filter((key) => {
+      const value = body?.[key as keyof Order];
+      return key === "items" ? !Array.isArray(value) || value.length === 0 : !value;
+    });
+    if (missing.length > 0) return c.json({ success: false, error: `Missing required fields: ${missing.join(", ")}` }, 400);
+    const order = await createOrder(body as Order);
+    return c.json({ success: true, data: order, message: "Order created successfully" }, 201);
+  } catch (error) {
+    return c.json({ success: false, error: error instanceof Error ? error.message : "Failed to create order" }, 500);
+  }
 });
 
-app.post('/api/_admin/db/seed', async (c) => {
-  await seedDb();
-  return c.json({ ok: true, seeded: true });
+index.get("/api/admin/tables", async (c) => {
+  try {
+    const authHeader = c.req.header("authorization") ?? "";
+    const isBearer = authHeader.toLowerCase().startsWith("bearer ");
+    const token = isBearer ? authHeader.slice(7).trim() : "";
+    const adminKey = c.req.query("key") ?? "";
+    const secret = (process.env?.ADMIN_INSPECT_KEY ?? "").trim();
+    if (!secret || (token !== secret && adminKey !== secret)) {
+      return c.json({ success: false, error: "Unauthorized" }, 401);
+    }
+    const tables = await inspectTables();
+    return c.json({ success: true, data: tables });
+  } catch (error) {
+    return c.json({ success: false, error: error instanceof Error ? error.message : "Failed to inspect tables" }, 500);
+  }
 });
 
-app.get('/api/_admin/db/products', async (c) => {
-  const items = await getAllItems();
-  return c.json({ items, count: items.length });
+index.get("/api/admin/tables/:tableName", async (c) => {
+  try {
+    const authHeader = c.req.header("authorization") ?? "";
+    const isBearer = authHeader.toLowerCase().startsWith("bearer ");
+    const token = isBearer ? authHeader.slice(7).trim() : "";
+    const adminKey = c.req.query("key") ?? "";
+    const secret = (process.env?.ADMIN_INSPECT_KEY ?? "").trim();
+    if (!secret || (token !== secret && adminKey !== secret)) {
+      return c.json({ success: false, error: "Unauthorized" }, 401);
+    }
+    const tableName = c.req.param("tableName") ?? "";
+    const data = await getTableData(tableName);
+    return c.json({ success: true, data });
+  } catch (error) {
+    return c.json({ success: false, error: error instanceof Error ? error.message : "Failed to load table data" }, 500);
+  }
 });
 
-app.get('/api/_admin/db/orders/:id', async (c) => {
-  const id = c.req.param('id') ?? '';
-  const order = await getOrderById(id);
-  if (!order) return c.json({ error: 'Order not found' }, 404);
-  return c.json({ order });
-});
-
-app.get('/api/_admin/db/raw', async (c) => {
-  return c.json({
-    ok: true,
-    db: Boolean(db),
-  });
-});
-
-app.notFound((c) => c.json({ error: 'Not found' }, 404));
-app.onError((err, c) =>
-  c.json(
-    {
-      error: 'Internal server error',
-      message: err?.message ?? 'Unknown error',
-    },
-    500
-  )
-);
-
-export default app;
+export default index;

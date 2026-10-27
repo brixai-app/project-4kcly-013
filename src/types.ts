@@ -1,100 +1,88 @@
-export type ProductCategory = 'mojri' | 'juttis' | 'bridal' | 'everyday' | 'limited';
-
-export interface Artisan {
+export type Product = {
   id: string;
   name: string;
-  location: string;
-  specialty?: string;
-  portraitUrl?: string;
-  story?: string;
-}
-
-export interface Product {
-  id: string;
-  name: string;
-  category: ProductCategory | string;
+  slug: string;
   price: number;
-  originalPrice?: number;
+  currency?: string;
+  category: string;
+  collection?: string;
   description?: string;
-  imageUrl: string;
+  image: string;
   gallery?: string[];
-  artisanId?: string;
-  artisan?: Artisan;
-  sizes?: string[];
-  colors?: string[];
+  artisan?: string;
+  origin?: string;
   material?: string;
-  inStock?: boolean;
+  sizes?: string[];
   featured?: boolean;
-  newArrival?: boolean;
-  limitedEdition?: boolean;
-  slug?: string;
-}
+  inStock?: boolean;
+  rating?: number;
+  reviewCount?: number;
+};
 
-export interface CartItem {
+export type Review = {
+  id: string;
   productId: string;
+  author: string;
+  rating: number;
+  title?: string;
+  body: string;
+  createdAt: string;
+};
+
+export type CartItem = {
+  productId: string;
+  name: string;
+  image: string;
+  price: number;
   quantity: number;
   size?: string;
   color?: string;
-  price: number;
-  product?: Product;
-}
+};
 
-export interface ShippingInfo {
-  fullName: string;
+export type Order = {
+  id: string;
+  orderNumber: string;
+  items: CartItem[];
+  subtotal: number;
+  shipping: number;
+  total: number;
+  currency?: string;
+  customerName: string;
   email: string;
-  phone: string;
+  phone?: string;
   addressLine1: string;
   addressLine2?: string;
   city: string;
   state: string;
   postalCode: string;
   country: string;
-  notes?: string;
-}
-
-export interface Order {
-  id: string;
-  items: CartItem[];
-  shipping: ShippingInfo;
-  subtotal: number;
-  shippingFee: number;
-  total: number;
-  status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+  status: "pending" | "paid" | "processing" | "shipped" | "delivered" | "cancelled";
   createdAt: string;
-  customerEmail?: string;
-}
+};
 
-export interface CustomOrderRequest {
-  id?: string;
+export type CheckoutField = {
   name: string;
-  email: string;
-  phone?: string;
-  occasion?: string;
-  size?: string;
-  colorPreference?: string;
-  budget?: string;
-  notes?: string;
-  createdAt?: string;
-}
-
-export interface CatalogFilterState {
-  category: string;
-  size: string;
-  color: string;
-  priceRange: string;
-  search: string;
-  sort: string;
-}
-
-export interface CatalogFilterOption {
   label: string;
-  value: string;
-}
+  type: "text" | "email" | "tel" | "textarea" | "select";
+  required?: boolean;
+  placeholder?: string;
+  autoComplete?: string;
+  options?: string[];
+};
 
-export interface CatalogFilterGroup {
-  key: keyof CatalogFilterState;
-  label: string;
-  options: CatalogFilterOption[];
-}
+export type ApiResponse<T> = {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+};
 
-export default Product;
+export type ProductsResponse = ApiResponse<Product[]>;
+export type ProductResponse = ApiResponse<Product>;
+export type ReviewsResponse = ApiResponse<Review[]>;
+export type OrderResponse = ApiResponse<Order>;
+export type OrdersResponse = ApiResponse<Order[]>;
+export type CartResponse = ApiResponse<CartItem[]>;
+export type CheckoutResponse = ApiResponse<{ orderId: string; orderNumber: string }>;
+
+export default {};

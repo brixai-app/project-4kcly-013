@@ -41,15 +41,28 @@ export const useSession = () => {
   return fallbackSessionState;
 };
 
-// Safe action helpers that never crash if client is offline or null
-export const signIn = rawClient?.signIn ?? {
-  email: async () => ({ error: { message: 'Authentication server unavailable' } }),
-  social: async () => ({ error: { message: 'Authentication server unavailable' } }),
+// Hybrid action helpers: work BOTH as callable functions (signIn({ email, password })) AND as namespace objects (signIn.email({ email, password }))
+const signInHandler = async (credsOrMethod: any, opts?: any) => {
+  if (typeof credsOrMethod === 'string' && rawClient?.signIn?.[credsOrMethod]) {
+    return rawClient.signIn[credsOrMethod](opts);
+  }
+  if (rawClient?.signIn?.email) {
+    return rawClient.signIn.email(credsOrMethod);
+  }
+  return { error: { message: 'Authentication server unavailable' } };
 };
+export const signIn = Object.assign(signInHandler, rawClient?.signIn);
 
-export const signUp = rawClient?.signUp ?? {
-  email: async () => ({ error: { message: 'Authentication server unavailable' } }),
+const signUpHandler = async (credsOrMethod: any, opts?: any) => {
+  if (typeof credsOrMethod === 'string' && rawClient?.signUp?.[credsOrMethod]) {
+    return rawClient.signUp[credsOrMethod](opts);
+  }
+  if (rawClient?.signUp?.email) {
+    return rawClient.signUp.email(credsOrMethod);
+  }
+  return { error: { message: 'Authentication server unavailable' } };
 };
+export const signUp = Object.assign(signUpHandler, rawClient?.signUp);
 
 export const signOut = rawClient?.signOut ?? (async () => ({ success: true }));
 

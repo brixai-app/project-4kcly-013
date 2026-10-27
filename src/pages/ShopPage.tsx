@@ -1,44 +1,53 @@
-import React from 'react';
-import { useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { CatalogWorkspace } from '@/components/EditorialSections';
-import { products } from '@/data/mockData';
+import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
+import { AlertCircle, RefreshCw } from 'lucide-react';
+import { CatalogExperience } from "@/components/CatalogExperience";
+import type { Product } from "@/types";
 
-export function ShopPage({ className = '' }: { className?: string }) {
+export function ShopPage() {
   const location = useLocation();
-  const params = new URLSearchParams(location?.search ?? '');
-  const category = params.get('category') ?? '';
-  const search = params.get('search') ?? '';
-  const sort = params.get('sort') ?? '';
-  const initialCount = products?.length ?? 0;
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>("");
+  const search = useMemo(() => new URLSearchParams(location.search).get("q") ?? "", [location.search]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const loadProducts = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const res = await fetch("/api/products", { signal: controller.signal });
+        const json = (await res.json()) as { success?: boolean; data?: Product[]; error?: string; message?: string };
+        if (!res.ok || json?.success === false) throw new Error(json?.error ?? json?.message ?? "Unable to load products.");
+        setProducts(Array.isArray(json?.data) ? json.data : []);
+      } catch (err) {
+        if ((err as { name?: string })?.name !== "AbortError") setError((err as Error)?.message ?? "Unable to load products.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadProducts();
+    return () => controller.abort();
+  }, []);
 
   return (
-    <main className={className}>
-      <section className="border-b border-[#CFC2B2] bg-[#FFFDF7]">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-10 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, ease: 'easeOut' }}
-            className="max-w-3xl"
+    <main className="bg-[#F5F1E9] text-[#2E2E2E]">
+      {error ? (
+        <div className="mx-auto flex max-w-7xl items-center gap-3 border-b border-[#CFC1AD] bg-[#FFFCF6] px-4 py-3 text-sm text-[#6F675D] sm:px-6 lg:px-8">
+          <AlertCircle className="h-4 w-4 shrink-0 text-[#8B0000]" />
+          <span className="min-w-0 flex-1 truncate">{error}</span>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="inline-flex items-center gap-2 border border-[#CFC1AD] bg-[#FFFCF6] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#2E2E2E] transition-colors hover:bg-[#F5F1E9]"
           >
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#6F655C]">Shop Jootiya</p>
-            <h1 className="mt-3 font-['Playfair_Display'] text-4xl font-light tracking-tight text-[#2B2B2B] sm:text-5xl">
-              Handcrafted Mojris, edited like a lookbook.
-            </h1>
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-[#6F655C] sm:text-base">
-              Explore refined Rajasthani silhouettes, artisan-led details, and seasonal pairs selected for ceremony, everyday wear, and limited drops.
-            </p>
-          </motion.div>
-          <div className="flex flex-wrap gap-3 text-xs font-semibold uppercase tracking-[0.24em] text-[#6F655C]">
-            <span className="rounded-sm border border-[#CFC2B2] px-3 py-2">Products {initialCount}</span>
-            <span className="rounded-sm border border-[#CFC2B2] px-3 py-2">Category {category || 'All'}</span>
-            <span className="rounded-sm border border-[#CFC2B2] px-3 py-2">Search {search || '—'}</span>
-            <span className="rounded-sm border border-[#CFC2B2] px-3 py-2">Sort {sort || 'Featured'}</span>
-          </div>
+            <RefreshCw className="h-3.5 w-3.5" />
+            Retry
+          </button>
         </div>
-      </section>
-      <CatalogWorkspace className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8" />
+      ) : null}
+      <CatalogExperience products={products} loading={loading} error={error} search={search} />
     </main>
   );
 }
