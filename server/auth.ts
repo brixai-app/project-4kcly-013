@@ -1,26 +1,29 @@
 import { betterAuth } from "better-auth";
-import { client } from "./db";
 
-const database = {
-  async findMany() {
-    return [];
-  },
-  async findOne() {
-    return null;
-  },
-  async create() {
-    return null;
-  },
-  async update() {
-    return null;
-  },
-  async delete() {
-    return null;
-  },
-};
+const isDatabaseReady = Boolean(process.env.DATABASE_URL ?? process.env.BETTER_AUTH_URL ?? process.env.POSTGRES_URL);
+
+const database = isDatabaseReady
+  ? undefined
+  : {
+      async findMany() {
+        return [];
+      },
+      async findOne() {
+        return null;
+      },
+      async create() {
+        return null;
+      },
+      async update() {
+        return null;
+      },
+      async delete() {
+        return null;
+      },
+    };
 
 export const auth = betterAuth({
-  database,
+  ...(database ? { database } : {}),
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,
