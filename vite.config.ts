@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     devServer({
       entry: 'server/index.ts',
-      exclude: ['/src/**', '/node_modules/**', '/@vite/**', '/@react-refresh'],
+      exclude: [/^(?!\/api).*/],
     }),
   ],
   server: { host: true, port: 5173, strictPort: true },

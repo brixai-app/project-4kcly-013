@@ -1,61 +1,57 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, Check, ChevronDown, X } from 'lucide-react';
+import { X, ShoppingBag, CheckCircle2, Minus, Plus, Shield, Truck, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import type { ModalContractProps, Product } from '@/types';
 import { useCart } from '@/context/CartContext';
+import type { Product, ProductSize } from '@/types';
 
-export type ProductDetailModalProps = ModalContractProps & {
+export interface ProductDetailModalProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   product?: Product | null;
-  onQuickAdd?: (product: Product, size?: string, color?: string) => void;
-};
+}
 
-const defaultProps = {
-  open: false,
-  onOpenChange: () => undefined,
-  product: null,
-  onQuickAdd: () => undefined,
-};
+export function ProductDetailModal({ open = false, onOpenChange = () => {}, product = null }: ProductDetailModalProps) {
+  const { addToCart } = useCart?.() ?? {};
+  const [selectedSize, setSelectedSize] = useState<ProductSize | ''>('');
+  const [quantity, setQuantity] = useState(1);
 
-export function ProductDetailModal({
-  open = defaultProps.open,
-  onOpenChange = defaultProps.onOpenChange,
-  product = defaultProps.product,
-  onQuickAdd = defaultProps.onQuickAdd,
-}: ProductDetailModalProps) {
-  const { addItem } = useCart?.() ?? { addItem: () => undefined };
-  const sizes = product?.sizes?.length ? product.sizes : ['UK 6', 'UK 7', 'UK 8', 'UK 9'];
-  const colors = product?.colors?.length ? product.colors : ['Tan', 'Ivory', 'Black'];
-  const [size, setSize] = useState(sizes?.[0] ?? '');
-  const [color, setColor] = useState(colors?.[0] ?? '');
+  const availableSizes = product?.sizes ?? [];
+  const inStock = product?.inStock ?? true;
+  const rating = product?.rating ?? 4.8;
+  const reviewCount = product?.reviewCount ?? 0;
+  const gallery = useMemo(() => [product?.image, ...(product?.gallery ?? [])].filter(Boolean) as string[], [product]);
 
-  const inStock = (product?.stock ?? 0) > 0;
-  const gallery = useMemo(() => {
-    const base = product?.gallery?.length ? product.gallery : [product?.image ?? 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1400&q=85'];
-    return base.filter(Boolean);
-  }, [product]);
+  useEffect(() => {
+    if (open) {
+      setSelectedSize((product?.sizes?.[0] ?? '') as ProductSize | '');
+      setQuantity(1);
+    }
+  }, [open, product]);
 
   const handleAdd = () => {
     if (!product) return;
-    if (!inStock) {
-      toast.error('This pair is currently out of stock.');
+    if (!selectedSize) {
+      toast.error('Select a size to continue.');
       return;
     }
-    addItem?.({
+    if (!inStock) {
+      toast.error('This piece is currently unavailable.');
+      return;
+    }
+    addToCart?.({
       productId: product.id,
-      name: product.name,
+      quantity,
+      size: selectedSize,
       price: product.price,
+      name: product.name,
       image: product.image,
-      quantity: 1,
-      size: size || undefined,
-      color: color || undefined,
-      stock: product.stock,
+      slug: product.slug,
     });
-    onQuickAdd?.(product, size || undefined, color || undefined);
-    toast.success('Added to cart.');
-    onOpenChange?.(false);
+    toast.success(`${product.name} added to cart.`);
+    onOpenChange(false);
   };
 
   return (
@@ -65,134 +61,145 @@ export function ProductDetailModal({
           <Dialog.Portal forceMount>
             <Dialog.Overlay asChild>
               <motion.div
-                className="fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px]"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
+                className="fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px]"
               />
             </Dialog.Overlay>
             <Dialog.Content asChild>
               <motion.div
-                className="fixed inset-y-0 right-0 z-50 flex w-full max-w-3xl flex-col overflow-hidden border-l border-[#8A806F] bg-[#FFFDF8] shadow-2xl"
-                initial={{ x: '100%' }}
-                animate={{ x: 0 }}
-                exit={{ x: '100%' }}
-                transition={{ type: 'spring', stiffness: 260, damping: 28 }}
+                initial={{ opacity: 0, x: 48 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 48 }}
+                transition={{ duration: 0.28, ease: 'easeOut' }}
+                className="fixed right-0 top-0 z-50 h-full w-full max-w-4xl overflow-y-auto border-l border-[#D8CCB9] bg-[#FAF9F6] text-[#1A1A1A] shadow-2xl outline-none"
               >
-                <div className="flex items-center justify-between border-b border-[#8A806F] px-5 py-4">
+                <div className="flex items-center justify-between border-b border-[#D8CCB9] px-5 py-4">
                   <div className="min-w-0">
-                    <Dialog.Title className="font-['Playfair_Display'] text-2xl font-medium tracking-tight text-[#211F1C]">
-                      {product?.name ?? 'Product Preview'}
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#675F56]">Quick View</p>
+                    <Dialog.Title className="mt-1 truncate font-['Playfair_Display'] text-2xl font-medium">
+                      {product?.name ?? 'Product'}
                     </Dialog.Title>
-                    <Dialog.Description className="mt-1 text-xs uppercase tracking-[0.24em] text-[#514B42]">
-                      Quick preview · artisan provenance · stock-safe selection
-                    </Dialog.Description>
                   </div>
                   <Dialog.Close asChild>
                     <button
                       type="button"
-                      className="inline-flex h-10 w-10 items-center justify-center border border-[#8A806F] text-[#211F1C] transition-colors hover:bg-[#6B451D] hover:text-white"
-                      aria-label="Close preview"
+                      className="inline-flex h-10 w-10 items-center justify-center border border-[#D8CCB9] bg-white text-[#1A1A1A] transition-colors hover:bg-[#A94720] hover:text-white"
+                      aria-label="Close quick view"
                     >
                       <X className="h-4 w-4" />
                     </button>
                   </Dialog.Close>
                 </div>
 
-                <div className="grid flex-1 gap-0 overflow-y-auto lg:grid-cols-[1.05fr_0.95fr]">
-                  <div className="border-b border-[#8A806F] lg:border-b-0 lg:border-r">
-                    <div className="aspect-[4/5] w-full overflow-hidden bg-[#FAF7F0]">
-                      <img
-                        src={gallery?.[0] ?? product?.image ?? 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1400&q=85'}
-                        alt={product?.name ?? 'Product image'}
-                        crossOrigin="anonymous"
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                    <div className="grid grid-cols-3 gap-px border-t border-[#8A806F] bg-[#8A806F]">
-                      {gallery.slice(0, 3).map((src, index) => (
-                        <div key={`${src}-${index}`} className="aspect-[4/5] overflow-hidden bg-[#FAF7F0]">
+                <div className="grid gap-0 lg:grid-cols-[1.1fr_0.9fr]">
+                  <div className="border-b border-[#D8CCB9] lg:border-b-0 lg:border-r">
+                    <div className="grid gap-0 sm:grid-cols-2">
+                      {gallery.slice(0, 4).map((src, index) => (
+                        <div key={`${src}-${index}`} className={cn('relative overflow-hidden border-[#D8CCB9]', index < 2 ? 'border-b sm:border-b-0' : '', index % 2 === 0 ? 'sm:border-r' : '')}>
                           <img
                             src={src}
-                            alt={`${product?.name ?? 'Product'} view ${index + 1}`}
+                            alt={product?.name ?? 'Product image'}
                             crossOrigin="anonymous"
-                            className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
+                            className="h-72 w-full object-cover transition-transform duration-500 hover:scale-105"
                           />
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-6 p-5">
+                  <div className="space-y-6 px-5 py-5 lg:px-6">
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs uppercase tracking-[0.24em] text-[#514B42]">{product?.category ?? 'Mojri'}</p>
-                        <p className="text-sm font-semibold text-[#211F1C]">₹{product?.price?.toLocaleString('en-IN') ?? '0'}</p>
+                      <div className="flex items-center gap-3 text-sm text-[#675F56]">
+                        <span className="uppercase tracking-[0.24em]">{product?.collection ?? 'Collection'}</span>
+                        <span className="h-1 w-1 rounded-full bg-[#D8CCB9]" />
+                        <span>{product?.category ?? 'Mojri'}</span>
                       </div>
-                      <p className="max-w-prose text-sm leading-6 text-[#514B42]">{product?.description ?? 'Handcrafted footwear shaped by Jodhpur artisans using time-honored techniques and refined finishing.'}</p>
-                      <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.22em] text-[#514B42]">
-                        <span className={cn('inline-flex items-center gap-1 border px-2 py-1', inStock ? 'border-[#8A806F] text-[#211F1C]' : 'border-red-400 text-red-700')}>
-                          {inStock ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
-                          {inStock ? `In stock · ${product?.stock ?? 0} left` : 'Out of stock'}
-                        </span>
-                        {product?.origin ? <span className="border border-[#8A806F] px-2 py-1">{product.origin}</span> : null}
-                        {product?.material ? <span className="border border-[#8A806F] px-2 py-1">{product.material}</span> : null}
+                      <div className="flex items-center gap-2 text-sm text-[#675F56]">
+                        <Star className="h-4 w-4 fill-[#A94720] text-[#A94720]" />
+                        <span>{rating.toFixed(1)}</span>
+                        <span>({reviewCount} reviews)</span>
+                      </div>
+                      <p className="max-w-xl text-sm leading-6 text-[#675F56]">{product?.description ?? ''}</p>
+                    </div>
+
+                    <div className="grid gap-3 border-y border-[#D8CCB9] py-4 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#675F56]">Material</p>
+                        <p className="text-sm font-medium">{(product?.materials ?? []).join(', ') || 'Hand-finished leather'}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#675F56]">Color</p>
+                        <p className="text-sm font-medium">{product?.color ?? 'Natural'}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#675F56]">Availability</p>
+                        <p className={cn('inline-flex items-center gap-2 text-sm font-medium', inStock ? 'text-[#1A1A1A]' : 'text-[#A94720]')}>
+                          {inStock ? <CheckCircle2 className="h-4 w-4 text-[#A94720]" /> : <Shield className="h-4 w-4 text-[#A94720]" />}
+                          {inStock ? 'In stock' : 'Limited stock'}
+                        </p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#675F56]">Delivery</p>
+                        <p className="inline-flex items-center gap-2 text-sm font-medium">
+                          <Truck className="h-4 w-4 text-[#A94720]" />
+                          3–5 business days
+                        </p>
                       </div>
                     </div>
 
-                    <div className="space-y-4">
-                      <div>
-                        <div className="mb-2 flex items-center justify-between">
-                          <p className="text-xs uppercase tracking-[0.24em] text-[#514B42]">Size</p>
-                          <ChevronDown className="h-4 w-4 text-[#514B42]" />
+                    <div className="space-y-3">
+                      <div className="flex items-end justify-between gap-4">
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#675F56]">Price</p>
+                          <p className="font-['Playfair_Display'] text-3xl font-medium">₹{product?.price?.toLocaleString('en-IN') ?? '0'}</p>
                         </div>
+                        {product?.compareAtPrice ? (
+                          <p className="text-sm text-[#675F56] line-through">₹{product.compareAtPrice.toLocaleString('en-IN')}</p>
+                        ) : null}
+                      </div>
+
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#675F56]">Select size</p>
                         <div className="flex flex-wrap gap-2">
-                          {sizes.map((item) => (
+                          {availableSizes.map((size) => (
                             <button
-                              key={item}
+                              key={size}
                               type="button"
-                              onClick={() => setSize(item)}
+                              onClick={() => setSelectedSize(size)}
                               className={cn(
-                                'min-w-0 border px-3 py-2 text-xs uppercase tracking-[0.2em] transition-colors',
-                                size === item ? 'border-[#6B451D] bg-[#6B451D] text-white' : 'border-[#8A806F] text-[#211F1C] hover:bg-[#FAF7F0]'
+                                'min-w-0 border px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition-colors',
+                                selectedSize === size
+                                  ? 'border-[#A94720] bg-[#A94720] text-white'
+                                  : 'border-[#D8CCB9] bg-white text-[#1A1A1A] hover:border-[#A94720]'
                               )}
                             >
-                              {item}
+                              {size}
                             </button>
                           ))}
                         </div>
                       </div>
 
-                      <div>
-                        <p className="mb-2 text-xs uppercase tracking-[0.24em] text-[#514B42]">Color</p>
-                        <div className="flex flex-wrap gap-2">
-                          {colors.map((item) => (
-                            <button
-                              key={item}
-                              type="button"
-                              onClick={() => setColor(item)}
-                              className={cn(
-                                'min-w-0 border px-3 py-2 text-xs uppercase tracking-[0.2em] transition-colors',
-                                color === item ? 'border-[#6B451D] bg-[#6B451D] text-white' : 'border-[#8A806F] text-[#211F1C] hover:bg-[#FAF7F0]'
-                              )}
-                            >
-                              {item}
-                            </button>
-                          ))}
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center border border-[#D8CCB9] bg-white">
+                          <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="p-3 hover:bg-[#F5F1E9]">
+                            <Minus className="h-4 w-4" />
+                          </button>
+                          <span className="min-w-10 px-3 text-center text-sm font-medium">{quantity}</span>
+                          <button type="button" onClick={() => setQuantity((q) => q + 1)} className="p-3 hover:bg-[#F5F1E9]">
+                            <Plus className="h-4 w-4" />
+                          </button>
                         </div>
+                        <button
+                          type="button"
+                          onClick={handleAdd}
+                          className="inline-flex flex-1 items-center justify-center gap-2 bg-[#A94720] px-4 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-white transition-colors hover:bg-[#843616]"
+                        >
+                          <ShoppingBag className="h-4 w-4" />
+                          Add to cart
+                        </button>
                       </div>
-                    </div>
-
-                    <div className="mt-auto border-t border-[#8A806F] pt-5">
-                      <button
-                        type="button"
-                        onClick={handleAdd}
-                        disabled={!inStock}
-                        className="inline-flex w-full items-center justify-center gap-2 bg-[#6B451D] px-4 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-white transition-colors hover:bg-[#4E3014] disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {inStock ? 'Add to Cart' : 'Notify Me'}
-                        <ArrowRight className="h-4 w-4" />
-                      </button>
                     </div>
                   </div>
                 </div>

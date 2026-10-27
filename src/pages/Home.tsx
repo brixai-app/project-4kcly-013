@@ -1,14 +1,10 @@
 import React from 'react';
-import { HeroBanner, LookbookCarousel, TrendingDrop, ArtisanSpotlight, NewsletterBand } from '@/components/HomeSections';
+import { HomeEditorial } from '@/components/CommerceSections';
 
-export function Home() {
+export function Home({ className = '' }: { className?: string } = {}) {
   return (
-    <main className="bg-[#FAF7F0] text-[#211F1C]">
-      <HeroBanner />
-      <LookbookCarousel />
-      <TrendingDrop />
-      <ArtisanSpotlight />
-      <NewsletterBand />
+    <main className={className}>
+      <HomeEditorial />
     </main>
   );
 }

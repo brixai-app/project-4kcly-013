@@ -1,170 +1,185 @@
-import { useEffect, useMemo, useState } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
-import { Filter, Sliders, X } from 'lucide-react';
-import { motion } from "framer-motion";
-import { FilterState, Product } from "@/types";
-import { products, defaultFilterState, filterOptions } from "@/data/mockData";
-import { cn } from "@/lib/utils";
-import { FilterDrawer, ProductGridSection } from "@/components/StoreSections";
+import React, { useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
+import { ChevronDown, Filter, Search, Sliders } from 'lucide-react';
+import { products } from '@/data/mockData';
+import { ProductMasonryGrid } from '@/components/ProductCard';
+import { cn } from '@/lib/utils';
+import type { Product, ProductFilters } from '@/types';
 
-export function ShopPage() {
-  const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [filters, setFilters] = useState<FilterState>(defaultFilterState);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-
-  useEffect(() => {
-    const query = searchParams.get("q") ?? "";
-    const category = searchParams.get("category") ?? "";
-    const collection = searchParams.get("collection") ?? "";
-    const min = Number(searchParams.get("min") ?? defaultFilterState.priceRange[0]);
-    const max = Number(searchParams.get("max") ?? defaultFilterState.priceRange[1]);
-    const inStockOnly = searchParams.get("stock") === "1";
-    const artisan = searchParams.get("artisan") ?? "";
-    const sort = searchParams.get("sort") ?? "featured";
-    setFilters({
-      query,
-      categories: category ? [category] : [],
-      collections: collection ? [collection] : [],
-      priceRange: [Number.isFinite(min) ? min : defaultFilterState.priceRange[0], Number.isFinite(max) ? max : defaultFilterState.priceRange[1]],
-      inStockOnly,
-      artisanIds: artisan ? [artisan] : [],
-    });
-    if (!searchParams.get("sort")) {
-      const next = new URLSearchParams(searchParams);
-      next.set("sort", sort);
-      setSearchParams(next, { replace: true });
-    }
-  }, [location.search]);
-
-  const sort = searchParams.get("sort") ?? "featured";
+export function ShopPage({ className = '' }: { className?: string }) {
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState('all');
+  const [size, setSize] = useState('all');
+  const [color, setColor] = useState('all');
+  const [style, setStyle] = useState('all');
+  const [sortBy, setSortBy] = useState<ProductFilters['sortBy']>('featured');
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 25000]);
 
   const filteredProducts = useMemo(() => {
-    const q = filters.query.trim().toLowerCase();
-    const [minPrice, maxPrice] = filters.priceRange;
-    const list = products.filter((product: Product) => {
+    const q = query.trim().toLowerCase();
+    return (products ?? []).filter((product: Product) => {
       const matchesQuery =
         !q ||
-        [product.name, product.category, product.collection, product.description, product.material, product.color, ...(product.tags ?? [])]
+        [product.name, product.description, product.category, product.material, product.color, product.artisan]
           .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(q));
-      const matchesCategory = filters.categories.length === 0 || filters.categories.includes(product.category);
-      const matchesCollection = filters.collections.length === 0 || filters.collections.includes(product.collection);
-      const matchesStock = !filters.inStockOnly || product.inStock;
-      const matchesPrice = product.price >= minPrice && product.price <= maxPrice;
-      const matchesArtisan = filters.artisanIds.length === 0 || (product.artisanId ? filters.artisanIds.includes(product.artisanId) : false);
-      return matchesQuery && matchesCategory && matchesCollection && matchesStock && matchesPrice && matchesArtisan;
+          .some((value) => String(value ?? '').toLowerCase().includes(q));
+      const matchesCategory = category === 'all' || String(product.category ?? '').toLowerCase() === category;
+      const matchesSize = size === 'all' || (product.sizes ?? []).includes(size);
+      const matchesColor = color === 'all' || String(product.color ?? '').toLowerCase().includes(color);
+      const matchesStyle = style === 'all' || String(product.material ?? '').toLowerCase().includes(style);
+      const matchesPrice = product.price >= priceRange[0] && product.price <= priceRange[1];
+      return matchesQuery && matchesCategory && matchesSize && matchesColor && matchesStyle && matchesPrice;
+    }).sort((a, b) => {
+      if (sortBy === 'price-asc') return a.price - b.price;
+      if (sortBy === 'price-desc') return b.price - a.price;
+      if (sortBy === 'newest') return Number(b.featured ?? false) - Number(a.featured ?? false);
+      return Number(b.featured ?? false) - Number(a.featured ?? false) || (b.rating ?? 0) - (a.rating ?? 0);
     });
-    const sorted = [...list].sort((a, b) => {
-      if (sort === "price-asc") return a.price - b.price;
-      if (sort === "price-desc") return b.price - a.price;
-      if (sort === "newest") return b.id.localeCompare(a.id);
-      return Number(Boolean(b.featured)) - Number(Boolean(a.featured));
-    });
-    return sorted;
-  }, [filters, sort]);
+  }, [query, category, size, color, style, sortBy, priceRange]);
 
-  const updateParam = (key: string, value: string | null) => {
-    const next = new URLSearchParams(searchParams);
-    if (value === null || value === "") next.delete(key);
-    else next.set(key, value);
-    setSearchParams(next, { replace: true });
-  };
-
-  const clearFilters = () => {
-    setSearchParams({}, { replace: true });
-    setFilters(defaultFilterState);
-  };
+  const categories = ['all', 'mojri', 'bridal', 'festive', 'classic', 'limited'];
+  const sizes = ['all', '6', '7', '8', '9', '10', '11'];
+  const colors = ['all', 'tan', 'brown', 'ivory', 'gold', 'black'];
+  const styles = ['all', 'leather', 'embroidered', 'handcrafted', 'suede'];
 
   return (
-    <div className="bg-[#FAF7F0] text-[#1F1E1C]">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-5 flex flex-col gap-4 border-b border-[#B8AD9D] pb-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#514B43]">Catalog</p>
-            <h1 className="mt-2 font-serif text-4xl font-light tracking-tight text-[#1F1E1C] sm:text-5xl">Jodhpur-made Mojris</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-[#514B43]">
-              Refine by size, color, price, and collection to discover handcrafted pairs shaped for ceremony, travel, and everyday elegance.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setDrawerOpen(true)}
-              className="inline-flex items-center gap-2 border border-[#B8AD9D] bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#1F1E1C] transition hover:border-[#C9A66B] hover:text-black"
-            >
-              <Filter className="h-4 w-4" />
-              Filters
-            </button>
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="inline-flex items-center gap-2 border border-[#B8AD9D] bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#1F1E1C] transition hover:border-[#C9A66B] hover:text-black"
-            >
-              <X className="h-4 w-4" />
-              Reset
-            </button>
-          </div>
-        </div>
-
+    <div className={cn('bg-[#FAF9F6] text-[#1A1A1A]', className)}>
+      <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-          <aside className="hidden min-w-0 lg:block">
-            <div className="sticky top-6 rounded-sm border border-[#B8AD9D] bg-white p-4">
-              <div className="flex items-center justify-between gap-3 border-b border-[#B8AD9D] pb-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#514B43]">Refine</p>
-                  <p className="mt-1 truncate text-sm text-[#1F1E1C]">Curated filters</p>
+          <aside className="rounded-sm border border-[#D8CDBD] bg-white p-4">
+            <div className="mb-4 flex items-center gap-2">
+              <Filter className="h-4 w-4 text-[#A94721]" />
+              <h1 className="min-w-0 truncate font-['Playfair_Display'] text-2xl font-medium">Shop Jootiya</h1>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block">
+                <span className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-[#675F56]">
+                  <Search className="h-3.5 w-3.5" />
+                  Search
+                </span>
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search mojris, colors, artisans"
+                  className="w-full rounded-sm border border-[#D8CDBD] bg-[#FAF9F6] px-3 py-2 text-sm outline-none transition focus:border-[#A94721]"
+                />
+              </label>
+
+              <div>
+                <span className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-[#675F56]">
+                  <Sliders className="h-3.5 w-3.5" />
+                  Category
+                </span>
+                <div className="flex flex-col gap-2.5">
+                  {categories.map((item) => (
+                    <button
+                      key={item}
+                      onClick={() => setCategory(item)}
+                      className={cn(
+                        'min-w-0 truncate rounded-sm border px-3 py-2 text-left text-xs font-semibold uppercase tracking-widest transition',
+                        category === item
+                          ? 'border-[#A94721] bg-[#A94721] text-white'
+                          : 'border-[#D8CDBD] bg-white text-[#1A1A1A] hover:border-[#A94721]'
+                      )}
+                    >
+                      {item}
+                    </button>
+                  ))}
                 </div>
-                <Sliders className="h-4 w-4 shrink-0 text-[#514B43]" />
               </div>
-              <FilterDrawer open={true} onOpenChange={() => {}} filters={filters} onChange={(next) => setFilters(next)} />
+
+              <div>
+                <span className="mb-2 block text-xs font-semibold uppercase tracking-widest text-[#675F56]">Size</span>
+                <div className="flex flex-wrap gap-2">
+                  {sizes.map((item) => (
+                    <button
+                      key={item}
+                      onClick={() => setSize(item)}
+                      className={cn(
+                        'rounded-sm border px-3 py-2 text-xs font-semibold uppercase tracking-widest transition',
+                        size === item
+                          ? 'border-[#A94721] bg-[#A94721] text-white'
+                          : 'border-[#D8CDBD] bg-white text-[#1A1A1A] hover:border-[#A94721]'
+                      )}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <span className="mb-2 block text-xs font-semibold uppercase tracking-widest text-[#675F56]">Color</span>
+                <div className="flex flex-wrap gap-2">
+                  {colors.map((item) => (
+                    <button
+                      key={item}
+                      onClick={() => setColor(item)}
+                      className={cn(
+                        'rounded-sm border px-3 py-2 text-xs font-semibold uppercase tracking-widest transition',
+                        color === item
+                          ? 'border-[#A94721] bg-[#A94721] text-white'
+                          : 'border-[#D8CDBD] bg-white text-[#1A1A1A] hover:border-[#A94721]'
+                      )}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <span className="mb-2 block text-xs font-semibold uppercase tracking-widest text-[#675F56]">Style</span>
+                <div className="flex flex-wrap gap-2">
+                  {styles.map((item) => (
+                    <button
+                      key={item}
+                      onClick={() => setStyle(item)}
+                      className={cn(
+                        'rounded-sm border px-3 py-2 text-xs font-semibold uppercase tracking-widest transition',
+                        style === item
+                          ? 'border-[#A94721] bg-[#A94721] text-white'
+                          : 'border-[#D8CDBD] bg-white text-[#1A1A1A] hover:border-[#A94721]'
+                      )}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <span className="mb-2 block text-xs font-semibold uppercase tracking-widest text-[#675F56]">Price Sort</span>
+                <button
+                  onClick={() => setSortBy(sortBy === 'price-asc' ? 'price-desc' : 'price-asc')}
+                  className="flex w-full items-center justify-between rounded-sm border border-[#D8CDBD] bg-white px-3 py-2 text-xs font-semibold uppercase tracking-widest transition hover:border-[#A94721]"
+                >
+                  <span>{sortBy === 'price-asc' ? 'Price Low to High' : 'Price High to Low'}</span>
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </aside>
 
-          <main className="min-w-0">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-[#514B43]">
-                Showing <span className="font-semibold text-[#1F1E1C]">{filteredProducts.length}</span> pieces
-              </p>
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.22em] text-[#514B43]">Sort</label>
-                <select
-                  value={sort}
-                  onChange={(e) => updateParam("sort", e.target.value)}
-                  className="min-w-0 border border-[#B8AD9D] bg-white px-3 py-2 text-sm text-[#1F1E1C] outline-none"
-                >
-                  <option value="featured">Featured</option>
-                  <option value="newest">Newest</option>
-                  <option value="price-asc">Price: Low to High</option>
-                  <option value="price-desc">Price: High to Low</option>
-                </select>
+          <div className="min-w-0">
+            <motion.div
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="mb-6 flex flex-col gap-3 border-b border-[#D8CDBD] pb-4 sm:flex-row sm:items-end sm:justify-between"
+            >
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-[#675F56]">Curated catalog</p>
+                <h2 className="font-['Playfair_Display'] text-3xl font-medium">Hand-finished Jodhpuri Mojris</h2>
               </div>
-            </div>
-
-            <div className="mb-5 flex flex-wrap gap-2">
-              {(filterOptions?.categories ?? []).slice(0, 6).map((item: string) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => updateParam("category", item)}
-                  className={cn(
-                    "min-w-0 border px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition",
-                    filters.categories.includes(item) ? "border-[#C9A66B] bg-[#C9A66B] text-black" : "border-[#B8AD9D] bg-white text-[#1F1E1C] hover:border-[#C9A66B]"
-                  )}
-                >
-                  <span className="block truncate">{item}</span>
-                </button>
-              ))}
-            </div>
-
-            <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
-              <ProductGridSection className="min-w-0" />
+              <p className="text-sm text-[#675F56]">{filteredProducts.length} pieces refined for your edit</p>
             </motion.div>
-          </main>
-        </div>
-      </div>
 
-      <FilterDrawer open={drawerOpen} onOpenChange={setDrawerOpen} filters={filters} onChange={setFilters} />
+            <ProductMasonryGrid products={filteredProducts} className="pb-8" />
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

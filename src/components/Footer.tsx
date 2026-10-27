@@ -1,100 +1,121 @@
-import React, { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { ArrowRight, Facebook, Instagram, Linkedin, Mail, Phone, Twitter } from 'lucide-react';
-import { toast } from "sonner";
+import React, { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowRight, Instagram, Linkedin, Twitter, Youtube } from 'lucide-react';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
-export function Footer() {
-  const [email, setEmail] = useState("");
-  const year = useMemo(() => new Date().getFullYear(), []);
-  const links = [
-    { label: "Customer Care", to: "/shop" },
-    { label: "Shipping & Returns", to: "/shop" },
-    { label: "Authenticity", to: "/shop" },
-    { label: "Privacy", to: "/shop" },
-  ];
+export function Footer({ className = '' }: { className?: string } = {}) {
+  const [email, setEmail] = useState('');
+  const links = useMemo(
+    () => ({
+      customerCare: [
+        { label: 'Contact', to: '/shop' },
+        { label: 'Size Guide', to: '/shop' },
+        { label: 'Returns', to: '/shop' },
+      ],
+      shipping: [
+        { label: 'Pan-India delivery', to: '/shop' },
+        { label: 'Secure packaging', to: '/shop' },
+        { label: 'Tracked dispatch', to: '/shop' },
+      ],
+      social: [
+        { icon: Instagram, label: 'Instagram', href: 'https://instagram.com' },
+        { icon: Twitter, label: 'Twitter', href: 'https://twitter.com' },
+        { icon: Linkedin, label: 'LinkedIn', href: 'https://linkedin.com' },
+        { icon: Youtube, label: 'YouTube', href: 'https://youtube.com' },
+      ],
+    }),
+    []
+  );
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const value = email.trim();
-    if (!value || !/^\S+@\S+\.\S+$/.test(value)) {
-      toast.error("Please enter a valid email address.");
+    if (!value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      toast.error('Please enter a valid email address.');
       return;
     }
-    toast.success("Subscribed to Jootiya updates.");
-    setEmail("");
+    toast.success('You are on the list. Expect first access and atelier notes.');
+    setEmail('');
   };
 
   return (
-    <footer className="border-t border-[#8A806F]/30 bg-[#FFFDF8] text-[#211F1C]">
-      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1.2fr_0.8fr_1fr] lg:px-8">
-        <section className="space-y-4">
-          <p className="font-serif text-3xl tracking-tight">Jootiya</p>
-          <p className="max-w-md text-sm leading-6 text-[#514B42]">
-            Authentic Rajasthani Mojris handcrafted in Jodhpur, shaped by artisan skill, heritage materials, and a quiet luxury finish.
+    <footer className={cn('border-t border-[#D8CCB9] bg-[#F5F1E9] text-[#1A1A1A]', className)}>
+      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1.2fr_0.8fr_0.8fr_1.2fr] lg:px-8">
+        <div className="min-w-0 space-y-4">
+          <p className="font-['Playfair_Display'] text-3xl font-light tracking-tight">Jootiya</p>
+          <p className="max-w-md text-sm leading-6 text-[#675F56]">
+            Authentic Jodhpuri mojris shaped by heritage craft, editorial restraint, and modern luxury commerce.
           </p>
-          <div className="flex flex-col gap-2 text-sm text-[#514B42]">
-            <a className="inline-flex items-center gap-2 transition-colors hover:text-[#6B451D]" href="mailto:care@jootiya.com">
-              <Mail className="h-4 w-4" />
-              care@jootiya.com
-            </a>
-            <a className="inline-flex items-center gap-2 transition-colors hover:text-[#6B451D]" href="tel:+919876543210">
-              <Phone className="h-4 w-4" />
-              +91 98765 43210
-            </a>
-          </div>
-        </section>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#675F56]">
+            Crafted in Jodhpur • Delivered across India
+          </p>
+        </div>
 
-        <nav className="space-y-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#514B42]">Explore</p>
-          <div className="flex flex-col gap-2.5">
-            {links.map((link) => (
-              <Link key={link.label} to={link.to} className="group inline-flex items-center justify-between gap-3 text-sm text-[#211F1C] transition-colors hover:text-[#6B451D]">
-                <span className="min-w-0 truncate">{link.label}</span>
-                <ArrowRight className="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
+        <div className="min-w-0">
+          <h3 className="text-xs font-semibold uppercase tracking-[0.24em] text-[#675F56]">Customer Care</h3>
+          <div className="mt-4 flex flex-col gap-2.5">
+            {links.customerCare.map((item) => (
+              <Link key={item.label} to={item.to} className="text-sm text-[#1A1A1A] transition-colors hover:text-[#A94720]">
+                {item.label}
               </Link>
             ))}
           </div>
-        </nav>
+        </div>
 
-        <section className="space-y-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#514B42]">Newsletter</p>
-          <p className="max-w-sm text-sm leading-6 text-[#514B42]">
-            Receive new drop previews, artisan stories, and early access to limited pairs.
-          </p>
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-            <label className="sr-only" htmlFor="footer-email">Email address</label>
-            <input
-              id="footer-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email address"
-              className="h-11 w-full rounded-sm border border-[#8A806F]/40 bg-[#FAF7F0] px-4 text-sm text-[#211F1C] outline-none transition focus:border-[#6B451D]"
-            />
-            <button type="submit" className="inline-flex h-11 items-center justify-center gap-2 rounded-sm bg-[#6B451D] px-4 text-xs font-semibold uppercase tracking-[0.24em] text-white transition-colors hover:bg-[#4E3014]">
-              Subscribe
-              <ArrowRight className="h-4 w-4" />
-            </button>
-          </form>
-          <div className="flex items-center gap-3 pt-2 text-[#514B42]">
-            <a aria-label="Instagram" href="https://instagram.com" target="_blank" rel="noreferrer" className="transition-colors hover:text-[#6B451D]">
-              <Instagram className="h-5 w-5" />
-            </a>
-            <a aria-label="Facebook" href="https://facebook.com" target="_blank" rel="noreferrer" className="transition-colors hover:text-[#6B451D]">
-              <Facebook className="h-5 w-5" />
-            </a>
-            <a aria-label="Twitter" href="https://twitter.com" target="_blank" rel="noreferrer" className="transition-colors hover:text-[#6B451D]">
-              <Twitter className="h-5 w-5" />
-            </a>
-            <a aria-label="LinkedIn" href="https://linkedin.com" target="_blank" rel="noreferrer" className="transition-colors hover:text-[#6B451D]">
-              <Linkedin className="h-5 w-5" />
-            </a>
+        <div className="min-w-0">
+          <h3 className="text-xs font-semibold uppercase tracking-[0.24em] text-[#675F56]">Shipping</h3>
+          <div className="mt-4 flex flex-col gap-2.5">
+            {links.shipping.map((item) => (
+              <Link key={item.label} to={item.to} className="text-sm text-[#1A1A1A] transition-colors hover:text-[#A94720]">
+                {item.label}
+              </Link>
+            ))}
           </div>
-        </section>
-      </div>
+        </div>
 
-      <div className="border-t border-[#8A806F]/20 px-4 py-4 text-center text-xs uppercase tracking-[0.22em] text-[#514B42] sm:px-6 lg:px-8">
-        © {year} Jootiya. Crafted in Jodhpur.
+        <div className="min-w-0">
+          <h3 className="text-xs font-semibold uppercase tracking-[0.24em] text-[#675F56]">Newsletter</h3>
+          <form onSubmit={handleSubmit} className="mt-4 space-y-3">
+            <label className="block text-sm text-[#675F56]" htmlFor="footer-email">
+              Atelier notes, new drops, and private access.
+            </label>
+            <div className="flex items-stretch gap-2">
+              <input
+                id="footer-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email address"
+                className="min-w-0 flex-1 border border-[#D8CCB9] bg-[#FAF9F6] px-4 py-3 text-sm text-[#1A1A1A] outline-none transition-colors placeholder:text-[#675F56]/70 focus:border-[#A94720]"
+              />
+              <button
+                type="submit"
+                className="inline-flex items-center gap-2 border border-[#A94720] bg-[#A94720] px-4 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-white transition-colors hover:bg-[#843616]"
+              >
+                Join
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-3 pt-2">
+              {links.social.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={item.label}
+                    className="inline-flex h-10 w-10 items-center justify-center border border-[#D8CCB9] text-[#1A1A1A] transition-colors hover:border-[#A94720] hover:text-[#A94720]"
+                  >
+                    <Icon className="h-4 w-4" />
+                  </a>
+                );
+              })}
+            </div>
+          </form>
+        </div>
       </div>
     </footer>
   );

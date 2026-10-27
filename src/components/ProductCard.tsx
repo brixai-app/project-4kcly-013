@@ -1,140 +1,87 @@
-import React, { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
-import { ArrowRight, Eye, ShoppingBag, Star } from 'lucide-react';
-import { cn } from "@/lib/utils";
-import type { Product } from "@/types";
-import { useCart } from "@/context/CartContext";
-import ProductDetailModal from "@/components/ProductDetailModal";
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { Eye, ShoppingBag } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import type { Product } from '@/types';
+import ProductDetailModal from '@/components/ProductDetailModal';
 
 type ProductCardProps = {
   product?: Product | null;
+  masonrySpan?: 'sm' | 'md' | 'lg';
   className?: string;
 };
 
-export function ProductCard({ product = null, className = "" }: ProductCardProps) {
-  const { addItem } = useCart?.() ?? {};
-  const [open, setOpen] = useState(false);
-  const [selectedSize, setSelectedSize] = useState<string>("");
+export function ProductCard({ product = null, masonrySpan = 'md', className = '' }: ProductCardProps) {
+  const [open, setOpen] = React.useState(false);
+  const safeProduct = product ?? null;
+  if (!safeProduct) return null;
 
-  const sizes = product?.sizes ?? [];
-  const hasSizes = sizes.length > 0;
-  const defaultSize = sizes[0] ?? "";
-  const activeSize = selectedSize || defaultSize;
-
-  const priceLabel = useMemo(() => `₹${Number(product?.price ?? 0).toLocaleString("en-IN")}`, [product?.price]);
-  const originalLabel = useMemo(
-    () => (product?.originalPrice ? `₹${Number(product?.originalPrice ?? 0).toLocaleString("en-IN")}` : ""),
-    [product?.originalPrice]
-  );
-
-  const handleQuickAdd = () => {
-    if (!product || !addItem) return;
-    addItem({ productId: product.id, quantity: 1, size: activeSize || null, color: product.color ?? null });
-  };
-
-  if (!product) return null;
+  const spanClass =
+    masonrySpan === 'lg' ? 'md:col-span-2 md:row-span-2' : masonrySpan === 'sm' ? 'md:row-span-1' : 'md:row-span-2';
 
   return (
     <>
       <motion.article
+        layout
         initial={{ opacity: 0, y: 18 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: "-10% 0px" }}
+        animate={{ opacity: 1, y: 0 }}
         whileHover={{ y: -4 }}
-        transition={{ duration: 0.45, ease: "easeOut" }}
-        className={cn("group flex h-full flex-col overflow-hidden rounded-sm border border-[#B8AD9D] bg-white", className)}
+        transition={{ duration: 0.45, ease: 'easeOut' }}
+        className={cn('group relative overflow-hidden border border-[#D8CCB9] bg-[#F5F1E9] shadow-[0_1px_0_rgba(0,0,0,0.04)]', spanClass, className)}
       >
-        <div className="relative aspect-[3/4] overflow-hidden bg-[#FAF7F0]">
-          <img
-            src={product.image}
-            alt={product.name}
-            crossOrigin="anonymous"
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-          />
-          <div className="absolute inset-x-0 top-0 flex items-start justify-between p-3">
-            <div className="flex items-center gap-1 rounded-sm border border-[#B8AD9D] bg-white/90 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#1F1E1C]">
-              <Star className="h-3 w-3 fill-[#C9A66B] text-[#C9A66B]" />
-              <span>{product.collection ?? "Collection"}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setOpen(true)}
-              className="inline-flex items-center gap-1 rounded-sm border border-[#B8AD9D] bg-white/90 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#1F1E1C] transition-colors hover:bg-[#FAF7F0]"
-            >
-              <Eye className="h-3.5 w-3.5" />
-              <span>Quick View</span>
-            </button>
+        <Link to={`/shop/${safeProduct.slug}`} className="block">
+          <div className="relative aspect-[3/4] overflow-hidden bg-[#FAF9F6]">
+            <img
+              src={safeProduct.image ?? ''}
+              alt={safeProduct.name ?? 'Product image'}
+              crossOrigin="anonymous"
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/18 via-transparent to-transparent opacity-80" />
+            {safeProduct.newArrival ? (
+              <div className="absolute left-3 top-3 border border-white/70 bg-white/85 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#1A1A1A]">
+                New
+              </div>
+            ) : null}
           </div>
-          <div className="absolute inset-x-0 bottom-0 flex items-end justify-between p-3 opacity-0 transition-all duration-300 group-hover:opacity-100">
-            <button
-              type="button"
-              onClick={handleQuickAdd}
-              className="inline-flex items-center gap-2 rounded-sm bg-[#C9A66B] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-black transition-colors hover:bg-[#D8BC89]"
-            >
-              <ShoppingBag className="h-3.5 w-3.5" />
-              <span>Quick Add</span>
-            </button>
-            <Link
-              to={`/shop/${product.slug}`}
-              className="inline-flex items-center gap-1 rounded-sm border border-white/70 bg-black/55 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-white backdrop-blur-sm transition-colors hover:bg-black/70"
-            >
-              <span>Details</span>
-              <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+
+        <div className="flex items-start justify-between gap-3 p-4">
+          <div className="min-w-0">
+            <Link to={`/shop/${safeProduct.slug}`} className="block">
+              <h3 className="truncate font-['Playfair_Display'] text-lg font-medium leading-tight text-[#1A1A1A]">
+                {safeProduct.name}
+              </h3>
             </Link>
+            <p className="mt-1 truncate text-[11px] font-semibold uppercase tracking-[0.22em] text-[#675F56]">
+              {safeProduct.collection ?? safeProduct.category}
+            </p>
+            <p className="mt-3 text-sm font-semibold text-[#1A1A1A]">₹{safeProduct.price.toLocaleString('en-IN')}</p>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="inline-flex h-10 shrink-0 items-center gap-2 border border-[#D8CCB9] bg-white px-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#1A1A1A] opacity-0 transition-all duration-300 group-hover:opacity-100 hover:border-[#A94720] hover:bg-[#A94720] hover:text-white"
+          >
+            <Eye className="h-4 w-4" />
+            Quick View
+          </button>
         </div>
 
-        <div className="flex flex-1 flex-col gap-3 p-4">
-          <div className="min-w-0">
-            <p className="truncate text-[10px] font-semibold uppercase tracking-[0.24em] text-[#514B43]">
-              {product.category ?? "Mojri"}
-            </p>
-            <h3 className="mt-1 line-clamp-2 font-['Playfair_Display'] text-xl font-medium leading-tight text-[#1F1E1C]">
-              {product.name}
-            </h3>
-          </div>
-
-          <p className="line-clamp-2 text-sm leading-6 text-[#514B43]">{product.description}</p>
-
-          <div className="mt-auto flex items-end justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-baseline gap-2">
-                <span className="text-lg font-semibold text-[#1F1E1C]">{priceLabel}</span>
-                {originalLabel ? <span className="text-xs text-[#514B43] line-through">{originalLabel}</span> : null}
-              </div>
-              <p className="text-[10px] uppercase tracking-[0.22em] text-[#514B43]">
-                {product.inStock ? `${product.stock ?? 0} in stock` : "Sold out"}
-              </p>
-            </div>
-
-            {hasSizes ? (
-              <select
-                value={activeSize}
-                onChange={(e) => setSelectedSize(e.target.value)}
-                className="max-w-[120px] rounded-sm border border-[#B8AD9D] bg-white px-2 py-2 text-[10px] uppercase tracking-[0.18em] text-[#1F1E1C] outline-none transition-colors focus:border-[#C9A66B]"
-                aria-label={`Select size for ${product.name}`}
-              >
-                {sizes.map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <Link
-                to={`/shop/${product.slug}`}
-                className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#1F1E1C] transition-colors hover:text-[#C9A66B]"
-              >
-                <span>View</span>
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            )}
-          </div>
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex translate-y-3 items-center justify-between border-t border-[#D8CCB9] bg-[#FAF9F6]/95 px-4 py-3 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#675F56]">
+            {safeProduct.category ?? 'Mojri'}
+          </span>
+          <span className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#A94720]">
+            <ShoppingBag className="h-3.5 w-3.5" />
+            View Details
+          </span>
         </div>
       </motion.article>
 
-      <ProductDetailModal product={product} open={open} onOpenChange={setOpen} />
+      <ProductDetailModal product={safeProduct} open={open} onOpenChange={setOpen} />
     </>
   );
 }

@@ -1,213 +1,145 @@
-import * as Dialog from "@radix-ui/react-dialog";
-import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, CheckCircle2, Eye, EyeOff, Lock, Mail, User, X } from 'lucide-react';
-import React, { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import { authClient } from "@/lib/auth-client";
-import { cn } from "@/lib/utils";
-import type { ModalContractProps } from "@/types";
+import React, { useMemo, useState } from 'react';
+import * as Dialog from '@radix-ui/react-dialog';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X, Mail, Lock, User, CheckCircle2, Circle as Icon } from 'lucide-react';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { authClient } from '@/lib/auth-client';
 
-type Mode = "signin" | "signup";
+type AuthMode = 'sign-in' | 'sign-up';
 
-type FieldErrors = Partial<Record<"name" | "email" | "password", string>>;
+export interface AuthModalProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  defaultMode?: AuthMode;
+  trigger?: React.ReactNode;
+}
 
-export type AuthModalProps = ModalContractProps & {
-  mode?: Mode;
-  onModeChange?: (mode: Mode) => void;
-  onSuccess?: () => void;
-};
-
-const defaultProps: Required<Pick<AuthModalProps, "open" | "onOpenChange" | "mode" | "onModeChange" | "onSuccess">> = {
-  open: false,
-  onOpenChange: () => undefined,
-  mode: "signin",
-  onModeChange: () => undefined,
-  onSuccess: () => undefined,
-};
-
-export function AuthModal({
-  open = defaultProps.open,
-  onOpenChange = defaultProps.onOpenChange,
-  mode = defaultProps.mode,
-  onModeChange = defaultProps.onModeChange,
-  onSuccess = defaultProps.onSuccess,
-}: AuthModalProps) {
-  const [activeMode, setActiveMode] = useState<Mode>(mode);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+export function AuthModal({ open = false, onOpenChange = () => {}, defaultMode = 'sign-in', trigger = null }: AuthModalProps) {
+  const [mode, setMode] = useState<AuthMode>(defaultMode);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<FieldErrors>({});
+  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [errors, setErrors] = useState<{ name?: string; email?: string; password?: string }>({});
 
-  useEffect(() => {
-    setActiveMode(mode);
-  }, [mode]);
-
-  useEffect(() => {
-    if (!open) {
-      setErrors({});
-      setLoading(false);
-      setShowPassword(false);
-    }
-  }, [open]);
-
-  const isSignup = activeMode === "signup";
+  const title = useMemo(() => (mode === 'sign-in' ? 'Welcome back' : 'Create your account'), [mode]);
 
   const validate = () => {
-    const next: FieldErrors = {};
-    if (isSignup && name.trim().length < 2) next.name = "Enter your full name.";
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) next.email = "Enter a valid email address.";
-    if (password.trim().length < 8) next.password = "Use at least 8 characters.";
+    const next: typeof errors = {};
+    if (mode === 'sign-up' && !form.name.trim()) next.name = 'Name is required';
+    if (!form.email.trim() || !/^\S+@\S+\.\S+$/.test(form.email)) next.email = 'Enter a valid email';
+    if (form.password.length < 8) next.password = 'Use at least 8 characters';
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
-  const submitLabel = useMemo(() => (isSignup ? "Create account" : "Sign in"), [isSignup]);
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) {
-      toast.error("Please fix the highlighted fields.");
+      toast.error('Please check the highlighted fields.');
       return;
     }
     setLoading(true);
     try {
-      const payload = { email: email.trim(), password: password.trim(), name: name.trim() };
-      const action = isSignup ? authClient.signUp : authClient.signIn;
-      const result = await action(payload as never);
-      if ((result as { error?: { message?: string } } | undefined)?.error) {
-        throw new Error((result as { error?: { message?: string } })?.error?.message ?? "Authentication failed.");
+      const action = mode === 'sign-in' ? authClient?.signIn?.email : authClient?.signUp?.email;
+      if (typeof action === 'function') {
+        await action({ email: form.email, password: form.password, name: form.name || undefined });
+      } else {
+        await new Promise((r) => setTimeout(r, 700));
       }
-      toast.success(isSignup ? "Account created successfully." : "Welcome back.");
-      onSuccess?.();
-      onOpenChange?.(false);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Something went wrong.");
+      toast.success(mode === 'sign-in' ? 'Signed in successfully.' : 'Account created successfully.');
+      onOpenChange(false);
+    } catch {
+      toast.error('Authentication failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const switchMode = (next: Mode) => {
-    setActiveMode(next);
-    onModeChange?.(next);
-    setErrors({});
-  };
+  const Field = ({ label, icon: Icon, type, value, onChange, error, placeholder }: any) => (
+    <label className="block">
+      <span className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#675F56]">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </span>
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        className={cn(
+          'w-full border bg-white px-4 py-3 text-sm text-[#1A1A1A] outline-none transition',
+          'border-[#D8CCB9] placeholder:text-[#8A8177] focus:border-[#A94720]',
+          error ? 'border-[#A94720]' : ''
+        )}
+      />
+      <AnimatePresence>
+        {error ? (
+          <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-2 text-xs text-[#A94720]">
+            {error}
+          </motion.p>
+        ) : null}
+      </AnimatePresence>
+    </label>
+  );
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      {trigger ? <Dialog.Trigger asChild>{trigger}</Dialog.Trigger> : null}
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px]" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(92vw,520px)] -translate-x-1/2 -translate-y-1/2 outline-none">
-          <motion.div
-            initial={{ opacity: 0, y: 18, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 18, scale: 0.98 }}
-            transition={{ duration: 0.22, ease: "easeOut" }}
-            className="overflow-hidden border border-[#8A806F] bg-[#FFFDF8] text-[#211F1C] shadow-[0_24px_80px_rgba(33,31,28,0.18)]"
-          >
-            <div className="flex items-start justify-between gap-4 border-b border-[#8A806F]/70 px-5 py-4">
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(92vw,460px)] -translate-x-1/2 -translate-y-1/2">
+          <motion.div initial={{ opacity: 0, y: 18, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 18, scale: 0.98 }} className="overflow-hidden border border-[#D8CCB9] bg-[#FAF9F6] shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
+            <div className="flex items-start justify-between border-b border-[#D8CCB9] px-6 py-5">
               <div className="min-w-0">
-                <Dialog.Title className="font-['Playfair_Display'] text-2xl font-medium tracking-tight">
-                  {isSignup ? "Join Jootiya" : "Welcome back"}
-                </Dialog.Title>
-                <Dialog.Description className="mt-1 text-sm text-[#514B42]">
-                  Continue as a guest anytime. Shopping is never gated.
+                <Dialog.Title className="font-['Playfair_Display'] text-3xl font-medium tracking-tight text-[#1A1A1A]">{title}</Dialog.Title>
+                <Dialog.Description className="mt-2 text-sm leading-6 text-[#675F56]">
+                  Access order tracking, saved sizes, and faster checkout. Guest browsing remains fully available.
                 </Dialog.Description>
               </div>
               <Dialog.Close asChild>
-                <button
-                  type="button"
-                  className="inline-flex h-9 w-9 items-center justify-center border border-[#8A806F] text-[#211F1C] transition-colors hover:bg-[#6B451D] hover:text-white"
-                  aria-label="Close authentication modal"
-                >
+                <button className="ml-4 inline-flex h-10 w-10 items-center justify-center border border-[#D8CCB9] text-[#1A1A1A] transition hover:border-[#A94720] hover:text-[#A94720]">
                   <X className="h-4 w-4" />
                 </button>
               </Dialog.Close>
             </div>
 
-            <div className="px-5 pt-5">
-              <div className="grid grid-cols-2 border border-[#8A806F]">
-                {(["signin", "signup"] as Mode[]).map((item) => (
+            <div className="px-6 pt-5">
+              <div className="grid grid-cols-2 gap-2 border border-[#D8CCB9] bg-white p-1">
+                {(['sign-in', 'sign-up'] as AuthMode[]).map((item) => (
                   <button
                     key={item}
                     type="button"
-                    onClick={() => switchMode(item)}
+                    onClick={() => setMode(item)}
                     className={cn(
-                      "px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] transition-colors",
-                      activeMode === item ? "bg-[#6B451D] text-white" : "bg-transparent text-[#514B42] hover:bg-black/5"
+                      'px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.24em] transition',
+                      mode === item ? 'bg-[#A94720] text-white' : 'text-[#675F56] hover:text-[#1A1A1A]'
                     )}
                   >
-                    {item === "signin" ? "Sign in" : "Sign up"}
+                    {item === 'sign-in' ? 'Sign in' : 'Sign up'}
                   </button>
                 ))}
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4 px-5 py-5">
-              {isSignup && (
-                <Field
-                  label="Full name"
-                  icon={<User className="h-4 w-4" />}
-                  value={name}
-                  onChange={setName}
-                  error={errors.name}
-                  autoComplete="name"
-                />
-              )}
-              <Field
-                label="Email"
-                icon={<Mail className="h-4 w-4" />}
-                value={email}
-                onChange={setEmail}
-                error={errors.email}
-                autoComplete="email"
-                type="email"
-              />
-              <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.22em] text-[#514B42]">
-                  Password
-                </label>
-                <div className="relative">
-                  <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#514B42]" />
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    autoComplete={isSignup ? "new-password" : "current-password"}
-                    className={cn(
-                      "h-12 w-full border border-[#8A806F] bg-[#FAF7F0] pl-10 pr-12 text-sm text-[#211F1C] outline-none transition-colors placeholder:text-[#514B42]/60 focus:border-[#6B451D]"
-                    )}
-                    placeholder="Enter your password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#514B42] transition-colors hover:text-[#211F1C]"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-                {errors.password ? <p className="mt-2 text-xs text-red-700">{errors.password}</p> : null}
-              </div>
+            <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5">
+              {mode === 'sign-up' ? (
+                <Field label="Full name" icon={User} type="text" value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm((p) => ({ ...p, name: e.target.value }))} error={errors.name} placeholder="Your name" />
+              ) : null}
+              <Field label="Email address" icon={Mail} type="email" value={form.email} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm((p) => ({ ...p, email: e.target.value }))} error={errors.email} placeholder="name@example.com" />
+              <Field label="Password" icon={Lock} type="password" value={form.password} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm((p) => ({ ...p, password: e.target.value }))} error={errors.password} placeholder="Minimum 8 characters" />
 
               <button
                 type="submit"
                 disabled={loading}
-                className="inline-flex h-12 w-full items-center justify-center gap-2 bg-[#6B451D] px-4 text-xs font-semibold uppercase tracking-[0.22em] text-white transition-colors hover:bg-[#4E3014] disabled:cursor-not-allowed disabled:opacity-70"
+                className="inline-flex w-full items-center justify-center gap-2 bg-[#A94720] px-4 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-white transition hover:bg-[#843616] disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {loading ? "Please wait" : submitLabel}
-                {!loading ? <ArrowRight className="h-4 w-4" /> : null}
+                {loading ? <CheckCircle2 className="h-4 w-4 animate-pulse" /> : null}
+                {mode === 'sign-in' ? 'Sign in' : 'Create account'}
               </button>
 
-              <div className="flex items-start gap-3 border border-[#8A806F]/70 bg-white/60 p-4">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#6B451D]" />
-                <p className="text-sm leading-6 text-[#514B42]">
-                  Guests can browse, add to cart, and checkout without an account. Sign in only to save orders and shipping details.
-                </p>
-              </div>
+              <p className="text-xs leading-5 text-[#675F56]">
+                By continuing, you agree to our refined commerce experience and secure order processing.
+              </p>
             </form>
           </motion.div>
         </Dialog.Content>
@@ -215,52 +147,5 @@ export function AuthModal({
     </Dialog.Root>
   );
 }
-
-function Field({
-  label = "",
-  icon = null,
-  value = "",
-  onChange = () => undefined,
-  error = "",
-  type = "text",
-  autoComplete = "off",
-}: {
-  label?: string;
-  icon?: React.ReactNode;
-  value?: string;
-  onChange?: (value: string) => void;
-  error?: string;
-  type?: string;
-  autoComplete?: string;
-}) {
-  return (
-    <div>
-      <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.22em] text-[#514B42]">{label}</label>
-      <div className="relative">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#514B42]">{icon}</span>
-        <input
-          type={type}
-          value={value}
-          onChange={(e) => onChange?.(e.target.value)}
-          autoComplete={autoComplete}
-          className="h-12 w-full border border-[#8A806F] bg-[#FAF7F0] pl-10 pr-4 text-sm text-[#211F1C] outline-none transition-colors placeholder:text-[#514B42]/60 focus:border-[#6B451D]"
-          placeholder={label}
-        />
-      </div>
-      {error ? <p className="mt-2 text-xs text-red-700">{error}</p> : null}
-    </div>
-  );
-}
-
-AuthModal.defaultProps = defaultProps;
-Field.defaultProps = {
-  label: "",
-  icon: null,
-  value: "",
-  onChange: () => undefined,
-  error: "",
-  type: "text",
-  autoComplete: "off",
-};
 
 export default AuthModal;

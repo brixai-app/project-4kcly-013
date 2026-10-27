@@ -1,45 +1,59 @@
-export type Product = {
+export type ProductSize = 'UK 5' | 'UK 6' | 'UK 7' | 'UK 8' | 'UK 9' | 'UK 10';
+
+export interface Product {
   id: string;
-  slug: string;
   name: string;
+  slug: string;
+  price: number;
+  compareAtPrice?: number | null;
   category: string;
   collection: string;
-  price: number;
-  originalPrice?: number | null;
   description: string;
-  story?: string;
   image: string;
-  images?: string[];
-  artisanId?: string | null;
-  material?: string;
-  color?: string;
-  sizes?: string[];
-  inStock: boolean;
-  stock: number;
+  gallery: string[];
+  artisanId: string;
   featured?: boolean;
-  tags?: string[];
-};
+  newArrival?: boolean;
+  inStock?: boolean;
+  sizes: ProductSize[];
+  materials: string[];
+  color: string;
+  rating?: number;
+  reviewCount?: number;
+}
 
-export type Artisan = {
+export interface Artisan {
   id: string;
   name: string;
-  village?: string;
-  district?: string;
-  specialty: string;
-  bio: string;
-  portrait?: string;
+  title: string;
+  location: string;
+  story: string;
+  image: string;
+  specialties: string[];
   yearsActive?: number;
-  techniques?: string[];
-};
+}
 
-export type CartItem = {
+export interface Review {
+  id: string;
+  productId: string;
+  author: string;
+  rating: number;
+  title: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface CartItem {
   productId: string;
   quantity: number;
-  size?: string | null;
-  color?: string | null;
-};
+  size: ProductSize;
+  price: number;
+  name: string;
+  image: string;
+  slug: string;
+}
 
-export type ShippingInfo = {
+export interface ShippingInfo {
   fullName: string;
   phone: string;
   email: string;
@@ -48,56 +62,48 @@ export type ShippingInfo = {
   city: string;
   state: string;
   postalCode: string;
-  country: string;
-};
+  country: 'India';
+}
 
-export type PaymentInfo = {
-  method: "cod" | "upi" | "card" | "netbanking";
+export interface PaymentInfo {
+  method: 'card' | 'upi' | 'cod';
+  cardHolderName?: string;
+  cardNumber?: string;
+  expiryMonth?: string;
+  expiryYear?: string;
+  cvv?: string;
   upiId?: string;
-  cardLast4?: string;
-  cardholderName?: string;
-};
+}
 
-export type Order = {
+export interface Order {
   id: string;
   orderNumber: string;
   items: CartItem[];
-  shipping: ShippingInfo;
-  payment: PaymentInfo;
   subtotal: number;
-  shippingFee: number;
+  shipping: number;
   total: number;
-  status: "pending" | "confirmed" | "packed" | "shipped" | "delivered" | "cancelled";
+  shippingInfo: ShippingInfo;
+  paymentInfo: PaymentInfo;
+  status: 'pending' | 'confirmed' | 'shipped' | 'delivered';
   createdAt: string;
-};
+}
 
-export type FilterState = {
-  query: string;
-  categories: string[];
-  collections: string[];
-  priceRange: [number, number];
-  inStockOnly: boolean;
-  artisanIds: string[];
-};
-
-export type CheckoutValidationErrors = Partial<{
-  fullName: string;
-  phone: string;
+export interface AuthUser {
+  id: string;
+  name: string;
   email: string;
-  addressLine1: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
-  paymentMethod: string;
-  upiId: string;
-  cardholderName: string;
-  cardLast4: string;
-}>;
+  image?: string | null;
+}
 
-export type CheckoutValidationResult = {
-  valid: boolean;
-  errors: CheckoutValidationErrors;
-};
+export interface SessionUser {
+  user: AuthUser | null;
+  expires?: string | null;
+}
 
-export default Product;
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  message?: string;
+}
+
+export default {} as const;
