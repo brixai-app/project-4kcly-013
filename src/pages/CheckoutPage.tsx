@@ -7,20 +7,23 @@ import { useCart } from '@/context/CartContext';
 import { shippingMethods } from '@/data/mockData';
 import type { Order } from '@/types';
 
-type CheckoutPageProps = {
-  className?: string;
-};
+const safeNumber = (value?: number | null) => Number(value ?? 0);
 
-export function CheckoutPage({ className = '' }: CheckoutPageProps) {
+export function CheckoutPage({ className = '' }: { className?: string }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { items, subtotal, shipping, total, clearCart } = useCart() as {
+  const cart = useCart() as {
     items?: unknown[];
     subtotal?: number;
     shipping?: number;
     total?: number;
     clearCart?: () => void;
   };
+  const items = cart?.items ?? [];
+  const subtotal = cart?.subtotal ?? 0;
+  const shipping = cart?.shipping ?? 0;
+  const total = cart?.total ?? 0;
+  const clearCart = cart?.clearCart;
   const [order, setOrder] = React.useState<Order | null>(null);
 
   const isConfirmation = location.pathname?.includes('/confirmation') ?? false;
@@ -67,7 +70,7 @@ export function CheckoutPage({ className = '' }: CheckoutPageProps) {
             <div className="rounded-md border border-[#D8CDBE] bg-white p-4">
               <CheckCircle2 className="h-5 w-5 text-[#C9A66B]" />
               <p className="mt-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#6E665D]">Total</p>
-              <p className="mt-2 text-sm text-[#2B2B2B]">₹{Number(activeOrder?.total ?? total ?? 0).toLocaleString('en-IN')}</p>
+              <p className="mt-2 text-sm text-[#2B2B2B]">₹{safeNumber(activeOrder?.total ?? total).toLocaleString('en-IN')}</p>
             </div>
           </div>
 

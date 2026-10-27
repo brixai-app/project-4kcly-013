@@ -13,6 +13,8 @@ import CheckoutPage from './pages/CheckoutPage';
 import { products } from './data/mockData';
 import ProductDetailModal from './components/ProductDetailModal';
 
+const safePathname = (pathname?: string) => pathname ?? '/';
+
 function AppRoutes() {
   const location = useLocation();
   const [cartOpen, setCartOpen] = useState(false);
@@ -48,12 +50,14 @@ function AppRoutes() {
     setPreviewSlug('');
   }, [location.pathname]);
 
+  const routeKey = safePathname(location.pathname);
+
   return (
     <div className="min-h-screen bg-[#F5F1EB] text-[#2B2B2B]">
       <Header />
       <AnimatePresence mode="wait">
         <motion.main
-          key={location.pathname}
+          key={routeKey}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
