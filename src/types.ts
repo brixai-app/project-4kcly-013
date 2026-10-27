@@ -3,20 +3,27 @@ export type Product = {
   name: string;
   slug: string;
   price: number;
-  currency?: string;
+  description: string;
   category: string;
   collection?: string;
-  description?: string;
   image: string;
-  gallery?: string[];
-  artisan?: string;
-  origin?: string;
-  material?: string;
+  images?: string[];
   sizes?: string[];
-  featured?: boolean;
-  inStock?: boolean;
+  colors?: string[];
+  artisan?: Artisan;
   rating?: number;
   reviewCount?: number;
+  inStock?: boolean;
+  featured?: boolean;
+};
+
+export type Artisan = {
+  id: string;
+  name: string;
+  location?: string;
+  craft?: string;
+  bio?: string;
+  image?: string;
 };
 
 export type Review = {
@@ -26,55 +33,47 @@ export type Review = {
   rating: number;
   title?: string;
   body: string;
-  createdAt: string;
+  createdAt?: string;
 };
 
 export type CartItem = {
-  productId: string;
-  name: string;
-  image: string;
-  price: number;
+  product: Product;
   quantity: number;
-  size?: string;
-  color?: string;
+  selectedSize?: string;
+  selectedColor?: string;
 };
 
-export type Order = {
-  id: string;
-  orderNumber: string;
-  items: CartItem[];
-  subtotal: number;
-  shipping: number;
-  total: number;
-  currency?: string;
-  customerName: string;
+export type ShippingDetails = {
+  fullName: string;
   email: string;
-  phone?: string;
+  phone: string;
   addressLine1: string;
   addressLine2?: string;
   city: string;
   state: string;
   postalCode: string;
   country: string;
-  status: "pending" | "paid" | "processing" | "shipped" | "delivered" | "cancelled";
-  createdAt: string;
 };
 
-export type CheckoutField = {
-  name: string;
-  label: string;
-  type: "text" | "email" | "tel" | "textarea" | "select";
-  required?: boolean;
-  placeholder?: string;
-  autoComplete?: string;
-  options?: string[];
+export type PaymentMethod = "card" | "upi" | "cod";
+
+export type Order = {
+  id: string;
+  items: CartItem[];
+  shipping: ShippingDetails;
+  paymentMethod: PaymentMethod;
+  subtotal: number;
+  shippingFee: number;
+  total: number;
+  status: "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
+  createdAt: string;
 };
 
 export type ApiResponse<T> = {
   success: boolean;
   data?: T;
-  error?: string;
   message?: string;
+  error?: string;
 };
 
 export type ProductsResponse = ApiResponse<Product[]>;
@@ -82,7 +81,13 @@ export type ProductResponse = ApiResponse<Product>;
 export type ReviewsResponse = ApiResponse<Review[]>;
 export type OrderResponse = ApiResponse<Order>;
 export type OrdersResponse = ApiResponse<Order[]>;
-export type CartResponse = ApiResponse<CartItem[]>;
-export type CheckoutResponse = ApiResponse<{ orderId: string; orderNumber: string }>;
+export type AuthResponse = ApiResponse<{
+  user?: {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+    image?: string | null;
+  } | null;
+}>;
 
-export default {};
+export default Product;

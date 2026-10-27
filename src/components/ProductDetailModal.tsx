@@ -1,51 +1,55 @@
 import { useEffect, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, Check, Minus, Plus, X } from 'lucide-react';
+import { Check, X, ShoppingBag, Star, ChevronRight } from 'lucide-react';
 import { toast } from "sonner";
+import type { Product } from "@/types";
 import { cn } from "@/lib/utils";
 import { useCart } from "@/context/CartContext";
-import type { Product } from "@/types";
 
 type ProductDetailModalProps = {
+  product?: Product | null;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  product?: Product | null;
 };
 
-const verifiedFallback = "https://images.unsplash.com/photo-1533867617858-e7b97e060509?auto=format&fit=crop&w=800&q=80";
+export function ProductDetailModal({
+  product = null,
+  open = false,
+  onOpenChange = () => {},
+}: ProductDetailModalProps) {
+  const { addItem } = useCart() as {
+    addItem?: (product: Product, quantity?: number, selectedSize?: string, selectedColor?: string) => void;
+  };
+  const [selectedSize, setSelectedSize] = useState("");
+  const [selectedColor, setSelectedColor] = useState("");
+  const [loading, setLoading] = useState(false);
 
-export function ProductDetailModal({ open = false, onOpenChange = () => {}, product = null }: ProductDetailModalProps) {
-  const { addToCart } = useCart?.() ?? { addToCart: () => {} };
-  const [size, setSize] = useState("");
-  const [quantity, setQuantity] = useState(1);
-
-  const sizes = useMemo(() => product?.sizes?.filter(Boolean) ?? [], [product?.sizes]);
-  const gallery = useMemo(() => {
-    const images = [product?.image, ...(product?.gallery ?? [])].filter(Boolean) as string[];
-    return images.length > 0 ? images : [verifiedFallback];
-  }, [product?.gallery, product?.image]);
+  const sizes = useMemo(() => product?.sizes ?? ["7", "8", "9", "10", "11"], [product?.sizes]);
+  const colors = useMemo(() => product?.colors ?? ["Tan", "Brown", "Black"], [product?.colors]);
 
   useEffect(() => {
-    setQuantity(1);
-    setSize(product?.sizes?.[0] ?? "");
-  }, [product?.id, product?.sizes]);
+    if (!open) return;
+    setSelectedSize(product?.sizes?.[0] ?? "");
+    setSelectedColor(product?.colors?.[0] ?? "");
+    setLoading(false);
+  }, [open, product?.id, product?.sizes, product?.colors]);
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!product) return;
-    if ((sizes?.length ?? 0) > 0 && !size) {
-      toast.error("Please select a size before adding to cart.");
+    if ((product?.sizes?.length ?? 0) > 0 && !selectedSize) {
+      toast.error("Please select a size.");
       return;
     }
-    addToCart?.({
-      productId: product.id,
-      name: product.name,
-      image: product.image ?? verifiedFallback,
-      price: product.price,
-      quantity,
-      size: size || undefined,
-    });
-    toast.success(`${product.name} added to cart.`);
+    if ((product?.colors?.length ?? 0) > 0 && !selectedColor) {
+      toast.error("Please select a color.");
+      return;
+    }
+    setLoading(true);
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    addItem?.(product, 1, selectedSize || undefined, selectedColor || undefined);
+    toast.success("Added to cart.");
+    setLoading(false);
     onOpenChange(false);
   };
 
@@ -68,136 +72,129 @@ export function ProductDetailModal({ open = false, onOpenChange = () => {}, prod
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 24, scale: 0.98 }}
                 transition={{ duration: 0.22, ease: "easeOut" }}
-                className="fixed left-1/2 top-1/2 z-50 w-[min(94vw,980px)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-sm border border-[#CFC1AD] bg-[#FFFCF6] text-[#2E2E2E] shadow-2xl"
+                className="fixed left-1/2 top-1/2 z-50 w-[min(94vw,980px)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-sm border border-[#D8CCB8] bg-[#FFFDF8] text-[#2B2B2B] shadow-2xl"
               >
-                <div className="grid max-h-[88vh] grid-cols-1 overflow-hidden lg:grid-cols-[1.1fr_0.9fr]">
-                  <div className="relative min-h-[320px] bg-[#F5F1E9]">
-                    <div className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-none border border-[#CFC1AD] bg-[#FFFCF6]/90 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#6F675D] backdrop-blur">
-                      <ArrowLeft className="h-3.5 w-3.5" />
-                      Quick View
+                <div className="grid max-h-[88vh] md:grid-cols-[1.05fr_0.95fr]">
+                  <div className="relative min-h-[320px] bg-[#FAF7F0]">
+                    <img
+                      src={product?.image ?? "https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&w=1400&q=85"}
+                      alt={product?.name ?? "Product preview"}
+                      crossOrigin="anonymous"
+                      className="h-full w-full object-cover"
+                    />
+                    <Dialog.Close asChild>
+                      <button
+                        type="button"
+                        className="absolute right-3 top-3 inline-flex h-10 w-10 items-center justify-center rounded-sm border border-[#D8CCB8] bg-[#FFFDF8]/90 text-[#2B2B2B] transition hover:border-[#9A7440] hover:text-[#9A7440]"
+                        aria-label="Close preview"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </Dialog.Close>
+                  </div>
+
+                  <div className="flex min-h-0 flex-col gap-5 overflow-y-auto p-5 md:p-7">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-[#6D6257]">
+                        <span>{product?.collection ?? product?.category ?? "Heritage Collection"}</span>
+                        <ChevronRight className="h-3.5 w-3.5" />
+                        <span>Quick Preview</span>
+                      </div>
+                      <Dialog.Title className="font-['Playfair_Display'] text-3xl font-normal tracking-tight text-[#2B2B2B] md:text-4xl">
+                        {product?.name ?? "Selected Mojri"}
+                      </Dialog.Title>
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg font-semibold text-[#9A7440]">
+                          ₹{Number(product?.price ?? 0).toLocaleString("en-IN")}
+                        </span>
+                        <div className="flex items-center gap-1 text-sm text-[#6D6257]">
+                          <Star className="h-4 w-4 fill-current text-[#9A7440]" />
+                          <span>{product?.rating?.toFixed(1) ?? "4.8"}</span>
+                          <span>·</span>
+                          <span>{product?.reviewCount ?? 0} reviews</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="grid h-full grid-cols-1 gap-2 p-3 sm:grid-cols-[1fr_88px]">
-                      <motion.div className="relative overflow-hidden rounded-sm border border-[#CFC1AD] bg-white">
-                        <img
-                          src={gallery?.[0] ?? verifiedFallback}
-                          alt={product?.name ?? "Product image"}
-                          crossOrigin="anonymous"
-                          className="h-full w-full object-cover"
-                        />
-                      </motion.div>
-                      <div className="flex gap-2 overflow-x-auto sm:flex-col sm:overflow-y-auto">
-                        {gallery.slice(1, 5).map((src, index) => (
-                          <motion.button
-                            key={`${src}-${index}`}
+
+                    <p className="text-sm leading-7 text-[#6D6257]">
+                      {product?.description ?? "An artisanal Jodhpuri silhouette shaped in a refined heritage palette."}
+                    </p>
+
+                    <div className="space-y-3">
+                      <div className="text-[11px] uppercase tracking-[0.28em] text-[#6D6257]">Size</div>
+                      <div className="flex flex-wrap gap-2">
+                        {sizes.map((size) => (
+                          <button
+                            key={size}
                             type="button"
-                            whileHover={{ scale: 1.02 }}
-                            className="h-20 w-20 shrink-0 overflow-hidden rounded-sm border border-[#CFC1AD] bg-white sm:h-24 sm:w-full"
+                            onClick={() => setSelectedSize(size)}
+                            className={cn(
+                              "min-w-0 rounded-sm border px-3 py-2 text-xs font-semibold uppercase tracking-widest transition",
+                              selectedSize === size
+                                ? "border-[#9A7440] bg-[#9A7440] text-black"
+                                : "border-[#D8CCB8] bg-[#FFFDF8] text-[#2B2B2B] hover:border-[#9A7440]"
+                            )}
                           >
-                            <img src={src} alt={`${product?.name ?? "Product"} ${index + 2}`} crossOrigin="anonymous" className="h-full w-full object-cover" />
-                          </motion.button>
+                            {size}
+                          </button>
                         ))}
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex min-h-0 flex-col gap-5 overflow-y-auto p-5 sm:p-6">
-                    <div className="space-y-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[#6F675D]">{product?.collection ?? product?.category ?? "Mojri"}</p>
-                      <Dialog.Title className="font-['Playfair_Display'] text-3xl font-light tracking-tight text-[#2E2E2E]">
-                        {product?.name ?? "Selected Piece"}
-                      </Dialog.Title>
-                      <div className="flex items-center gap-3 text-sm text-[#6F675D]">
-                        <span className="font-semibold text-[#2E2E2E]">
-                          {new Intl.NumberFormat("en-IN", {
-                            style: "currency",
-                            currency: product?.currency ?? "INR",
-                            maximumFractionDigits: 0,
-                          }).format(product?.price ?? 0)}
-                        </span>
-                        <span className="h-1 w-1 rounded-full bg-[#CFC1AD]" />
-                        <span>{product?.artisan ?? "Hand-finished by Jodhpur artisans"}</span>
-                      </div>
-                    </div>
-
-                    <Dialog.Description className="text-sm leading-7 text-[#6F675D]">
-                      {product?.description ??
-                        "A refined Jodhpuri silhouette shaped in heritage craft, with a balanced profile, supple finish, and ceremonial ease for everyday wear."}
-                    </Dialog.Description>
-
-                    <div className="grid gap-3 text-sm text-[#6F675D]">
+                    <div className="space-y-3">
+                      <div className="text-[11px] uppercase tracking-[0.28em] text-[#6D6257]">Color</div>
                       <div className="flex flex-wrap gap-2">
-                        <span className="min-w-0 rounded-sm border border-[#CFC1AD] px-3 py-2">
-                          Origin: {product?.origin ?? "Jodhpur, Rajasthan"}
-                        </span>
-                        <span className="min-w-0 rounded-sm border border-[#CFC1AD] px-3 py-2">
-                          Material: {product?.material ?? "Leather and woven textile"}
-                        </span>
+                        {colors.map((color) => (
+                          <button
+                            key={color}
+                            type="button"
+                            onClick={() => setSelectedColor(color)}
+                            className={cn(
+                              "min-w-0 rounded-sm border px-3 py-2 text-xs font-semibold uppercase tracking-widest transition",
+                              selectedColor === color
+                                ? "border-[#9A7440] bg-[#9A7440] text-black"
+                                : "border-[#D8CCB8] bg-[#FFFDF8] text-[#2B2B2B] hover:border-[#9A7440]"
+                            )}
+                          >
+                            {color}
+                          </button>
+                        ))}
                       </div>
                     </div>
 
-                    {(sizes?.length ?? 0) > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[#6F675D]">Select Size</p>
-                        <div className="flex flex-wrap gap-2">
-                          {sizes.map((item) => (
-                            <button
-                              key={item}
-                              type="button"
-                              onClick={() => setSize(item)}
-                              className={cn(
-                                "min-w-0 rounded-sm border px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition",
-                                size === item
-                                  ? "border-[#8B0000] bg-[#8B0000] text-white"
-                                  : "border-[#CFC1AD] bg-[#FFFCF6] text-[#2E2E2E] hover:border-[#8B0000] hover:text-[#8B0000]"
-                              )}
-                            >
-                              {item}
-                            </button>
-                          ))}
+                    <div className="rounded-sm border border-[#D8CCB8] bg-[#FAF7F0] p-4">
+                      <div className="flex items-start gap-3">
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#9A7440]" />
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-[#2B2B2B]">Heritage craftsmanship</div>
+                          <div className="mt-1 text-sm leading-6 text-[#6D6257]">
+                            Hand-finished detailing, secure checkout, and curated packaging for every order.
+                          </div>
                         </div>
                       </div>
-                    )}
+                    </div>
 
-                    <div className="flex items-center justify-between gap-3 border-t border-[#CFC1AD] pt-4">
-                      <div className="flex items-center gap-2 rounded-sm border border-[#CFC1AD] bg-[#FFFCF6] p-1">
-                        <button
-                          type="button"
-                          onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                          className="grid h-9 w-9 place-items-center rounded-sm text-[#2E2E2E] transition hover:bg-[#F5F1E9]"
-                        >
-                          <Minus className="h-4 w-4" />
-                        </button>
-                        <span className="w-8 text-center text-sm font-semibold">{quantity}</span>
-                        <button
-                          type="button"
-                          onClick={() => setQuantity((q) => q + 1)}
-                          className="grid h-9 w-9 place-items-center rounded-sm text-[#2E2E2E] transition hover:bg-[#F5F1E9]"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </button>
-                      </div>
-
+                    <div className="mt-auto flex flex-col gap-3 pt-2 sm:flex-row">
                       <button
                         type="button"
                         onClick={handleAdd}
-                        className="inline-flex items-center gap-2 rounded-sm bg-[#8B0000] px-5 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-white transition hover:bg-[#650000]"
+                        disabled={loading}
+                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-sm bg-[#9A7440] px-5 py-3 text-xs font-semibold uppercase tracking-widest text-black transition hover:bg-[#76562E] disabled:cursor-not-allowed disabled:opacity-70"
                       >
-                        <Check className="h-4 w-4" />
-                        Add to Cart
+                        <ShoppingBag className="h-4 w-4" />
+                        {loading ? "Adding..." : "Add to Cart"}
                       </button>
+                      <Dialog.Close asChild>
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-center rounded-sm border border-[#D8CCB8] px-5 py-3 text-xs font-semibold uppercase tracking-widest text-[#2B2B2B] transition hover:border-[#9A7440] hover:text-[#9A7440]"
+                        >
+                          Continue Browsing
+                        </button>
+                      </Dialog.Close>
                     </div>
                   </div>
                 </div>
-
-                <Dialog.Close asChild>
-                  <button
-                    type="button"
-                    aria-label="Close quick view"
-                    className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-sm border border-[#CFC1AD] bg-[#FFFCF6] text-[#2E2E2E] transition hover:bg-[#F5F1E9]"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </Dialog.Close>
               </motion.div>
             </Dialog.Content>
           </Dialog.Portal>

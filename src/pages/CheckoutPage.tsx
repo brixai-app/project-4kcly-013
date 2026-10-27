@@ -1,140 +1,220 @@
-import React from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Shield, Truck } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { CheckoutForm } from '@/components/CartDrawer';
-import { useCart } from '@/context/CartContext';
-import { shippingMethods } from '@/data/mockData';
-import type { Order } from '@/types';
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { CheckCircle2, CreditCard, Truck, Shield, MapPin } from 'lucide-react';
+import { useCart } from "@/context/CartContext";
+import type { PaymentMethod, ShippingDetails } from "@/types";
 
-const safeNumber = (value?: number | null) => Number(value ?? 0);
-
-export function CheckoutPage({ className = '' }: { className?: string }) {
-  const location = useLocation();
+export function CheckoutPage() {
   const navigate = useNavigate();
-  const cart = useCart() as {
-    items?: unknown[];
+  const { items, subtotal, clearCart } = useCart() as {
+    items?: Array<{ product?: { id?: string; name?: string; price?: number }; quantity?: number }>;
     subtotal?: number;
-    shipping?: number;
-    total?: number;
     clearCart?: () => void;
   };
-  const items = cart?.items ?? [];
-  const subtotal = cart?.subtotal ?? 0;
-  const shipping = cart?.shipping ?? 0;
-  const total = cart?.total ?? 0;
-  const clearCart = cart?.clearCart;
-  const [order, setOrder] = React.useState<Order | null>(null);
 
-  const isConfirmation = location.pathname?.includes('/confirmation') ?? false;
+  const [loading, setLoading] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("upi");
+  const [shipping, setShipping] = useState<ShippingDetails>({
+    fullName: "",
+    email: "",
+    phone: "",
+    addressLine1: "",
+    addressLine2: "",
+    city: "",
+    state: "",
+    postalCode: "",
+    country: "India",
+  });
 
-  const handleSubmit = React.useCallback(
-    (payload?: Order) => {
-      if (payload) setOrder(payload);
+  const shippingFee = useMemo(() => (subtotal ?? 0) > 4999 ? 0 : 199, [subtotal]);
+  const total = (subtotal ?? 0) + shippingFee;
+
+  const updateField = (key: keyof ShippingDetails, value: string) =>
+    setShipping((prev) => ({ ...prev, [key]: value }));
+
+  const validate = () => {
+    const required: Array<keyof ShippingDetails> = [
+      "fullName",
+      "email",
+      "phone",
+      "addressLine1",
+      "city",
+      "state",
+      "postalCode",
+      "country",
+    ];
+    const missing = required.find((key) => !shipping?.[key]?.trim?.());
+    if (missing) {
+      toast.error("Please complete all shipping details.");
+      return false;
+    }
+    if (!items?.length) {
+      toast.error("Your cart is empty.");
+      return false;
+    }
+    return true;
+  };
+
+  const placeOrder = async () => {
+    if (!validate() || loading) return;
+    setLoading(true);
+    try {
+      const payload = {
+        items: items ?? [],
+        shipping,
+        paymentMethod,
+        subtotal: subtotal ?? 0,
+        shippingFee,
+        total,
+      };
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = (await response.json().catch(() => null)) as { success?: boolean; data?: { id?: string }; message?: string } | null;
+      if (!response.ok || !data?.success) throw new Error(data?.message ?? "Unable to place order.");
       clearCart?.();
-      navigate('/checkout/confirmation', { replace: true, state: { order: payload ?? order } });
-    },
-    [clearCart, navigate, order]
-  );
-
-  const activeOrder = (location.state as { order?: Order } | null)?.order ?? order ?? null;
-
-  if (isConfirmation) {
-    return (
-      <div className={`mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 lg:px-8 ${className}`}>
-        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="rounded-md border border-[#D8CDBE] bg-[#FFFCF7] p-6 shadow-[0_18px_50px_rgba(43,43,43,0.08)]">
-          <div className="flex items-start gap-4">
-            <div className="mt-1 rounded-md border border-[#D8CDBE] bg-[#F5F1EB] p-3">
-              <CheckCircle2 className="h-5 w-5 text-[#C9A66B]" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6E665D]">Order confirmed</p>
-              <h1 className="mt-2 font-['Playfair_Display'] text-3xl font-light tracking-tight text-[#2B2B2B]">Your Jootiya order is being prepared</h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-[#6E665D]">
-                {activeOrder ? `Order ${activeOrder.id} has been received. We will share shipping updates shortly.` : 'Your checkout is complete. We will share shipping updates shortly.'}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
-            <div className="rounded-md border border-[#D8CDBE] bg-white p-4">
-              <Truck className="h-5 w-5 text-[#C9A66B]" />
-              <p className="mt-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#6E665D]">Shipping</p>
-              <p className="mt-2 text-sm text-[#2B2B2B]">{activeOrder?.shippingMethod?.label ?? shippingMethods?.[0]?.label ?? 'Standard delivery'}</p>
-            </div>
-            <div className="rounded-md border border-[#D8CDBE] bg-white p-4">
-              <Shield className="h-5 w-5 text-[#C9A66B]" />
-              <p className="mt-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#6E665D]">Payment</p>
-              <p className="mt-2 text-sm text-[#2B2B2B]">{activeOrder?.paymentMethod?.toUpperCase?.() ?? 'UPI'}</p>
-            </div>
-            <div className="rounded-md border border-[#D8CDBE] bg-white p-4">
-              <CheckCircle2 className="h-5 w-5 text-[#C9A66B]" />
-              <p className="mt-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#6E665D]">Total</p>
-              <p className="mt-2 text-sm text-[#2B2B2B]">₹{safeNumber(activeOrder?.total ?? total).toLocaleString('en-IN')}</p>
-            </div>
-          </div>
-
-          <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link to="/shop" className="inline-flex items-center gap-2 rounded-md border border-[#2B2B2B] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#2B2B2B] transition-colors hover:bg-[#2B2B2B] hover:text-white">
-              Continue shopping
-            </Link>
-            <button type="button" onClick={() => navigate('/')} className="inline-flex items-center gap-2 rounded-md border border-[#D8CDBE] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#6E665D] transition-colors hover:border-[#C9A66B] hover:text-[#2B2B2B]">
-              <ArrowLeft className="h-4 w-4" />
-              Return home
-            </button>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
+      toast.success("Order placed successfully.");
+      navigate(`/confirmation/${data?.data?.id ?? "order"}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className={`mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8 ${className}`}>
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6E665D]">Checkout</p>
-          <h1 className="mt-2 font-['Playfair_Display'] text-4xl font-light tracking-tight text-[#2B2B2B]">Finalize your order</h1>
-        </div>
-        <Link to="/shop" className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#6E665D] transition-colors hover:text-[#2B2B2B]">
-          <ArrowLeft className="h-4 w-4" />
-          Back to shop
-        </Link>
-      </div>
+    <main className="bg-[#FAF7F0] text-[#2B2B2B]">
+      <section className="mx-auto grid min-h-[calc(100vh-5rem)] max-w-7xl gap-8 px-4 py-8 md:grid-cols-[1.3fr_0.7fr] md:px-6 lg:px-8">
+        <div className="space-y-6">
+          <div className="border border-[#D8CCB8] bg-[#FFFDF8] p-6">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.3em] text-[#9A7440]">Secure checkout</p>
+            <h1 className="font-['Playfair_Display'] text-4xl font-light tracking-tight md:text-5xl">Complete your order</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-[#6D6257]">
+              Confirm your shipping details and choose a payment method for your handcrafted Jodhpuri Mojris.
+            </p>
+          </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="rounded-md border border-[#D8CDBE] bg-[#FFFCF7] p-5 shadow-[0_18px_50px_rgba(43,43,43,0.06)]">
-          <CheckoutForm
-            shippingMethod={shippingMethods?.[0] ?? null}
-            subtotal={subtotal ?? 0}
-            shipping={shipping ?? 0}
-            total={total ?? 0}
-            onSubmit={handleSubmit}
-          />
-        </div>
+          <div className="grid gap-4 border border-[#D8CCB8] bg-[#FFFDF8] p-6 md:grid-cols-2">
+            {[
+              { icon: MapPin, title: "Shipping", text: "Ivory-toned delivery across India." },
+              { icon: CreditCard, title: "Payment", text: "Mocked client-side payment flow." },
+              { icon: Truck, title: "Dispatch", text: "Carefully packed and tracked." },
+              { icon: Shield, title: "Security", text: "Protected checkout experience." },
+            ].map((item) => (
+              <div key={item.title} className="flex min-w-0 items-start gap-3">
+                <item.icon className="mt-0.5 h-4 w-4 shrink-0 text-[#9A7440]" />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-[0.25em]">{item.title}</p>
+                  <p className="mt-1 text-sm text-[#6D6257]">{item.text}</p>
+                </div>
+              </div>
+            ))}
+          </div>
 
-        <aside className="rounded-md border border-[#D8CDBE] bg-[#F5F1EB] p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6E665D]">Order summary</p>
-          <div className="mt-4 space-y-3 text-sm text-[#2B2B2B]">
-            <div className="flex items-center justify-between gap-4">
-              <span>Items</span>
-              <span>{items?.length ?? 0}</span>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <span>Subtotal</span>
-              <span>₹{Number(subtotal ?? 0).toLocaleString('en-IN')}</span>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <span>Shipping</span>
-              <span>₹{Number(shipping ?? 0).toLocaleString('en-IN')}</span>
-            </div>
-            <div className="border-t border-[#D8CDBE] pt-3 flex items-center justify-between gap-4 font-semibold">
-              <span>Total</span>
-              <span>₹{Number(total ?? 0).toLocaleString('en-IN')}</span>
+          <div className="border border-[#D8CCB8] bg-[#FFFDF8] p-6">
+            <h2 className="font-['Playfair_Display'] text-2xl font-light">Shipping details</h2>
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              {[
+                ["fullName", "Full name"],
+                ["email", "Email address"],
+                ["phone", "Phone number"],
+                ["addressLine1", "Address line 1"],
+                ["city", "City"],
+                ["state", "State"],
+                ["postalCode", "Postal code"],
+                ["country", "Country"],
+              ].map(([key, label]) => (
+                <label key={key} className="block">
+                  <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-[#6D6257]">{label}</span>
+                  <input
+                    value={shipping?.[key as keyof ShippingDetails] ?? ""}
+                    onChange={(e) => updateField(key as keyof ShippingDetails, e.target.value)}
+                    className="w-full border border-[#D8CCB8] bg-[#FAF7F0] px-3 py-3 text-sm outline-none transition focus:border-[#9A7440]"
+                    type="text"
+                    autoComplete="off"
+                  />
+                </label>
+              ))}
+              <label className="md:col-span-2 block">
+                <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.25em] text-[#6D6257]">Address line 2</span>
+                <input
+                  value={shipping?.addressLine2 ?? ""}
+                  onChange={(e) => updateField("addressLine2", e.target.value)}
+                  className="w-full border border-[#D8CCB8] bg-[#FAF7F0] px-3 py-3 text-sm outline-none transition focus:border-[#9A7440]"
+                  type="text"
+                  autoComplete="off"
+                />
+              </label>
             </div>
           </div>
+
+          <div className="border border-[#D8CCB8] bg-[#FFFDF8] p-6">
+            <h2 className="font-['Playfair_Display'] text-2xl font-light">Payment method</h2>
+            <div className="mt-4 space-y-3">
+              {[
+                ["upi", "UPI"],
+                ["card", "Card"],
+                ["cod", "Cash on delivery"],
+              ].map(([value, label]) => (
+                <label key={value} className="flex cursor-pointer items-center gap-3 border border-[#D8CCB8] px-4 py-3">
+                  <input
+                    type="radio"
+                    name="payment"
+                    checked={paymentMethod === value}
+                    onChange={() => setPaymentMethod(value as PaymentMethod)}
+                    className="h-4 w-4 accent-[#9A7440]"
+                  />
+                  <span className="text-sm font-medium">{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <aside className="h-fit border border-[#D8CCB8] bg-[#FFFDF8] p-6 md:sticky md:top-6">
+          <h2 className="font-['Playfair_Display'] text-2xl font-light">Order summary</h2>
+          <div className="mt-5 space-y-4">
+            {(items ?? []).map((item, index) => (
+              <div key={`${item?.product?.id ?? index}`} className="flex items-start justify-between gap-4 border-b border-[#D8CCB8] pb-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{item?.product?.name ?? "Product"}</p>
+                  <p className="mt-1 text-xs uppercase tracking-[0.2em] text-[#6D6257]">Qty {item?.quantity ?? 1}</p>
+                </div>
+                <p className="shrink-0 text-sm font-semibold">₹{((item?.product?.price ?? 0) * (item?.quantity ?? 1)).toLocaleString("en-IN")}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-5 space-y-2 border-t border-[#D8CCB8] pt-4 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-[#6D6257]">Subtotal</span>
+              <span className="font-medium">₹{(subtotal ?? 0).toLocaleString("en-IN")}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[#6D6257]">Shipping</span>
+              <span className="font-medium">{shippingFee === 0 ? "Free" : `₹${shippingFee.toLocaleString("en-IN")}`}</span>
+            </div>
+            <div className="flex items-center justify-between border-t border-[#D8CCB8] pt-3 text-base">
+              <span className="font-semibold">Total</span>
+              <span className="font-semibold">₹{total.toLocaleString("en-IN")}</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void placeOrder()}
+            disabled={loading}
+            className="mt-6 flex w-full items-center justify-center gap-2 bg-[#9A7440] px-4 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-black transition hover:bg-[#76562E] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading ? "Placing order" : "Place order"}
+            <CheckCircle2 className="h-4 w-4" />
+          </button>
         </aside>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
 

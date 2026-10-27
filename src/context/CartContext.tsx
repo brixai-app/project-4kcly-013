@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { CartItem } from "@/types";
+import type { CartItem, Product } from "@/types";
 
 type CartContextValue = {
   items: CartItem[];
@@ -10,24 +10,24 @@ type CartContextValue = {
   openCart: () => void;
   closeCart: () => void;
   toggleCart: () => void;
-  addItem: (item: CartItem) => void;
-  removeItem: (productId: string, size?: string, color?: string) => void;
-  updateQuantity: (productId: string, quantity: number, size?: string, color?: string) => void;
+  addItem: (product: Product, quantity?: number, selectedSize?: string, selectedColor?: string) => void;
+  removeItem: (productId: string, selectedSize?: string, selectedColor?: string) => void;
+  updateQuantity: (productId: string, quantity: number, selectedSize?: string, selectedColor?: string) => void;
   clearCart: () => void;
 };
 
 const CartContext = createContext<CartContextValue | undefined>(undefined);
-const STORAGE_KEY = "jootiya-cart";
+const STORAGE_KEY = "jootiya-cart-v1";
 
-const getItemKey = (item: Pick<CartItem, "productId" | "size" | "color">) =>
-  `${item.productId}::${item.size ?? ""}::${item.color ?? ""}`;
+const sameVariant = (item: CartItem, productId: string, selectedSize?: string, selectedColor?: string) =>
+  item.product?.id === productId &&
+  (item.selectedSize ?? "") === (selectedSize ?? "") &&
+  (item.selectedColor ?? "") === (selectedColor ?? "");
 
-const readStoredItems = (): CartItem[] => {
-  if (typeof window === "undefined") return [];
+const safeParse = (value: string | null): CartItem[] => {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    const parsed = raw ? (JSON.parse(raw) as CartItem[]) : [];
-    return Array.isArray(parsed) ? parsed.filter((item) => item?.productId && item?.name) : [];
+    const parsed = JSON.parse(value ?? "[]") as CartItem[];
+    return Array.isArray(parsed) ? parsed.filter((item) => item?.product?.id) : [];
   } catch {
     return [];
   }
@@ -36,81 +36,69 @@ const readStoredItems = (): CartItem[] => {
 export function CartProvider({ children }: { children?: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setItems(readStoredItems());
-    setHydrated(true);
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    setItems(safeParse(stored));
   }, []);
 
   useEffect(() => {
-    if (!hydrated || typeof window === "undefined") return;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-  }, [hydrated, items]);
-
-  const subtotal = useMemo(
-    () => items.reduce((sum, item) => sum + (item?.price ?? 0) * (item?.quantity ?? 0), 0),
-    [items]
-  );
-
-  const itemCount = useMemo(
-    () => items.reduce((sum, item) => sum + (item?.quantity ?? 0), 0),
-    [items]
-  );
+  }, [items]);
 
   const openCart = useCallback(() => setIsOpen(true), []);
   const closeCart = useCallback(() => setIsOpen(false), []);
   const toggleCart = useCallback(() => setIsOpen((prev) => !prev), []);
 
-  const addItem = useCallback((item: CartItem) => {
-    setItems((current) => {
-      const quantity = Math.max(1, item?.quantity ?? 1);
-      const nextItem = { ...item, quantity };
-      const key = getItemKey(nextItem);
-      const index = current.findIndex((entry) => getItemKey(entry) === key);
-      if (index >= 0) {
-        const next = [...current];
-        next[index] = { ...next[index], quantity: (next[index]?.quantity ?? 0) + quantity };
-        return next;
-      }
-      return [...current, nextItem];
-    });
-    toast.success(`${item?.name ?? "Item"} added to cart`);
+  const addItem = useCallback(
+    (product: Product, quantity = 1, selectedSize?: string, selectedColor?: string) => {
+      if (!product?.id) return;
+      setItems((prev) => {
+        const existingIndex = prev.findIndex((item) => sameVariant(item, product.id, selectedSize, selectedColor));
+        if (existingIndex >= 0) {
+          const next = [...prev];
+          next[existingIndex] = { ...next[existingIndex], quantity: next[existingIndex].quantity + quantity };
+          return next;
+        }
+        return [...prev, { product, quantity, selectedSize, selectedColor }];
+      });
+      setIsOpen(true);
+      toast.success(`${product?.name ?? "Item"} added to cart`, {
+        action: { label: "Undo", onClick: () => removeItem(product.id, selectedSize, selectedColor) },
+      });
+    },
+    []
+  );
+
+  const removeItem = useCallback((productId: string, selectedSize?: string, selectedColor?: string) => {
+    setItems((prev) => prev.filter((item) => !sameVariant(item, productId, selectedSize, selectedColor)));
+    toast.message("Removed from cart");
   }, []);
 
-  const removeItem = useCallback((productId: string, size?: string, color?: string) => {
-    setItems((current) => current.filter((item) => getItemKey(item) !== getItemKey({ productId, size, color })));
-    toast.message("Item removed from cart");
-  }, []);
-
-  const updateQuantity = useCallback((productId: string, quantity: number, size?: string, color?: string) => {
-    const nextQuantity = Math.max(1, quantity);
-    setItems((current) =>
-      current.map((item) =>
-        getItemKey(item) === getItemKey({ productId, size, color }) ? { ...item, quantity: nextQuantity } : item
-      )
-    );
-  }, []);
+  const updateQuantity = useCallback(
+    (productId: string, quantity: number, selectedSize?: string, selectedColor?: string) => {
+      setItems((prev) =>
+        quantity <= 0
+          ? prev.filter((item) => !sameVariant(item, productId, selectedSize, selectedColor))
+          : prev.map((item) => (sameVariant(item, productId, selectedSize, selectedColor) ? { ...item, quantity } : item))
+      );
+    },
+    []
+  );
 
   const clearCart = useCallback(() => {
     setItems([]);
     toast.message("Cart cleared");
   }, []);
 
-  const value = useMemo<CartContextValue>(
-    () => ({
-      items,
-      isOpen,
-      subtotal,
-      itemCount,
-      openCart,
-      closeCart,
-      toggleCart,
-      addItem,
-      removeItem,
-      updateQuantity,
-      clearCart,
-    }),
+  const subtotal = useMemo(
+    () => items.reduce((sum, item) => sum + (item.product?.price ?? 0) * (item.quantity ?? 0), 0),
+    [items]
+  );
+  const itemCount = useMemo(() => items.reduce((sum, item) => sum + (item.quantity ?? 0), 0), [items]);
+
+  const value = useMemo(
+    () => ({ items, isOpen, subtotal, itemCount, openCart, closeCart, toggleCart, addItem, removeItem, updateQuantity, clearCart }),
     [items, isOpen, subtotal, itemCount, openCart, closeCart, toggleCart, addItem, removeItem, updateQuantity, clearCart]
   );
 
