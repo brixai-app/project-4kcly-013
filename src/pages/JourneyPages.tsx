@@ -1,76 +1,44 @@
 import React from 'react';
-import { useLocation, useParams } from 'react-router-dom';
-import { CartDrawer } from '@/components/CartDrawer';
-import {
-  ArtisanList,
-  ArtisanProfile,
-  CheckoutForm,
-  ManifestoSection,
-  NewsletterBand,
-  ProductExperience,
-} from '@/components/EditorialSections';
+import { useParams } from 'react-router-dom';
+import { CommerceSections } from '@/components/CommerceSections';
 import { artisans, products } from '@/data/mockData';
-import type { Artisan, Product } from '@/types';
 
-export function ProductPage({ className = '' }: { className?: string }) {
-  const { slug } = useParams();
-  const product = products?.find((item) => item?.slug === slug) ?? products?.[0] ?? null;
-  return (
-    <div className={className}>
-      <ProductExperience className="px-4 py-8 sm:px-6 lg:px-8" />
-      <ManifestoSection className="px-4 pb-8 sm:px-6 lg:px-8" />
-      <NewsletterBand className="px-4 pb-10 sm:px-6 lg:px-8" />
-      <CartDrawer />
-      {product ? null : null}
-    </div>
-  );
+type PageProps = { className?: string };
+
+function resolveProduct(id?: string) {
+  return products?.find((product) => product?.id === id) ?? products?.[0] ?? null;
 }
 
-export function CheckoutPage({ className = '' }: { className?: string }) {
-  return (
-    <div className={className}>
-      <CheckoutForm className="px-4 py-8 sm:px-6 lg:px-8" />
-      <NewsletterBand className="px-4 pb-10 sm:px-6 lg:px-8" />
-      <CartDrawer />
-    </div>
-  );
+function resolveArtisan(id?: string) {
+  return artisans?.find((artisan) => artisan?.id === id) ?? artisans?.[0] ?? null;
 }
 
-export function ArtisansPage({ className = '' }: { className?: string }) {
-  return (
-    <div className={className}>
-      <ArtisanList className="px-4 py-8 sm:px-6 lg:px-8" />
-      <ManifestoSection className="px-4 pb-8 sm:px-6 lg:px-8" />
-      <NewsletterBand className="px-4 pb-10 sm:px-6 lg:px-8" />
-    </div>
-  );
+export function ProductPage({ className = '' }: PageProps) {
+  const { productId } = useParams<{ productId?: string }>();
+  const product = resolveProduct(productId);
+  return <CommerceSections.ProductSection className={className} />;
 }
 
-export function ArtisanProfilePage({ className = '' }: { className?: string }) {
-  const { artisanId } = useParams();
-  const artisan = artisans?.find((item) => item?.id === artisanId) ?? artisans?.[0] ?? null;
-  return (
-    <div className={className}>
-      <ArtisanProfile artisan={artisan as Artisan | null} className="px-4 py-8 sm:px-6 lg:px-8" />
-      <NewsletterBand className="px-4 pb-10 sm:px-6 lg:px-8" />
-    </div>
-  );
+export function ArtisansPage({ className = '' }: PageProps) {
+  return <CommerceSections.ArtisanSection className={className} />;
 }
 
-export function CartRoute({ className = '' }: { className?: string }) {
-  const location = useLocation();
-  const open = location?.pathname?.includes('/cart') ?? false;
-  return <CartDrawer open={open} onOpenChange={() => {}} />;
+export function ArtisanDetailPage({ className = '' }: PageProps) {
+  const { artisanId } = useParams<{ artisanId?: string }>();
+  const artisan = resolveArtisan(artisanId);
+  return <CommerceSections.ArtisanSection className={className} />;
 }
 
-export function JourneyPages({ className = '' }: { className?: string }) {
-  const location = useLocation();
-  const path = location?.pathname ?? '/';
-  if (path.includes('/checkout')) return <CheckoutPage className={className} />;
-  if (path.includes('/artisans/') || path.includes('/artisan/')) return <ArtisanProfilePage className={className} />;
-  if (path.includes('/artisans')) return <ArtisansPage className={className} />;
-  if (path.includes('/product/') || path.includes('/shop/')) return <ProductPage className={className} />;
-  return <ProductPage className={className} />;
+export function CheckoutPage({ className = '' }: PageProps) {
+  return <CommerceSections.CheckoutSection className={className} />;
 }
 
-export default JourneyPages;
+export function CustomOrderPage({ className = '' }: PageProps) {
+  return <CommerceSections.CustomOrderSection className={className} />;
+}
+
+export function CartRoute({ className = '' }: PageProps) {
+  return <CommerceSections.CatalogSection className={className} />;
+}
+
+export default ProductPage;

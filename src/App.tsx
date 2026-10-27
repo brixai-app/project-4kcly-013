@@ -1,82 +1,58 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
-import { AnimatePresence, motion } from 'framer-motion';
-import Header from './components/Header';
-import Footer from './components/Footer';
-import CartDrawer from './components/CartDrawer';
-import AuthModal from './components/AuthModal';
-import { CartProvider } from './context/CartContext';
-import Home, { ArtisansPage } from './pages/Home';
-import ShopPage from './pages/ShopPage';
-import CheckoutPage from './pages/CheckoutPage';
-import { products } from './data/mockData';
-import ProductDetailModal from './components/ProductDetailModal';
+import { Header } from '@/components/Header';
+import { Footer } from '@/components/Footer';
+import { CartDrawer } from '@/components/CartDrawer';
+import { AuthModal } from '@/components/AuthModal';
+import { CartProvider } from '@/context/CartContext';
+import { Home } from '@/pages/Home';
+import { ShopPage } from '@/pages/ShopPage';
+import {
+  ArtisansPage,
+  ArtisanDetailPage,
+  CartRoute,
+  CheckoutPage,
+  CustomOrderPage,
+  ProductPage,
+} from '@/pages/JourneyPages';
 
-const safePathname = (pathname?: string) => pathname ?? '/';
-
-function AppRoutes() {
+function AppShell() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [cartOpen, setCartOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
-  const [authTab, setAuthTab] = useState<'signin' | 'signup'>('signin');
-  const [previewSlug, setPreviewSlug] = useState('');
-  const previewProduct = useMemo(() => products?.find((p) => p?.slug === previewSlug) ?? null, [previewSlug]);
 
   useEffect(() => {
-    const onOpenCart = () => setCartOpen(true);
-    const onOpenAuth = (e: Event) => {
-      const detail = (e as CustomEvent<{ tab?: 'signin' | 'signup' }>).detail;
-      setAuthTab(detail?.tab ?? 'signin');
-      setAuthOpen(true);
-    };
-    const onPreview = (e: Event) => {
-      const detail = (e as CustomEvent<{ slug?: string }>).detail;
-      setPreviewSlug(detail?.slug ?? '');
-    };
-    window.addEventListener('jootiya:open-cart', onOpenCart);
-    window.addEventListener('jootiya:open-auth', onOpenAuth);
-    window.addEventListener('jootiya:preview-product', onPreview);
-    return () => {
-      window.removeEventListener('jootiya:open-cart', onOpenCart);
-      window.removeEventListener('jootiya:open-auth', onOpenAuth);
-      window.removeEventListener('jootiya:preview-product', onPreview);
-    };
-  }, []);
+    const params = new URLSearchParams(location.search ?? '');
+    const cart = params.get('cart');
+    const auth = params.get('auth');
+    if (cart === 'open') setCartOpen(true);
+    if (auth === 'open') setAuthOpen(true);
+    if (cart || auth) navigate({ pathname: location.pathname, search: '' }, { replace: true });
+  }, [location.pathname, location.search, navigate]);
 
-  useEffect(() => {
-    setCartOpen(false);
-    setAuthOpen(false);
-    setPreviewSlug('');
-  }, [location.pathname]);
-
-  const routeKey = safePathname(location.pathname);
+  const routeKey = useMemo(() => location.pathname + location.search, [location.pathname, location.search]);
 
   return (
-    <div className="min-h-screen bg-[#F5F1EB] text-[#2B2B2B]">
-      <Header />
-      <AnimatePresence mode="wait">
-        <motion.main
-          key={routeKey}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.35, ease: 'easeOut' }}
-          className="min-h-[calc(100vh-0px)]"
-        >
-          <Routes location={location}>
-            <Route path="/" element={<Home />} />
-            <Route path="/shop" element={<ShopPage />} />
-            <Route path="/checkout" element={<CheckoutPage />} />
-            <Route path="/artisans" element={<ArtisansPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </motion.main>
-      </AnimatePresence>
-      <Footer />
+    <div key={routeKey} className="min-h-screen bg-[#F9F5F0] text-[#2B2B2B]">
+      <Header className="" />
+      <main className="min-h-[calc(100vh-8rem)]">
+        <Routes>
+          <Route path="/" element={<Home className="" />} />
+          <Route path="/shop" element={<ShopPage className="" />} />
+          <Route path="/products/:id" element={<ProductPage className="" />} />
+          <Route path="/artisans" element={<ArtisansPage className="" />} />
+          <Route path="/artisans/:id" element={<ArtisanDetailPage className="" />} />
+          <Route path="/checkout" element={<CheckoutPage className="" />} />
+          <Route path="/custom-order" element={<CustomOrderPage className="" />} />
+          <Route path="/cart" element={<CartRoute className="" />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
+      <Footer className="" />
       <CartDrawer open={cartOpen} onOpenChange={setCartOpen} />
-      <AuthModal open={authOpen} onOpenChange={setAuthOpen} defaultTab={authTab} />
-      <ProductDetailModal open={!!previewSlug} onOpenChange={(open) => !open && setPreviewSlug('')} product={previewProduct} slug={previewSlug} />
+      <AuthModal open={authOpen} onOpenChange={setAuthOpen} />
       <Toaster position="top-right" richColors closeButton />
     </div>
   );
@@ -86,7 +62,7 @@ export function App() {
   return (
     <HashRouter>
       <CartProvider>
-        <AppRoutes />
+        <AppShell />
       </CartProvider>
     </HashRouter>
   );

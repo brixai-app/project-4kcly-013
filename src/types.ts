@@ -1,98 +1,104 @@
-export type ProductCategory = 'Mojri' | 'Jutti' | 'Kolhapuri' | 'Accessories' | 'New In' | 'Best Sellers';
+export type ProductCategory = 'Mojri' | 'Jutti' | 'Slip-on' | 'Wedding' | 'Heritage' | 'Limited';
 
-export type ShippingMethod = {
+export interface Product {
   id: string;
-  label: string;
-  eta: string;
+  name: string;
+  category: ProductCategory | string;
   price: number;
-};
+  image: string;
+  images?: string[];
+  artisanId?: string;
+  description?: string;
+  details?: string[];
+  sizes?: string[];
+  color?: string;
+  material?: string;
+  inStock?: boolean;
+  featured?: boolean;
+  rating?: number;
+  reviewCount?: number;
+}
 
-export type PaymentMethod = 'card' | 'upi' | 'cod' | 'wallet';
-
-export type FilterState = {
-  query: string;
-  categories: ProductCategory[];
-  priceRange: [number, number];
-  sortBy: 'featured' | 'newest' | 'price-asc' | 'price-desc';
-};
-
-export type Artisan = {
+export interface Artisan {
   id: string;
   name: string;
   location: string;
   specialty: string;
-  portraitUrl: string;
-  story: string;
-};
-
-export type Product = {
-  id: string;
-  slug: string;
-  name: string;
-  category: ProductCategory;
-  price: number;
-  compareAtPrice?: number | null;
-  description: string;
-  image: string;
-  gallery?: string[];
-  artisanId?: string | null;
-  sizes: string[];
-  colors?: string[];
-  inStock: boolean;
+  portrait: string;
+  story?: string;
+  yearsExperience?: number;
   featured?: boolean;
-  newArrival?: boolean;
-  rating?: number;
-  reviewCount?: number;
-  material?: string;
-  care?: string;
-};
+}
 
-export type CartItem = {
+export interface CartItem {
   productId: string;
   quantity: number;
-  size: string;
-  color?: string | null;
-};
+  size?: string;
+  color?: string;
+}
 
-export type CustomerProfile = {
-  id: string;
-  name: string;
+export interface ShippingInfo {
+  fullName: string;
   email: string;
-  phone?: string | null;
-};
+  phone: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+}
 
-export type OrderStatus = 'pending' | 'paid' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
-
-export type Order = {
+export interface Order {
   id: string;
-  customer: CustomerProfile;
   items: CartItem[];
+  shipping: ShippingInfo;
   subtotal: number;
-  shipping: number;
+  shippingFee: number;
   total: number;
-  shippingMethod: ShippingMethod;
-  paymentMethod: PaymentMethod;
-  status: OrderStatus;
+  status: 'pending' | 'confirmed' | 'packed' | 'shipped' | 'delivered' | 'cancelled';
   createdAt: string;
-};
+}
 
-export type AuthSessionUser = {
-  id: string;
+export interface CustomOrderRequest {
+  id?: string;
   name: string;
   email: string;
-  image?: string | null;
-};
+  phone: string;
+  occasion: string;
+  size: string;
+  colorPreference?: string;
+  notes?: string;
+  budget?: string;
+}
 
-export type AuthCredentials = {
+export interface ProductFilters {
+  query: string;
+  category: string;
+  size: string;
+  priceRange: string;
+  featuredOnly: boolean;
+}
+
+export interface ShopSortOption {
+  label: string;
+  value: string;
+}
+
+export interface FilterOption {
+  label: string;
+  value: string;
+}
+
+export interface NavigationLink {
+  label: string;
+  href: string;
+}
+
+export interface AuthFormValues {
+  name?: string;
   email: string;
   password: string;
-  name?: string;
-};
-
-export type AuthResponse = {
-  user: AuthSessionUser | null;
-  token?: string | null;
-  error?: string | null;
-};
+}
 
 export default {};

@@ -1,200 +1,94 @@
-import type { Artisan, Product, ProductCategory, ShippingMethod } from '@/types';
+import type { Artisan, FilterOption, NavigationLink, Product, ProductCategory, ShopSortOption } from '@/types';
 
-export const imageAssets = {
-  heroPrimary: 'https://images.unsplash.com/photo-1590874103328-eac38a683ce7?auto=format&fit=crop&w=800&q=80',
-  heroSecondary: 'https://images.unsplash.com/photo-1533867617858-e7b97e060509?auto=format&fit=crop&w=800&q=80',
-  heroAccent: 'https://images.unsplash.com/photo-1560769629-975ec94e6a86?auto=format&fit=crop&w=800&q=80',
-  artisanOne: 'https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&w=1400&q=85',
-  artisanTwo: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1400&q=85',
-  artisanThree: 'https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&w=1400&q=85',
+export const verifiedImages = {
+  hero: 'https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&w=1400&q=85',
+  craft: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1400&q=85',
+  artisan: 'https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&w=1400&q=85',
+  product1: 'https://images.unsplash.com/photo-1590874103328-eac38a683ce7?auto=format&fit=crop&w=800&q=80',
+  product2: 'https://images.unsplash.com/photo-1533867617858-e7b97e060509?auto=format&fit=crop&w=800&q=80',
+  product3: 'https://images.unsplash.com/photo-1560769629-975ec94e6a86?auto=format&fit=crop&w=800&q=80',
+  product4: 'https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&w=1400&q=85',
+  product5: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1400&q=85',
+  product6: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=800&q=80',
 } as const;
 
-export const categories: ProductCategory[] = ['Mojri', 'Jutti', 'Kolhapuri', 'Accessories', 'New In', 'Best Sellers'];
-
-export const shippingMethods: ShippingMethod[] = [
-  { id: 'standard', label: 'Standard Delivery', eta: '4-6 business days', price: 0 },
-  { id: 'express', label: 'Express Delivery', eta: '2-3 business days', price: 249 },
-  { id: 'priority', label: 'Priority Hand Delivery', eta: '1-2 business days', price: 499 },
+export const products: Product[] = [
+  { id: 'jootiya-001', name: 'Mehrab Embroidered Mojri', category: 'Mojri', price: 4890, image: verifiedImages.product1, images: [verifiedImages.product1, verifiedImages.product4], artisanId: 'artisan-1', description: 'Hand-finished Jodhpur mojri with mirror-thread embroidery and a supple leather lining.', details: ['Hand-stitched upper', 'Vegetable-tanned leather', 'Cushioned insole'], sizes: ['38', '39', '40', '41', '42', '43'], color: 'Antique Gold', material: 'Leather and silk thread', inStock: true, featured: true, rating: 4.9, reviewCount: 128 },
+  { id: 'jootiya-002', name: 'Nawaab Heritage Jutti', category: 'Heritage', price: 5290, image: verifiedImages.product2, images: [verifiedImages.product2, verifiedImages.product5], artisanId: 'artisan-2', description: 'A ceremonial silhouette with tonal zari work and a refined almond toe.', details: ['Zari embroidery', 'Soft heel cup', 'Formal occasion ready'], sizes: ['37', '38', '39', '40', '41', '42'], color: 'Ivory', material: 'Leather, zari, cotton lining', inStock: true, featured: true, rating: 4.8, reviewCount: 94 },
+  { id: 'jootiya-003', name: 'Thar Slip-on Mojri', category: 'Slip-on', price: 3990, image: verifiedImages.product3, images: [verifiedImages.product3, verifiedImages.product6], artisanId: 'artisan-3', description: 'Minimal slip-on crafted for daily wear with a soft, breathable interior.', details: ['Easy slip-on profile', 'Breathable lining', 'Flexible sole'], sizes: ['38', '39', '40', '41', '42'], color: 'Charcoal', material: 'Suede and leather', inStock: true, featured: false, rating: 4.7, reviewCount: 61 },
+  { id: 'jootiya-004', name: 'Sunehri Wedding Mojri', category: 'Wedding', price: 6890, image: verifiedImages.product4, images: [verifiedImages.product4, verifiedImages.product1], artisanId: 'artisan-1', description: 'A richly embellished wedding pair with antique gold accents and ceremonial depth.', details: ['Wedding embellishment', 'Hand-beaded finish', 'Premium comfort padding'], sizes: ['39', '40', '41', '42', '43', '44'], color: 'Vermilion', material: 'Leather, beadwork, silk', inStock: true, featured: true, rating: 5, reviewCount: 52 },
+  { id: 'jootiya-005', name: 'Jharokha Limited Edition', category: 'Limited', price: 7590, image: verifiedImages.product5, images: [verifiedImages.product5, verifiedImages.product2], artisanId: 'artisan-4', description: 'A collector’s edition with architectural motifs inspired by Jodhpur façades.', details: ['Numbered release', 'Architectural motif', 'Collector packaging'], sizes: ['38', '39', '40', '41', '42', '43'], color: 'Sandstone', material: 'Leather and metallic thread', inStock: false, featured: true, rating: 4.9, reviewCount: 33 },
+  { id: 'jootiya-006', name: 'Rangrez Mojri', category: 'Mojri', price: 4590, image: verifiedImages.product6, images: [verifiedImages.product6, verifiedImages.product3], artisanId: 'artisan-5', description: 'A vivid artisan-made pair balancing comfort, color, and traditional craft detail.', details: ['Colorfast dye work', 'Hand-cut patterning', 'Everyday luxury'], sizes: ['37', '38', '39', '40', '41', '42', '43'], color: 'Indigo', material: 'Leather, cotton, thread', inStock: true, featured: false, rating: 4.8, reviewCount: 77 },
 ];
 
 export const artisans: Artisan[] = [
-  {
-    id: 'artisan-1',
-    name: 'Rafiq Khan',
-    location: 'Jodhpur, Rajasthan',
-    specialty: 'Hand-stitched men’s mojris',
-    portraitUrl: imageAssets.artisanOne,
-    story: 'Rafiq shapes supple uppers with a quiet precision inherited across three generations of workshop craft.',
-  },
-  {
-    id: 'artisan-2',
-    name: 'Amina Bano',
-    location: 'Bikaner, Rajasthan',
-    specialty: 'Mirror-work and embroidered juttis',
-    portraitUrl: imageAssets.artisanTwo,
-    story: 'Amina balances delicate embroidery with durable construction, creating pieces that feel ceremonial yet wearable.',
-  },
-  {
-    id: 'artisan-3',
-    name: 'Salim Noor',
-    location: 'Jaipur, Rajasthan',
-    specialty: 'Vegetable-tanned finishing and dyeing',
-    portraitUrl: imageAssets.artisanThree,
-    story: 'Salim finishes each pair with natural dyes and burnished edges that deepen beautifully with time.',
-  },
+  { id: 'artisan-1', name: 'Bhanwar Singh', location: 'Jodhpur, Rajasthan', specialty: 'Mirror-thread embroidery', portrait: verifiedImages.artisan, story: 'A third-generation mojri maker known for ceremonial detailing and precise hand finishing.', yearsExperience: 28, featured: true },
+  { id: 'artisan-2', name: 'Amina Bano', location: 'Jodhpur, Rajasthan', specialty: 'Zari and beadwork', portrait: verifiedImages.product2, story: 'Creates heirloom juttis with a disciplined balance of ornament and wearability.', yearsExperience: 19, featured: true },
+  { id: 'artisan-3', name: 'Rafiq Khan', location: 'Jodhpur, Rajasthan', specialty: 'Everyday comfort lasts', portrait: verifiedImages.product3, story: 'Focuses on ergonomic lasts and soft interiors for long-wear slip-on silhouettes.', yearsExperience: 14, featured: false },
+  { id: 'artisan-4', name: 'Lalita Devi', location: 'Jodhpur, Rajasthan', specialty: 'Architectural motifs', portrait: verifiedImages.product5, story: 'Translates Jodhpur’s jharokha geometry into refined limited-edition footwear.', yearsExperience: 22, featured: true },
+  { id: 'artisan-5', name: 'Imran Ali', location: 'Jodhpur, Rajasthan', specialty: 'Natural dye finishing', portrait: verifiedImages.product6, story: 'Blends saturated color with traditional construction for contemporary collectors.', yearsExperience: 16, featured: false },
 ];
 
-export const products: Product[] = [
-  {
-    id: 'prod-001',
-    slug: 'maharaja-ivory-mojri',
-    name: 'Maharaja Ivory Mojri',
-    category: 'Mojri',
-    price: 3499,
-    compareAtPrice: 4299,
-    description: 'An ivory leather mojri with hand-finished piping, a softly pointed toe, and a refined ceremonial silhouette.',
-    image: imageAssets.heroPrimary,
-    gallery: [imageAssets.heroPrimary, imageAssets.heroSecondary, imageAssets.heroAccent],
-    artisanId: 'artisan-1',
-    sizes: ['6', '7', '8', '9', '10', '11'],
-    colors: ['Ivory', 'Sand'],
-    inStock: true,
-    featured: true,
-    newArrival: false,
-    rating: 4.9,
-    reviewCount: 128,
-    material: 'Vegetable-tanned leather',
-    care: 'Store in a dust bag and condition lightly after wear.',
-  },
-  {
-    id: 'prod-002',
-    slug: 'noor-ember-jutti',
-    name: 'Noor Ember Jutti',
-    category: 'Jutti',
-    price: 2899,
-    description: 'A deep ember jutti with tonal embroidery and a cushioned footbed for long evenings and formal occasions.',
-    image: imageAssets.heroSecondary,
-    gallery: [imageAssets.heroSecondary, imageAssets.heroAccent],
-    artisanId: 'artisan-2',
-    sizes: ['5', '6', '7', '8', '9'],
-    colors: ['Ember', 'Wine'],
-    inStock: true,
-    featured: true,
-    newArrival: true,
-    rating: 4.8,
-    reviewCount: 94,
-    material: 'Leather upper with textile embroidery',
-    care: 'Wipe gently with a dry cloth and avoid direct moisture.',
-  },
-  {
-    id: 'prod-003',
-    slug: 'sandstone-kolhapuri',
-    name: 'Sandstone Kolhapuri',
-    category: 'Kolhapuri',
-    price: 2199,
-    description: 'A pared-back Kolhapuri with braided straps, a matte finish, and a grounded everyday profile.',
-    image: imageAssets.heroAccent,
-    gallery: [imageAssets.heroAccent, imageAssets.heroPrimary],
-    artisanId: 'artisan-3',
-    sizes: ['6', '7', '8', '9', '10'],
-    colors: ['Sandstone', 'Cocoa'],
-    inStock: true,
-    featured: false,
-    newArrival: true,
-    rating: 4.7,
-    reviewCount: 61,
-    material: 'Natural leather',
-    care: 'Keep away from prolonged sun exposure and polish sparingly.',
-  },
-  {
-    id: 'prod-004',
-    slug: 'heritage-thread-clutch',
-    name: 'Heritage Thread Clutch',
-    category: 'Accessories',
-    price: 1799,
-    description: 'A compact accessory pouch with woven detailing, ideal for gifting, travel, and ceremonial dressing.',
-    image: imageAssets.artisanOne,
-    gallery: [imageAssets.artisanOne, imageAssets.artisanTwo],
-    artisanId: 'artisan-2',
-    sizes: ['One Size'],
-    colors: ['Natural', 'Charcoal'],
-    inStock: true,
-    featured: false,
-    newArrival: false,
-    rating: 4.6,
-    reviewCount: 37,
-    material: 'Textile and leather trim',
-    care: 'Spot clean only and store flat.',
-  },
-  {
-    id: 'prod-005',
-    slug: 'desert-loom-mojri',
-    name: 'Desert Loom Mojri',
-    category: 'Best Sellers',
-    price: 3199,
-    compareAtPrice: 3799,
-    description: 'A bestselling mojri with subtle loom texture, softened lining, and a versatile profile for daily wear.',
-    image: imageAssets.artisanTwo,
-    gallery: [imageAssets.artisanTwo, imageAssets.artisanThree],
-    artisanId: 'artisan-1',
-    sizes: ['6', '7', '8', '9', '10', '11'],
-    colors: ['Taupe', 'Clay'],
-    inStock: true,
-    featured: true,
-    newArrival: false,
-    rating: 4.9,
-    reviewCount: 201,
-    material: 'Full-grain leather',
-    care: 'Use a neutral conditioner and air dry naturally.',
-  },
-  {
-    id: 'prod-006',
-    slug: 'atelier-midnight-jutti',
-    name: 'Atelier Midnight Jutti',
-    category: 'New In',
-    price: 3699,
-    description: 'A midnight-toned jutti with restrained metallic accents and a sculpted, elegant finish.',
-    image: imageAssets.artisanThree,
-    gallery: [imageAssets.artisanThree, imageAssets.heroPrimary, imageAssets.heroAccent],
-    artisanId: 'artisan-3',
-    sizes: ['5', '6', '7', '8', '9', '10'],
-    colors: ['Midnight', 'Graphite'],
-    inStock: false,
-    featured: true,
-    newArrival: true,
-    rating: 4.8,
-    reviewCount: 48,
-    material: 'Leather with metallic threadwork',
-    care: 'Keep in breathable storage and avoid abrasive surfaces.',
-  },
+export const categories: ProductCategory[] = ['Mojri', 'Jutti', 'Slip-on', 'Wedding', 'Heritage', 'Limited'];
+
+export const filterOptions: FilterOption[] = [
+  { label: 'All Categories', value: 'all' },
+  { label: 'Mojri', value: 'Mojri' },
+  { label: 'Jutti', value: 'Jutti' },
+  { label: 'Slip-on', value: 'Slip-on' },
+  { label: 'Wedding', value: 'Wedding' },
+  { label: 'Heritage', value: 'Heritage' },
+  { label: 'Limited', value: 'Limited' },
 ];
 
-export const editorialCopy = {
-  heroTitle: 'Jootiya',
-  heroSubtitle: 'Luxury Jodhpuri mojris, shaped by hand and framed like collectible fashion.',
-  heroBody:
-    'Warm parchment surfaces, deep charcoal typography, and soft-gold detailing guide a modern editorial storefront rooted in authentic craft.',
+export const sizeOptions: FilterOption[] = [
+  { label: '37', value: '37' },
+  { label: '38', value: '38' },
+  { label: '39', value: '39' },
+  { label: '40', value: '40' },
+  { label: '41', value: '41' },
+  { label: '42', value: '42' },
+  { label: '43', value: '43' },
+  { label: '44', value: '44' },
+];
+
+export const sortOptions: ShopSortOption[] = [
+  { label: 'Featured', value: 'featured' },
+  { label: 'Price: Low to High', value: 'price-asc' },
+  { label: 'Price: High to Low', value: 'price-desc' },
+  { label: 'Newest', value: 'newest' },
+];
+
+export const navigationLinks: NavigationLink[] = [
+  { label: 'Home', href: '/' },
+  { label: 'Shop', href: '/shop' },
+  { label: 'Journey', href: '/journey' },
+];
+
+export const editorialContent = {
+  heroEyebrow: 'Jodhpur Craft Ledger',
+  heroTitle: 'Authentic Mojris, Handcrafted in the Blue City',
+  heroDescription: 'A luxury storefront for Rajasthani footwear shaped by artisan hands, ceremonial detail, and enduring comfort.',
   heroCta: 'Explore Collection',
-  manifestoTitle: 'Craft, carried forward',
-  manifestoBody:
-    'Every pair is selected for silhouette, finish, and the quiet authority of workmanship that improves with wear.',
+  manifestoTitle: 'Crafted with patience, worn with distinction.',
+  manifestoBody: 'Each pair is cut, stitched, and finished in small batches by master artisans preserving the language of Jodhpur craft.',
   newsletterTitle: 'Receive the next drop',
-  newsletterBody:
-    'Early access to new arrivals, artisan stories, and seasonal edits from the Jootiya atelier.',
+  newsletterBody: 'Private previews, artisan stories, and limited releases delivered with restraint.',
 } as const;
 
-const mockData = {
-  imageAssets,
-  categories,
-  shippingMethods,
-  artisans,
+export const mockData = {
+  verifiedImages,
   products,
-  editorialCopy,
+  artisans,
+  categories,
+  filterOptions,
+  sizeOptions,
+  sortOptions,
+  navigationLinks,
+  editorialContent,
 };
 
 export default mockData;
-export { mockData };
-
 export const sizeGuide: any = [
   { size: 'XS', chest: '34-36', waist: '28-30' },
   { size: 'S', chest: '36-38', waist: '30-32' },
@@ -202,10 +96,3 @@ export const sizeGuide: any = [
   { size: 'L', chest: '40-42', waist: '34-36' },
   { size: 'XL', chest: '42-44', waist: '36-38' },
 ];
-
-export const editorialContent: any = {
-  title: 'Crafted with Purpose',
-  subtitle: 'Modern Aesthetics & Timeless Form',
-  description: 'Every collection is meticulously designed to merge functional utility with striking visual hierarchy.',
-  sections: [],
-};
