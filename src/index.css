@@ -3,26 +3,26 @@
 @tailwind utilities;
 
 :root {
-  --color-bg: #FAF7F0;
-  --color-bg-rgb: 250, 247, 240;
-  --color-surface: #FFFDF8;
-  --color-surface-rgb: 255, 253, 248;
-  --color-surface-hover: #F2EBDD;
-  --color-surface-hover-rgb: 242, 235, 221;
-  --color-border: #D8CCB8;
-  --color-border-rgb: 216, 204, 184;
-  --color-text-primary: #2B2B2B;
-  --color-text-primary-rgb: 43, 43, 43;
-  --color-text-muted: #6D6257;
-  --color-text-muted-rgb: 109, 98, 87;
-  --color-accent: #9A7440;
-  --color-accent-rgb: 154, 116, 64;
-  --color-accent-hover: #76562E;
-  --color-accent-hover-rgb: 118, 86, 46;
-  --color-accent-text: #000000;
-  --radius-theme: 4px;
-  --font-heading: 'Playfair Display', sans-serif;
-  --font-body: 'Lora', sans-serif;
+  --color-bg: #F9F5F0;
+  --color-bg-rgb: 249, 245, 240;
+  --color-surface: #FFFDF9;
+  --color-surface-rgb: 255, 253, 249;
+  --color-surface-hover: #F1E8DD;
+  --color-surface-hover-rgb: 241, 232, 221;
+  --color-border: #CDBB9B;
+  --color-border-rgb: 205, 187, 155;
+  --color-text-primary: #2E2B28;
+  --color-text-primary-rgb: 46, 43, 40;
+  --color-text-muted: #6E6258;
+  --color-text-muted-rgb: 110, 98, 88;
+  --color-accent: #C1440E;
+  --color-accent-rgb: 193, 68, 14;
+  --color-accent-hover: #963308;
+  --color-accent-hover-rgb: 150, 51, 8;
+  --color-accent-text: #ffffff;
+  --radius-theme: 6px;
+  --font-heading: 'Bodoni Moda', sans-serif;
+  --font-body: 'Inter', sans-serif;
 }
 
 @layer base {

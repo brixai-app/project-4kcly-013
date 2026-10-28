@@ -1,93 +1,130 @@
-export type Product = {
+export type ProductCategory = 'Mojri' | 'Jutti' | 'Slip-on' | 'Wedding' | 'Heritage' | 'Everyday';
+export type ProductGender = 'Men' | 'Women' | 'Unisex';
+export type ProductAvailability = 'in_stock' | 'low_stock' | 'preorder' | 'sold_out';
+
+export interface Product {
   id: string;
-  name: string;
   slug: string;
+  name: string;
+  category: ProductCategory;
+  gender: ProductGender;
   price: number;
+  compareAtPrice?: number | null;
   description: string;
-  category: string;
-  collection?: string;
+  artisan: string;
+  material: string;
+  color: string;
+  sizes: string[];
   image: string;
-  images?: string[];
-  sizes?: string[];
-  colors?: string[];
-  artisan?: Artisan;
+  gallery?: string[];
   rating?: number;
   reviewCount?: number;
-  inStock?: boolean;
+  availability?: ProductAvailability;
   featured?: boolean;
-};
+  newArrival?: boolean;
+  handcrafted?: boolean;
+  stock?: number;
+  tags?: string[];
+}
 
-export type Artisan = {
+export interface Artisan {
   id: string;
   name: string;
-  location?: string;
-  craft?: string;
-  bio?: string;
-  image?: string;
-};
+  location: string;
+  specialty: string;
+  story: string;
+  portrait: string;
+  yearsActive?: number;
+  signature?: string[];
+}
 
-export type Review = {
-  id: string;
+export interface CartItem {
   productId: string;
-  author: string;
-  rating: number;
-  title?: string;
-  body: string;
-  createdAt?: string;
-};
-
-export type CartItem = {
-  product: Product;
   quantity: number;
-  selectedSize?: string;
-  selectedColor?: string;
-};
+  size: string;
+  product?: Product;
+}
 
-export type ShippingDetails = {
+export interface OrderAddress {
   fullName: string;
-  email: string;
   phone: string;
-  addressLine1: string;
-  addressLine2?: string;
+  line1: string;
+  line2?: string;
   city: string;
   state: string;
   postalCode: string;
   country: string;
-};
+}
 
-export type PaymentMethod = "card" | "upi" | "cod";
-
-export type Order = {
+export interface Order {
   id: string;
+  userId?: string | null;
   items: CartItem[];
-  shipping: ShippingDetails;
-  paymentMethod: PaymentMethod;
   subtotal: number;
-  shippingFee: number;
+  shipping: number;
   total: number;
-  status: "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
+  currency: string;
+  status: 'pending' | 'confirmed' | 'packed' | 'shipped' | 'delivered' | 'cancelled';
+  shippingAddress: OrderAddress;
   createdAt: string;
-};
+  updatedAt?: string;
+}
 
-export type ApiResponse<T> = {
-  success: boolean;
-  data?: T;
+export interface CustomOrderRequest {
+  id?: string;
+  name: string;
+  phone: string;
+  email?: string;
+  occasion: string;
+  size: string;
+  colorPreference?: string;
+  notes?: string;
+  referenceImages?: string[];
+  status?: 'new' | 'reviewing' | 'quoted' | 'approved' | 'in_production' | 'completed';
+  createdAt?: string;
+}
+
+export interface ProductFilterState {
+  query: string;
+  categories: ProductCategory[];
+  genders: ProductGender[];
+  sizes: string[];
+  priceRange: [number, number];
+  availability: ProductAvailability[];
+  featuredOnly: boolean;
+  handcraftedOnly: boolean;
+  sortBy: 'featured' | 'newest' | 'price-asc' | 'price-desc' | 'rating';
+}
+
+export interface CheckoutPayload {
+  items: CartItem[];
+  shippingAddress: OrderAddress;
+  paymentMethod: 'card' | 'upi' | 'cod';
+  notes?: string;
+}
+
+export interface ApiResponse<T> {
+  data: T;
   message?: string;
-  error?: string;
-};
+  success: boolean;
+}
 
-export type ProductsResponse = ApiResponse<Product[]>;
-export type ProductResponse = ApiResponse<Product>;
-export type ReviewsResponse = ApiResponse<Review[]>;
-export type OrderResponse = ApiResponse<Order>;
-export type OrdersResponse = ApiResponse<Order[]>;
-export type AuthResponse = ApiResponse<{
-  user?: {
-    id: string;
-    name?: string | null;
-    email?: string | null;
-    image?: string | null;
-  } | null;
-}>;
+export interface ApiErrorResponse {
+  success: false;
+  message: string;
+  code?: string;
+  details?: unknown;
+}
 
-export default Product;
+export interface ProductsResponse extends ApiResponse<Product[]> {}
+export interface ProductResponse extends ApiResponse<Product> {}
+export interface OrdersResponse extends ApiResponse<Order[]> {}
+export interface OrderResponse extends ApiResponse<Order> {}
+export interface ArtisanResponse extends ApiResponse<Artisan[]> {}
+export interface CheckoutResponse extends ApiResponse<Order> {}
+
+export type FilterPayload = ProductFilterState;
+export type CheckoutRequest = CheckoutPayload;
+
+const types = {};
+export default types;

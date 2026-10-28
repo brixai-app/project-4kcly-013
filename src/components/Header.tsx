@@ -1,168 +1,194 @@
-import React from 'react';
-import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Menu, Search, ShoppingBag, User, X } from 'lucide-react';
-import { Dialog } from "@radix-ui/react-dialog";
-import { cn } from "@/lib/utils";
-import { useCart } from "@/context/CartContext";
-import { authClient, useSession } from "@/lib/auth-client";
-import { AuthModal } from "@/components/AuthModal";
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Menu, Search, ShoppingBag, User, X, ChevronDown, Circle as LogOut } from 'lucide-react';
+import { Dialog } from '@radix-ui/react-dialog';
+import { cn } from '@/lib/utils';
+import { useCart } from '@/context/CartContext';
+import AuthModal from '@/components/AuthModal';
+import { authClient, useSession, signOut } from '@/lib/auth-client';
 
-type NavItem = { label: string; to: string };
+export interface HeaderProps {
+  className?: string;
+}
 
-const navItems: NavItem[] = [
-  { label: "Home", to: "/" },
-  { label: "Shop", to: "/shop" },
-  { label: "Editorial", to: "/editorial" },
-  { label: "Checkout", to: "/checkout" },
-];
-
-export function Header() {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [authOpen, setAuthOpen] = useState(false);
-  const [search, setSearch] = useState("");
+export function Header({ className = '' }: HeaderProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { items } = useCart() as { items?: { quantity?: number }[] };
-  const session = useSession?.() as { data?: { user?: { name?: string | null; email?: string | null } | null } | null } | undefined;
+  const { items } = useCart() as { items?: Array<{ quantity?: number }> };
+  const session = useSession?.() ?? null;
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const cartCount = useMemo(
     () => (items ?? []).reduce((sum, item) => sum + (item?.quantity ?? 0), 0),
-    [items]
+    [items],
   );
 
   useEffect(() => {
     setMobileOpen(false);
+    setMenuOpen(false);
   }, [location.pathname]);
 
-  const handleSearchSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const query = search.trim();
-    if (!query) return;
-    navigate(`/shop?search=${encodeURIComponent(query)}`);
+  const navItems = [
+    { label: 'Mojri', to: '/shop?category=Mojri' },
+    { label: 'Jutti', to: '/shop?category=Jutti' },
+    { label: 'Wedding', to: '/shop?category=Wedding' },
+    { label: 'Heritage', to: '/shop?category=Heritage' },
+  ];
+
+  const handleSearch = () => {
+    const trimmed = query.trim();
+    navigate(trimmed ? `/shop?q=${encodeURIComponent(trimmed)}` : '/shop');
   };
 
-  const handleSignOut = async () => {
-    await authClient?.signOut?.();
+  const handleAuth = async () => {
+    if (session?.user) {
+      await signOut?.();
+      return;
+    }
+    setAuthOpen(true);
   };
-
-  const userLabel = session?.data?.user?.name ?? session?.data?.user?.email ?? "Account";
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[#D8CCB8] bg-[#FAF7F0]/95 backdrop-blur">
+    <header className={cn('sticky top-0 z-50 border-b border-[#CDBB9B] bg-[#F9F5F0]/95 backdrop-blur', className)}>
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
         <button
           type="button"
           onClick={() => setMobileOpen((v) => !v)}
-          className="inline-flex h-10 w-10 items-center justify-center border border-[#D8CCB8] bg-[#FFFDF8] text-[#2B2B2B] transition hover:border-[#9A7440] hover:text-[#9A7440] lg:hidden"
-          aria-label="Toggle navigation"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#CDBB9B] bg-[#FFFDF9] text-[#2E2B28] lg:hidden"
+          aria-label="Toggle menu"
         >
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
 
-        <Link
-          to="/"
-          className="min-w-0 shrink-0 font-['Playfair_Display'] text-2xl tracking-[0.18em] text-[#2B2B2B]"
-        >
-          JOOTIYA
+        <Link to="/" className="min-w-0 flex-1 lg:flex-none">
+          <div className="font-['Bodoni_Moda'] text-2xl font-semibold tracking-[0.18em] text-[#2E2B28]">
+            JOOTIYA
+          </div>
+          <div className="text-[10px] uppercase tracking-[0.35em] text-[#6E6258]">
+            Jodhpuri Mojris
+          </div>
         </Link>
 
-        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-6 lg:flex">
+        <nav className="hidden flex-1 items-center justify-center gap-1 lg:flex">
           {navItems.map((item) => (
             <Link
-              key={item.to}
+              key={item.label}
               to={item.to}
-              className={cn(
-                "text-xs font-semibold uppercase tracking-[0.22em] text-[#6D6257] transition hover:text-[#9A7440]",
-                location.pathname === item.to && "text-[#9A7440]"
-              )}
+              className="rounded-md px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-[#2E2B28] transition hover:bg-[#FFFDF9] hover:text-[#C1440E]"
             >
               {item.label}
             </Link>
           ))}
         </nav>
 
-        <form onSubmit={handleSearchSubmit} className="hidden min-w-0 flex-1 max-w-sm lg:block">
-          <label className="flex h-10 items-center gap-2 border border-[#D8CCB8] bg-[#FFFDF8] px-3">
-            <Search className="h-4 w-4 shrink-0 text-[#6D6257]" />
+        <div className="hidden min-w-[240px] max-w-sm flex-1 items-center gap-2 lg:flex">
+          <div className="flex w-full items-center gap-2 rounded-md border border-[#CDBB9B] bg-[#FFFDF9] px-3 py-2">
+            <Search className="h-4 w-4 shrink-0 text-[#6E6258]" />
             <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search mojris, sizes, artisans"
-              className="w-full min-w-0 bg-transparent text-sm text-[#2B2B2B] outline-none placeholder:text-[#6D6257]"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              placeholder="Search styles, artisans, sizes"
+              className="w-full bg-transparent text-sm text-[#2E2B28] outline-none placeholder:text-[#6E6258]"
             />
-          </label>
-        </form>
+          </div>
+          <button
+            type="button"
+            onClick={handleSearch}
+            className="rounded-md bg-[#C1440E] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-white transition hover:bg-[#963308]"
+          >
+            Search
+          </button>
+        </div>
 
         <div className="ml-auto flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setAuthOpen(true)}
-            className="inline-flex h-10 items-center gap-2 border border-[#D8CCB8] bg-[#FFFDF8] px-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#2B2B2B] transition hover:border-[#9A7440] hover:text-[#9A7440]"
+            onClick={() => setMenuOpen((v) => !v)}
+            className="hidden h-10 items-center gap-1 rounded-md border border-[#CDBB9B] bg-[#FFFDF9] px-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-[#2E2B28] lg:inline-flex"
           >
-            <User className="h-4 w-4" />
-            <span className="hidden sm:inline">{session?.data?.user ? userLabel : "Sign In"}</span>
-            <span className="sm:hidden">Sign In</span>
+            Shop
+            <ChevronDown className="h-4 w-4" />
           </button>
 
-          {session?.data?.user ? (
-            <button
-              type="button"
-              onClick={() => void handleSignOut()}
-              className="hidden h-10 border border-[#D8CCB8] bg-[#FFFDF8] px-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#6D6257] transition hover:border-[#9A7440] hover:text-[#9A7440] sm:inline-flex"
-            >
-              Sign Out
-            </button>
-          ) : null}
+          <button
+            type="button"
+            onClick={handleAuth}
+            className="inline-flex h-10 items-center gap-2 rounded-md border border-[#CDBB9B] bg-[#FFFDF9] px-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-[#2E2B28] transition hover:text-[#C1440E]"
+          >
+            <User className="h-4 w-4" />
+            <span className="hidden sm:inline">{session?.user ? 'Sign Out' : 'Sign In'}</span>
+          </button>
 
-          <Link
-            to="/checkout"
-            className="relative inline-flex h-10 w-10 items-center justify-center border border-[#D8CCB8] bg-[#FFFDF8] text-[#2B2B2B] transition hover:border-[#9A7440] hover:text-[#9A7440]"
+          <button
+            type="button"
+            onClick={() => navigate('/shop?cart=open')}
+            className="relative inline-flex h-10 items-center justify-center rounded-md border border-[#CDBB9B] bg-[#FFFDF9] px-3 text-[#2E2B28] transition hover:text-[#C1440E]"
             aria-label="Open cart"
           >
             <ShoppingBag className="h-5 w-5" />
             {cartCount > 0 ? (
-              <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center border border-[#9A7440] bg-[#9A7440] px-1 text-[10px] font-semibold leading-none text-black">
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#C1440E] px-1 text-[10px] font-semibold text-white">
                 {cartCount}
               </span>
             ) : null}
-          </Link>
+          </button>
         </div>
       </div>
 
       {mobileOpen ? (
-        <div className="border-t border-[#D8CCB8] bg-[#FFFDF8] lg:hidden">
-          <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 sm:px-6">
-            <form onSubmit={handleSearchSubmit}>
-              <label className="flex h-10 items-center gap-2 border border-[#D8CCB8] bg-[#FAF7F0] px-3">
-                <Search className="h-4 w-4 shrink-0 text-[#6D6257]" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search"
-                  className="w-full min-w-0 bg-transparent text-sm text-[#2B2B2B] outline-none placeholder:text-[#6D6257]"
-                />
-              </label>
-            </form>
-            <nav className="flex flex-col gap-2.5">
-              {navItems.map((item) => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className={cn(
-                    "min-w-0 truncate border border-[#D8CCB8] px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#2B2B2B]",
-                    location.pathname === item.to && "border-[#9A7440] text-[#9A7440]"
-                  )}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
+        <div className="border-t border-[#CDBB9B] bg-[#FFFDF9] px-4 py-4 lg:hidden">
+          <div className="flex flex-col gap-2.5">
+            {navItems.map((item) => (
+              <Link
+                key={item.label}
+                to={item.to}
+                className="min-w-0 rounded-md border border-[#CDBB9B] px-3 py-2 text-sm font-medium text-[#2E2B28]"
+              >
+                {item.label}
+              </Link>
+            ))}
+            <div className="flex items-center gap-2 rounded-md border border-[#CDBB9B] px-3 py-2">
+              <Search className="h-4 w-4 shrink-0 text-[#6E6258]" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                placeholder="Search"
+                className="w-full bg-transparent text-sm outline-none placeholder:text-[#6E6258]"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleSearch}
+              className="rounded-md bg-[#C1440E] px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-white"
+            >
+              Search
+            </button>
           </div>
         </div>
       ) : null}
 
-      <AuthModal open={authOpen} onOpenChange={setAuthOpen} defaultTab="signin" />
+      {menuOpen ? (
+        <div className="hidden border-t border-[#CDBB9B] bg-[#FFFDF9] px-4 py-3 lg:block">
+          <div className="mx-auto flex max-w-7xl flex-wrap gap-2">
+            {['Everyday', 'Slip-on', 'Men', 'Women', 'Unisex'].map((item) => (
+              <Link
+                key={item}
+                to={`/shop?filter=${encodeURIComponent(item)}`}
+                className="rounded-md border border-[#CDBB9B] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-[#2E2B28] hover:text-[#C1440E]"
+              >
+                {item}
+              </Link>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <AuthModal open={authOpen} onOpenChange={setAuthOpen} />
     </header>
   );
 }

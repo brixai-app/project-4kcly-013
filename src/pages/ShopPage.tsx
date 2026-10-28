@@ -1,192 +1,154 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { ArrowRight, Filter, Search, Sliders, RefreshCw } from 'lucide-react';
-import { Product } from "@/types";
-import { cn } from "@/lib/utils";
-import { ProductCard } from "@/components/ProductCard";
-
-type SortKey = "featured" | "newest" | "price-asc" | "price-desc";
+import { useEffect, useMemo, useState } from 'react';
+import { Search, Sliders, ArrowUpRight, RefreshCw } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { FilterSidebar, ProductGrid } from '@/components/StorefrontSections';
+import type { Product, ProductFilterState } from '@/types';
 
 export function ShopPage() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("All");
-  const [sort, setSort] = useState<SortKey>("featured");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
+  const [filters, setFilters] = useState<Partial<ProductFilterState>>({
+    query: '',
+    sortBy: 'featured',
+    categories: [],
+    genders: [],
+    sizes: [],
+    availability: [],
+    featuredOnly: false,
+    handcraftedOnly: false,
+    priceRange: [0, 100000],
+  });
 
   useEffect(() => {
-    const controller = new AbortController();
+    let active = true;
     const load = async () => {
       setLoading(true);
-      setError("");
+      setError('');
       try {
-        const res = await fetch("/api/products", { signal: controller.signal });
-        const json = (await res.json()) as { success?: boolean; data?: Product[]; message?: string; error?: string };
-        if (!res.ok || !json?.success) throw new Error(json?.message ?? json?.error ?? "Unable to load products");
-        setProducts(Array.isArray(json?.data) ? json.data : []);
-      } catch (err) {
-        if ((err as Error)?.name !== "AbortError") setError((err as Error)?.message ?? "Unable to load products");
+        const res = await fetch('/api/products');
+        const json = await res.json().catch(() => null);
+        const payload = Array.isArray(json) ? json : (json?.data ?? json?.products ?? json?.items ?? []);
+        const next = Array.isArray(payload) ? payload : [];
+        if (active) setProducts(next);
+      } catch {
+        if (active) setError('Unable to load the collection right now.');
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
     load();
-    return () => controller.abort();
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const categories = useMemo(() => ["All", ...Array.from(new Set(products.map((p) => p.category).filter(Boolean)))], [products]);
+  const filteredProducts = useMemo(() => {
+    const query = (filters.query ?? '').trim().toLowerCase();
+    const categories = filters.categories ?? [];
+    const genders = filters.genders ?? [];
+    const sizes = filters.sizes ?? [];
+    const availability = filters.availability ?? [];
+    const [minPrice, maxPrice] = filters.priceRange ?? [0, Number.MAX_SAFE_INTEGER];
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const list = products.filter((p) => {
+    const list = products.filter((product) => {
       const matchesQuery =
-        !q ||
-        [p.name, p.description, p.category, p.collection, p.artisan?.name].some((v) => v?.toLowerCase().includes(q));
-      const matchesCategory = category === "All" || p.category === category;
-      return matchesQuery && matchesCategory;
+        !query ||
+        [product.name, product.category, product.artisan, product.material, product.color, ...(product.tags ?? [])]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(query));
+      const matchesCategory = categories.length === 0 || categories.some((category) => String(product.category ?? '').toLowerCase() === String(category ?? '').toLowerCase());
+      const matchesGender = genders.length === 0 || genders.includes(product.gender);
+      const matchesSize = sizes.length === 0 || sizes.some((size) => (product.sizes ?? []).includes(size));
+      const matchesAvailability =
+        availability.length === 0 || availability.includes(product.availability ?? 'in_stock');
+      const matchesPrice = product.price >= minPrice && product.price <= maxPrice;
+      const matchesFeatured = !filters.featuredOnly || !!product.featured;
+      const matchesHandcrafted = !filters.handcraftedOnly || !!product.handcrafted;
+      return matchesQuery && matchesCategory && matchesGender && matchesSize && matchesAvailability && matchesPrice && matchesFeatured && matchesHandcrafted;
     });
+
+    const sortBy = filters.sortBy ?? 'featured';
     return [...list].sort((a, b) => {
-      if (sort === "price-asc") return a.price - b.price;
-      if (sort === "price-desc") return b.price - a.price;
-      if (sort === "newest") return (b.featured ? 1 : 0) - (a.featured ? 1 : 0);
-      return (b.featured ? 1 : 0) - (a.featured ? 1 : 0);
+      if (sortBy === 'price-asc') return a.price - b.price;
+      if (sortBy === 'price-desc') return b.price - a.price;
+      if (sortBy === 'rating') return (b.rating ?? 0) - (a.rating ?? 0);
+      if (sortBy === 'newest') return Number(!!b.newArrival) - Number(!!a.newArrival);
+      return Number(!!b.featured) - Number(!!a.featured);
     });
-  }, [products, query, category, sort]);
+  }, [filters, products]);
 
   return (
-    <main className="bg-[#FAF7F0] text-[#2B2B2B]">
-      <section className="border-b border-[#D8CCB8] bg-[#FFFDF8]">
-        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="font-sans text-xs font-semibold uppercase tracking-[0.35em] text-[#9A7440]">Shop Jootiya</p>
-              <h1 className="mt-3 font-serif text-4xl font-light tracking-tight sm:text-5xl lg:text-6xl">
-                Authentic Jodhpuri Mojris, curated with editorial restraint.
+    <main className="bg-[#F9F5F0] text-[#2E2B28]">
+      <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-6 border border-[#CDBB9B] bg-[#FFFDF9] p-4 sm:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#6E6258]">Shop Jootiya</p>
+              <h1 className="mt-2 font-['Bodoni_Moda'] text-4xl font-light tracking-tight sm:text-5xl">
+                Authentic Jodhpuri Mojris, curated with editorial precision.
               </h1>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-[#6D6257] sm:text-base">
-                Explore handcrafted silhouettes, artisan-led finishes, and heritage textures across a refined catalog built for slow luxury.
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-[#6E6258]">
+                Explore handcrafted silhouettes, heritage finishes, and occasion-ready pairs sourced from master artisans.
               </p>
             </div>
-            <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.28em] text-[#6D6257]">
-              <Sliders className="h-4 w-4 text-[#9A7440]" />
-              <span>{filtered.length} pieces</span>
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#6E6258]">
+              <ArrowUpRight className="h-4 w-4" />
+              <span>{filteredProducts.length} pieces</span>
             </div>
           </div>
-        </div>
-      </section>
 
-      <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
-          <aside className="rounded-sm border border-[#D8CCB8] bg-[#FFFDF8] p-4">
-            <div className="flex items-center gap-2 border-b border-[#D8CCB8] pb-3">
-              <Filter className="h-4 w-4 text-[#9A7440]" />
-              <h2 className="min-w-0 truncate font-sans text-xs font-semibold uppercase tracking-[0.28em]">Filters</h2>
-            </div>
-            <div className="mt-4 flex flex-col gap-2.5">
-              <label className="flex flex-col gap-2">
-                <span className="font-sans text-xs font-semibold uppercase tracking-[0.22em] text-[#6D6257]">Search</span>
-                <div className="flex items-center gap-2 rounded-sm border border-[#D8CCB8] bg-white px-3 py-2">
-                  <Search className="h-4 w-4 shrink-0 text-[#9A7440]" />
+          <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+            <aside className="min-w-0">
+              <div className="sticky top-4">
+                <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#6E6258]">
+                  <Sliders className="h-4 w-4" />
+                  <span>Filters</span>
+                </div>
+                <FilterSidebar
+                  filters={filters}
+                  onFilterChange={(next) => setFilters((prev) => ({ ...prev, ...next }))}
+                  className="rounded-none border border-[#CDBB9B] bg-[#FFFDF9] p-4"
+                />
+              </div>
+            </aside>
+
+            <section className="min-w-0">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <label className="flex min-w-0 flex-1 items-center gap-3 border border-[#CDBB9B] bg-[#FFFDF9] px-3 py-2">
+                  <Search className="h-4 w-4 shrink-0 text-[#6E6258]" />
                   <input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search mojris, craft, artisan"
-                    className="w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-[#6D6257]"
+                    value={filters.query ?? ''}
+                    onChange={(e) => setFilters((prev) => ({ ...prev, query: e.target.value }))}
+                    placeholder="Search by style, artisan, material..."
+                    className="min-w-0 w-full bg-transparent text-sm outline-none placeholder:text-[#6E6258]"
                   />
-                </div>
-              </label>
-
-              <div className="flex flex-col gap-2">
-                <span className="font-sans text-xs font-semibold uppercase tracking-[0.22em] text-[#6D6257]">Category</span>
-                <div className="flex flex-wrap gap-2">
-                  {categories.map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      onClick={() => setCategory(item)}
-                      className={cn(
-                        "min-w-0 rounded-sm border px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] transition",
-                        category === item
-                          ? "border-[#9A7440] bg-[#9A7440] text-black"
-                          : "border-[#D8CCB8] bg-white text-[#2B2B2B] hover:border-[#9A7440]"
-                      )}
-                    >
-                      <span className="block min-w-0 truncate">{item}</span>
-                    </button>
-                  ))}
-                </div>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setFilters({ query: '', sortBy: 'featured', categories: [], genders: [], sizes: [], availability: [], featuredOnly: false, handcraftedOnly: false, priceRange: [0, 100000] })}
+                  className="inline-flex items-center gap-2 border border-[#CDBB9B] bg-[#FFFDF9] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#2E2B28] transition-colors hover:bg-[#F9F5F0]"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Reset
+                </button>
               </div>
 
-              <label className="flex flex-col gap-2">
-                <span className="font-sans text-xs font-semibold uppercase tracking-[0.22em] text-[#6D6257]">Sort</span>
-                <div className="rounded-sm border border-[#D8CCB8] bg-white px-3 py-2">
-                  <select
-                    value={sort}
-                    onChange={(e) => setSort(e.target.value as SortKey)}
-                    className="w-full bg-transparent text-sm outline-none"
-                  >
-                    <option value="featured">Featured</option>
-                    <option value="newest">Newest</option>
-                    <option value="price-asc">Price: Low to High</option>
-                    <option value="price-desc">Price: High to Low</option>
-                  </select>
-                </div>
-              </label>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setQuery("");
-                  setCategory("All");
-                  setSort("featured");
-                }}
-                className="mt-2 inline-flex items-center justify-center gap-2 rounded-sm border border-[#D8CCB8] bg-[#FFFDF8] px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#2B2B2B] transition hover:border-[#9A7440]"
-              >
-                <RefreshCw className="h-4 w-4 text-[#9A7440]" />
-                Reset
-              </button>
-            </div>
-          </aside>
-
-          <div className="min-w-0">
-            <div className="mb-4 flex items-center justify-between gap-3 border-b border-[#D8CCB8] pb-3">
-              <p className="min-w-0 truncate text-sm text-[#6D6257]">
-                {loading ? "Loading collection..." : error ? error : `${filtered.length} results`}
-              </p>
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#6D6257]">
-                <span className="hidden sm:inline">Refined catalog</span>
-                <ArrowRight className="h-4 w-4 text-[#9A7440]" />
-              </div>
-            </div>
-
-            {error ? (
-              <div className="rounded-sm border border-[#D8CCB8] bg-[#FFFDF8] p-6 text-sm text-[#6D6257]">{error}</div>
-            ) : (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.45 }}
-                className="columns-1 gap-4 sm:columns-2 xl:columns-3"
-              >
-                {(loading ? Array.from({ length: 6 }) : filtered).map((product, index) => (
-                  <div key={(product as Product)?.id ?? `skeleton-${index}`} className="mb-4 break-inside-avoid">
-                    {loading ? (
-                      <div className="overflow-hidden rounded-sm border border-[#D8CCB8] bg-[#FFFDF8]">
-                        <div className="aspect-[3/4] animate-pulse bg-[#E9E1D3]" />
-                        <div className="space-y-3 p-4">
-                          <div className="h-3 w-24 animate-pulse bg-[#E9E1D3]" />
-                          <div className="h-4 w-3/4 animate-pulse bg-[#E9E1D3]" />
-                          <div className="h-3 w-16 animate-pulse bg-[#E9E1D3]" />
-                        </div>
-                      </div>
-                    ) : (
-                      <ProductCard product={product as Product} />
-                    )}
+              {loading ? (
+                <div className="flex min-h-[40vh] items-center justify-center border border-dashed border-[#CDBB9B] bg-[#FFFDF9]">
+                  <div className="flex items-center gap-3 text-sm text-[#6E6258]">
+                    <motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
+                      <RefreshCw className="h-4 w-4" />
+                    </motion.span>
+                    Loading collection...
                   </div>
-                ))}
-              </motion.div>
-            )}
+                </div>
+              ) : error ? (
+                <div className="border border-[#CDBB9B] bg-[#FFFDF9] p-6 text-sm text-[#6E6258]">{error}</div>
+              ) : (
+                <ProductGrid products={filteredProducts} className="min-w-0" />
+              )}
+            </section>
           </div>
         </div>
       </section>

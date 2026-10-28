@@ -1,61 +1,69 @@
-import React from "react";
-import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@radix-ui/react-dialog";
-import { ArrowRight, ChevronRight, Filter, Heart, MapPin, Sparkles, Store, Truck } from 'lucide-react';
-import { cn } from "@/lib/utils";
-import ProductCard from "@/components/ProductCard";
-import { useCart } from "@/context/CartContext";
-import { artisanStories, categories, products } from "@/data/mockData";
-import type { ArtisanStory, Product } from "@/types";
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { ArrowRight, Filter, Sparkles, Star, Truck, Shield, Leaf, ShoppingBag, Search, Circle as Icon } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import ProductCard from '@/components/ProductCard';
+import type { Product, ProductCategory, ProductFilterState } from '@/types';
 
-type SectionProps = { className?: string };
-type DrawerProps = { open?: boolean; onOpenChange?: (open: boolean) => void; story?: ArtisanStory | null };
+const heroImage = 'https://images.unsplash.com/photo-1590874103328-eac38a683ce7?auto=format&fit=crop&w=800&q=80';
+const artisanImage = 'https://images.unsplash.com/photo-1533867617858-e7b97e060509?auto=format&fit=crop&w=800&q=80';
+const workshopImage = 'https://images.unsplash.com/photo-1560769629-975ec94e6a86?auto=format&fit=crop&w=800&q=80';
+const detailImage = 'https://images.unsplash.com/photo-1552346154-21d32810aba3?auto=format&fit=crop&w=800&q=80';
+const craftImage = 'https://images.unsplash.com/photo-1543163521-1bf539c55dd2?auto=format&fit=crop&w=800&q=80';
 
-export function HeroBanner({ className = "" }: SectionProps) {
-  const featured = products?.find((p) => p?.featured) ?? products?.[0];
+const categories: ProductCategory[] = ['Mojri', 'Jutti', 'Slip-on', 'Wedding', 'Heritage', 'Everyday'];
+
+export function LoadingSpinner({ className = '' }: { className?: string }) {
+  return <div className={cn('h-10 w-10 animate-spin rounded-full border-2 border-[#CDBB9B] border-t-[#C1440E]', className)} />;
+}
+
+export function HeroBanner({ className = '' }: { className?: string }) {
   return (
-    <section className={cn("relative overflow-hidden bg-[#F5F0E6] text-[#2B2B2B]", className)}>
-      <div className="mx-auto grid min-h-[82vh] max-w-7xl gap-6 px-4 py-6 md:grid-cols-[1.15fr_0.85fr] md:px-6 lg:px-8">
-        <div className="relative overflow-hidden rounded-[18px] border border-[#C9A66B] bg-[#0f0f0f]">
-          <img src={featured?.image ?? ""} alt={featured?.name ?? "Jootiya hero"} crossOrigin="anonymous" className="h-full w-full object-cover opacity-90" />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/30 to-transparent" />
-          <div className="absolute inset-0 flex items-end p-6 md:p-10">
-            <div className="max-w-xl text-white">
-              <p className="mb-4 text-xs font-semibold uppercase tracking-[0.35em] text-[#E7C98A]">Jootiya / Jodhpur atelier</p>
-              <h1 className="font-serif text-5xl font-light tracking-tight md:text-7xl">Heritage Mojris, reimagined with quiet opulence.</h1>
-              <p className="mt-5 max-w-lg text-sm leading-7 text-white/80 md:text-base">Handcrafted Rajasthani footwear shaped in parchment light, terracotta warmth, and gold-threaded provenance.</p>
-              <div className="mt-8 flex flex-wrap items-center gap-3">
-                <Link to="/shop" className="inline-flex items-center gap-2 rounded-md bg-[#B04E2C] px-5 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-white transition hover:bg-[#8F3C22]">
-                  Explore Collection <ArrowRight size={16} />
-                </Link>
-                <span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#E7C98A]"><Sparkles size={14} /> Limited artisan editions</span>
-              </div>
+    <section className={cn('relative overflow-hidden bg-[#F9F5F0]', className)}>
+      <div className="mx-auto grid min-h-[88vh] max-w-7xl grid-cols-1 lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="relative min-h-[56vh] lg:min-h-[88vh]">
+          <img src={heroImage} alt="Jodhpuri mojris editorial hero" crossOrigin="anonymous" className="h-full w-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a]/70 via-[#0a0a0a]/20 to-transparent" />
+          <div className="absolute bottom-0 left-0 right-0 p-6 sm:p-10 lg:p-12">
+            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.35em] text-[#F9F5F0]/85">Authentic Jodhpuri Mojris</p>
+            <h1 className="max-w-3xl font-['Bodoni_Moda'] text-5xl font-light leading-[0.92] tracking-tight text-[#FFFDF9] sm:text-6xl lg:text-7xl">
+              Heritage footwear, cut with modern restraint.
+            </h1>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <Link to="/shop" className="inline-flex items-center gap-2 rounded-sm bg-[#C1440E] px-5 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-white transition-colors hover:bg-[#963308]">
+                Explore Collection <ArrowRight size={16} />
+              </Link>
+              <span className="max-w-md text-sm leading-6 text-[#F9F5F0]/85">
+                Hand-finished pairs in warm ivory, terracotta, and restrained gold, sourced from master artisans in Rajasthan.
+              </span>
             </div>
           </div>
         </div>
-        <div className="grid gap-6">
-          <div className="rounded-[18px] border border-[#C9A66B] bg-[#FFFBF4] p-5 md:p-7">
-            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#6D6257]">Featured pair</p>
-            <h2 className="mt-3 font-serif text-3xl font-light tracking-tight">{featured?.name ?? "Signature Mojri"}</h2>
-            <p className="mt-3 text-sm leading-7 text-[#6D6257]">{featured?.description ?? "A refined silhouette with hand-finished detailing and enduring comfort."}</p>
-            <div className="mt-6 flex items-center justify-between border-t border-[#C9A66B]/60 pt-4">
-              <span className="text-lg font-semibold">₹{featured?.price?.toLocaleString?.("en-IN") ?? "0"}</span>
-              <Link to="/shop" className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#B04E2C]">
-                Shop latest drop <ChevronRight size={16} />
-              </Link>
+        <div className="flex flex-col justify-between border-t border-[#CDBB9B] bg-[#FFFDF9] p-6 sm:p-8 lg:border-l lg:border-t-0 lg:p-10">
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#6E6258]">Collection Rail</span>
+              <span className="h-px flex-1 bg-[#CDBB9B]" />
+            </div>
+            <div className="space-y-4">
+              {['Hand-embroidered uppers', 'Supple leather lining', 'Wedding and everyday silhouettes'].map((item, index) => (
+                <div key={item} className="flex items-start gap-4 border-b border-[#CDBB9B]/60 pb-4">
+                  <span className="font-['Bodoni_Moda'] text-2xl text-[#C1440E]">{String(index + 1).padStart(2, '0')}</span>
+                  <p className="text-sm leading-6 text-[#2E2B28]">{item}</p>
+                </div>
+              ))}
             </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            {[products?.[1], products?.[2]].filter(Boolean).map((p) => (
-              <div key={p?.id} className="overflow-hidden rounded-[18px] border border-[#C9A66B] bg-[#FFFBF4]">
-                <img src={p?.image ?? ""} alt={p?.name ?? ""} crossOrigin="anonymous" className="aspect-[4/5] w-full object-cover" />
-                <div className="p-4">
-                  <p className="text-xs uppercase tracking-[0.28em] text-[#6D6257]">{p?.collection ?? "Collection"}</p>
-                  <h3 className="mt-2 font-serif text-xl">{p?.name ?? ""}</h3>
-                </div>
-              </div>
-            ))}
+          <div className="mt-8 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-sm border border-[#CDBB9B] bg-[#F9F5F0] p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#6E6258]">Craft note</p>
+              <p className="mt-2 text-sm leading-6 text-[#2E2B28]">Every pair is photographed in natural light to preserve texture, stitch, and tonal depth.</p>
+            </div>
+            <div className="rounded-sm border border-[#CDBB9B] bg-[#FFFDF9] p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#6E6258]">Fast dispatch</p>
+              <p className="mt-2 text-sm leading-6 text-[#2E2B28]">Secure packaging, size guidance, and attentive support from order to delivery.</p>
+            </div>
           </div>
         </div>
       </div>
@@ -63,39 +71,163 @@ export function HeroBanner({ className = "" }: SectionProps) {
   );
 }
 
-export function ProductGrid({ className = "" }: SectionProps) {
-  return <section className={cn("mx-auto max-w-7xl px-4 py-10 md:px-6 lg:px-8", className)}><div className="mb-6 flex items-end justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#6D6257]">Curated selection</p><h2 className="mt-2 font-serif text-3xl font-light tracking-tight">Mojris with atelier precision</h2></div><Link to="/shop" className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#B04E2C]">View all <ArrowRight size={16} /></Link></div><div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{products?.slice(0, 6)?.map((product) => <ProductCard key={product?.id} product={product} />)}</div></section>;
+export function FeaturedArtisan({ className = '' }: { className?: string }) {
+  return (
+    <section className={cn('bg-[#FFFDF9] px-4 py-16 sm:px-6 lg:px-8', className)}>
+      <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
+        <div className="space-y-5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#6E6258]">Featured artisan</p>
+          <h2 className="font-['Bodoni_Moda'] text-4xl font-light tracking-tight text-[#2E2B28] sm:text-5xl">A workshop language of thread, leather, and patience.</h2>
+          <p className="max-w-xl text-sm leading-7 text-[#6E6258]">
+            Jootiya pairs contemporary retail discipline with the tactile rhythm of Rajasthan&apos;s craft houses, where each silhouette is shaped, stitched, and finished by hand.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {['Handcrafted', 'Limited batches', 'Authentic materials'].map((tag) => (
+              <span key={tag} className="inline-flex items-center gap-2 rounded-sm border border-[#CDBB9B] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-[#2E2B28]">
+                <Sparkles size={12} className="text-[#C1440E]" /> {tag}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <img src={artisanImage} alt="Artisan portrait" crossOrigin="anonymous" className="h-full min-h-[320px] w-full object-cover" />
+          <div className="grid gap-4">
+            <img src={workshopImage} alt="Workshop detail" crossOrigin="anonymous" className="h-40 w-full object-cover sm:h-48" />
+            <div className="border border-[#CDBB9B] bg-[#F9F5F0] p-5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#6E6258]">Signature</p>
+              <p className="mt-2 font-['Bodoni_Moda'] text-2xl text-[#2E2B28]">Terracotta stitching, gold thread accents, and a refined toe profile.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
 }
 
-export function FiltersPanel({ className = "" }: SectionProps) {
-  return <aside className={cn("rounded-[18px] border border-[#C9A66B] bg-[#FFFBF4] p-4", className)}><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#6D6257]"><Filter size={14} /> Refine</div><div className="mt-4 flex flex-col gap-2.5">{categories?.slice(0, 6)?.map((c) => <button key={c} className="min-w-0 rounded-md border border-[#C9A66B]/70 px-3 py-2 text-left text-sm text-[#2B2B2B] transition hover:bg-[#F5F0E6]"><span className="block truncate">{c}</span></button>)}</div></aside>;
+export function CuratedSpotlight({ className = '' }: { className?: string }) {
+  return (
+    <section className={cn('bg-[#F9F5F0] px-4 py-16 sm:px-6 lg:px-8', className)}>
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-8 flex items-end justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#6E6258]">Curated spotlight</p>
+            <h2 className="mt-2 font-['Bodoni_Moda'] text-4xl font-light tracking-tight text-[#2E2B28]">Selected pairs for ceremony and daily wear.</h2>
+          </div>
+          <Link to="/shop" className="hidden items-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#C1440E] sm:inline-flex">
+            View all <ArrowRight size={14} />
+          </Link>
+        </div>
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {[heroImage, detailImage, craftImage].map((src, index) => (
+            <motion.article key={src} whileHover={{ y: -4 }} className="group overflow-hidden border border-[#CDBB9B] bg-[#FFFDF9]">
+              <div className="aspect-[3/4] overflow-hidden">
+                <img src={src} alt={`Spotlight ${index + 1}`} crossOrigin="anonymous" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+              </div>
+              <div className="p-5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#6E6258]">Editorial edit</p>
+                <h3 className="mt-2 font-['Bodoni_Moda'] text-2xl text-[#2E2B28]">Crafted silhouette {index + 1}</h3>
+                <p className="mt-2 text-sm leading-6 text-[#6E6258]">A refined balance of comfort, ceremony, and heritage detailing.</p>
+              </div>
+            </motion.article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
 }
 
-export function CartView({ className = "" }: SectionProps) {
-  const { cart } = useCart();
-  return <section className={cn("rounded-[18px] border border-[#C9A66B] bg-[#FFFBF4] p-5", className)}><div className="flex items-center justify-between"><h3 className="font-serif text-2xl">Cart preview</h3><span className="text-sm text-[#6D6257]">{cart?.itemCount ?? 0} items</span></div><div className="mt-4 flex flex-col gap-3">{cart?.items?.slice(0, 3)?.map((item) => <div key={`${item?.productId}-${item?.size ?? "na"}`} className="flex items-center gap-3"><img src={item?.image ?? ""} alt={item?.name ?? ""} crossOrigin="anonymous" className="h-16 w-12 rounded-md object-cover" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{item?.name ?? ""}</p><p className="text-xs text-[#6D6257]">Qty {item?.quantity ?? 0}</p></div><span className="text-sm font-semibold">₹{((item?.price ?? 0) * (item?.quantity ?? 0)).toLocaleString("en-IN")}</span></div>)}</div></section>;
+export function CraftManifesto({ className = '' }: { className?: string }) {
+  return (
+    <section className={cn('bg-[#0f0f0f] px-4 py-14 sm:px-6 lg:px-8', className)}>
+      <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-3">
+        {[
+          { icon: Leaf, title: 'Natural materials', text: 'Leather, thread, and finishing details chosen for longevity and comfort.' },
+          { icon: Shield, title: 'Trusted quality', text: 'Careful inspection across stitching, fit, and finish before dispatch.' },
+          { icon: Truck, title: 'Reliable delivery', text: 'Secure packaging and responsive support from checkout to arrival.' },
+        ].map(({ icon: Icon, title, text }) => (
+          <div key={title} className="border border-white/10 bg-white/5 p-6 text-[#FFFDF9]">
+            <Icon className="text-[#CDBB9B]" size={20} />
+            <h3 className="mt-4 font-['Bodoni_Moda'] text-2xl font-light">{title}</h3>
+            <p className="mt-2 text-sm leading-7 text-white/75">{text}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
-export function ArtisanList({ className = "" }: SectionProps) {
-  return <section className={cn("mx-auto max-w-7xl px-4 py-10 md:px-6 lg:px-8", className)}><div className="mb-5 flex items-end justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#6D6257]">Artisan voices</p><h2 className="mt-2 font-serif text-3xl font-light tracking-tight">The hands behind the pair</h2></div></div><div className="grid gap-4 md:grid-cols-3">{artisanStories?.slice(0, 3)?.map((story) => <ArtisanStoryCard key={story?.id} story={story} />)}</div></section>;
+export function NewsletterSection({ className = '' }: { className?: string }) {
+  return (
+    <section className={cn('bg-[#FFFDF9] px-4 py-16 sm:px-6 lg:px-8', className)}>
+      <div className="mx-auto max-w-7xl border border-[#CDBB9B] bg-[#F9F5F0] p-6 sm:p-8 lg:p-10">
+        <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#6E6258]">Newsletter</p>
+            <h2 className="mt-2 font-['Bodoni_Moda'] text-4xl font-light tracking-tight text-[#2E2B28]">Receive new drops, artisan stories, and private access.</h2>
+          </div>
+          <form className="flex flex-col gap-3 sm:flex-row">
+            <label className="sr-only" htmlFor="newsletter-email">Email</label>
+            <input id="newsletter-email" type="email" placeholder="Email address" className="min-w-0 flex-1 border border-[#CDBB9B] bg-[#FFFDF9] px-4 py-3 text-sm text-[#2E2B28] outline-none placeholder:text-[#6E6258]" />
+            <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-sm bg-[#C1440E] px-5 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-white transition-colors hover:bg-[#963308]">
+              Subscribe <ArrowRight size={16} />
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+  );
 }
 
-function ArtisanStoryCard({ story }: { story: ArtisanStory }) {
-  return <Dialog><DialogTrigger asChild><button className="group overflow-hidden rounded-[18px] border border-[#C9A66B] bg-[#FFFBF4] text-left"><img src={story?.image ?? ""} alt={story?.name ?? ""} crossOrigin="anonymous" className="aspect-[4/5] w-full object-cover transition-transform duration-500 group-hover:scale-105" /><div className="p-4"><p className="text-xs uppercase tracking-[0.28em] text-[#6D6257]">{story?.location ?? "Jodhpur"}</p><h3 className="mt-2 font-serif text-2xl">{story?.name ?? ""}</h3><p className="mt-2 text-sm text-[#6D6257]">{story?.title ?? ""}</p></div></button></DialogTrigger><ArtisanStoryDrawer story={story} /></Dialog>;
+export function FilterSidebar({
+  filters,
+  onFilterChange,
+  className = '',
+}: {
+  filters?: Partial<ProductFilterState>;
+  onFilterChange?: (next: Partial<ProductFilterState>) => void;
+  className?: string;
+}) {
+  const activeCategories = filters?.categories ?? [];
+  return (
+    <aside className={cn('rounded-sm border border-[#CDBB9B] bg-[#FFFDF9] p-4', className)}>
+      <div className="flex items-center gap-2">
+        <Filter size={16} className="text-[#C1440E]" />
+        <h3 className="min-w-0 truncate text-xs font-semibold uppercase tracking-[0.28em] text-[#2E2B28]">Filters</h3>
+      </div>
+      <div className="mt-4 flex flex-col gap-2.5">
+        <div className="flex flex-wrap gap-2">
+          {categories.map((category) => {
+            const active = activeCategories.includes(category);
+            return (
+              <button
+                key={category}
+                type="button"
+                onClick={() => onFilterChange?.({ categories: active ? activeCategories.filter((item) => item !== category) : [...activeCategories, category] })}
+                className={cn('min-w-0 truncate border px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.28em] transition-colors', active ? 'border-[#C1440E] bg-[#C1440E] text-white' : 'border-[#CDBB9B] bg-transparent text-[#2E2B28] hover:border-[#C1440E]')}
+              >
+                {category}
+              </button>
+            );
+          })}
+        </div>
+        <Link to="/shop" className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#C1440E]">
+          <Search size={14} /> Search all
+        </Link>
+      </div>
+    </aside>
+  );
 }
 
-export function ArtisanStoryDrawer({ open = false, onOpenChange = () => {}, story = null }: DrawerProps) {
-  return <DialogContent className="fixed right-0 top-0 h-full w-[92vw] max-w-xl overflow-y-auto border-l border-[#C9A66B] bg-[#FFFBF4] p-6 shadow-2xl outline-none"><DialogTitle className="font-serif text-3xl">{story?.name ?? "Artisan story"}</DialogTitle><div className="mt-4 space-y-4"><img src={story?.image ?? ""} alt={story?.name ?? ""} crossOrigin="anonymous" className="aspect-[4/5] w-full rounded-[18px] object-cover" /><p className="text-sm leading-7 text-[#6D6257]">{story?.story ?? ""}</p><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#6D6257]"><MapPin size={14} /> {story?.location ?? "Jodhpur"}</div></div></DialogContent>;
+export function ProductGrid({ products = [], className = '' }: { products?: Product[]; className?: string }) {
+  return (
+    <div className={cn('grid gap-5 sm:grid-cols-2 xl:grid-cols-3', className)}>
+      {products.map((product) => (
+        <ProductCard key={product.id} product={product} />
+      ))}
+    </div>
+  );
 }
 
-export function ManifestoSection({ className = "" }: SectionProps) {
-  return <section className={cn("mx-auto max-w-7xl px-4 py-10 md:px-6 lg:px-8", className)}><div className="grid gap-6 rounded-[18px] border border-[#C9A66B] bg-[#0f0f0f] p-6 text-white md:grid-cols-[1.2fr_0.8fr] md:p-8"><div><p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#E7C98A]">Manifesto</p><h2 className="mt-3 font-serif text-4xl font-light tracking-tight md:text-5xl">Crafted for ceremony, worn for every day.</h2><p className="mt-4 max-w-2xl text-sm leading-7 text-white/75">Each pair is shaped by regional technique, tactile materials, and a restrained palette that lets the workmanship speak first.</p></div><div className="grid gap-3 text-sm text-white/80"><div className="flex items-center gap-3"><Truck size={16} className="text-[#E7C98A]" /> Careful dispatch from Jodhpur</div><div className="flex items-center gap-3"><Heart size={16} className="text-[#E7C98A]" /> Hand-finished artisan detailing</div><div className="flex items-center gap-3"><Store size={16} className="text-[#E7C98A]" /> Heritage silhouettes, modern fit</div></div></div></section>;
-}
-
-export function NewsletterSection({ className = "" }: SectionProps) {
-  return <section className={cn("mx-auto max-w-7xl px-4 py-10 md:px-6 lg:px-8", className)}><div className="rounded-[18px] border border-[#C9A66B] bg-[#FFFBF4] p-6 md:p-8"><p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#6D6257]">Newsletter</p><div className="mt-3 flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><h2 className="font-serif text-3xl font-light tracking-tight">Receive the next drop, quietly.</h2><p className="mt-2 max-w-xl text-sm leading-7 text-[#6D6257]">Early access to new silhouettes, artisan notes, and limited releases.</p></div><form className="flex w-full max-w-xl flex-col gap-3 sm:flex-row"><input type="email" placeholder="Email address" className="min-w-0 flex-1 rounded-md border border-[#C9A66B] bg-white px-4 py-3 text-sm outline-none placeholder:text-[#6D6257]" /><button type="button" className="inline-flex items-center justify-center rounded-md bg-[#B04E2C] px-5 py-3 text-xs font-semibold uppercase tracking-[0.28em] text-white transition hover:bg-[#8F3C22]">Subscribe</button></form></div></div></section>;
-}
-
-export default ProductGrid;
-// Auto-synthesized missing component export
-export const ProductDetailView: any = (props: any) => props?.children || null;
+const sections = { HeroBanner, FeaturedArtisan, CuratedSpotlight, CraftManifesto, NewsletterSection, FilterSidebar, ProductGrid, LoadingSpinner };
+export default sections;
+export { sections };
