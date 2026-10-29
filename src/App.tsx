@@ -1,94 +1,74 @@
-import React, { useEffect, useState } from 'react';
-import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { Toaster } from 'sonner';
-import { AnimatePresence, motion } from 'framer-motion';
-import Header from './components/Header';
-import Footer from './components/Footer';
-import CartDrawer from './components/CartDrawer';
-import { CartProvider } from './context/CartContext';
-import Home from './pages/Home';
-import ShopPage from './pages/ShopPage';
-import SecondaryPages, {
-  ProductPage,
-  CartPage,
-  CheckoutPage,
-  ArtisansPage,
-  ArtisanPage,
-  CustomOrderPage,
-  LoginPage,
-  NotFoundPage,
-} from './pages/SecondaryPages';
+import React, { useEffect, useMemo, useState } from "react";
+import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { Toaster } from "sonner";
+import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
+import { CartDrawer, CartRoute } from "@/components/CartDrawer";
+import { AuthModal } from "@/components/AuthModal";
+import { CartProvider } from "@/context/CartContext";
+import Home from "@/pages/Home";
+import CatalogPage from "@/pages/CatalogPage";
+import ProductDetailsPage from "@/pages/ProductDetailsPage";
+import ArtisanStoriesPage from "@/pages/ArtisanStoriesPage";
+import CheckoutPage from "@/pages/CheckoutPage";
+import OrderConfirmationPage from "@/pages/OrderConfirmationPage";
 
 function ScrollToTop() {
-  const location = useLocation();
+  const { pathname, hash } = useLocation();
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [location.pathname, location.hash]);
+    if (!hash) window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [pathname, hash]);
   return null;
 }
 
-function AppRoutes() {
+function AppShell() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const [cartOpen, setCartOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+
+  useEffect(() => {
+    setAuthOpen(location.pathname === "/login");
+  }, [location.pathname]);
+
+  const authDefaultTab = useMemo(() => (location.pathname.includes("signup") ? "signup" : "signin"), [location.pathname]);
+
+  const handleAuthOpenChange = (open: boolean) => {
+    setAuthOpen(open);
+    if (!open && location.pathname === "/login") navigate(-1);
+  };
+
   return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={location.pathname}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -10 }}
-        transition={{ duration: 0.28, ease: 'easeOut' }}
-        className="min-h-[calc(100vh-0px)]"
-      >
-        <Routes location={location}>
+    <div className="min-h-screen bg-[#F7F0E3] text-[#211A17]">
+      <Header className="sticky top-0 z-40" />
+      <main>
+        <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/shop" element={<ShopPage />} />
-          <Route path="/product/:slug" element={<ProductPage />} />
-          <Route path="/cart" element={<CartPage />} />
+          <Route path="/catalog" element={<CatalogPage />} />
+          <Route path="/products/:slug" element={<ProductDetailsPage />} />
+          <Route path="/artisans" element={<ArtisanStoriesPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
-          <Route path="/artisans" element={<ArtisansPage />} />
-          <Route path="/artisans/:id" element={<ArtisanPage />} />
-          <Route path="/custom-order" element={<CustomOrderPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/404" element={<NotFoundPage />} />
-          <Route path="*" element={<Navigate to="/404" replace />} />
+          <Route path="/order/:orderId" element={<OrderConfirmationPage />} />
+          <Route path="/cart" element={<CartRoute open={true} onOpenChange={setCartOpen} />} />
+          <Route path="/login" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </motion.div>
-    </AnimatePresence>
+      </main>
+      <Footer />
+      <CartDrawer open={cartOpen} onOpenChange={setCartOpen} />
+      <AuthModal open={authOpen} onOpenChange={handleAuthOpenChange} defaultTab={authDefaultTab as "signin" | "signup"} />
+      <Toaster position="top-right" richColors closeButton theme="light" />
+    </div>
   );
 }
 
-export function App() {
-  const [cartOpen, setCartOpen] = useState(false);
+export default function App() {
   return (
     <HashRouter>
       <CartProvider>
-        <div className="min-h-screen bg-[#F9F5F0] text-[#2E2B28] antialiased">
-          <ScrollToTop />
-          <Header />
-          <main className="relative">
-            <AppRoutes />
-          </main>
-          <Footer />
-          <CartDrawer open={cartOpen} onOpenChange={setCartOpen} />
-          <Toaster
-            position="top-right"
-            richColors={false}
-            closeButton
-            toastOptions={{
-              style: {
-                background: '#FFFDF9',
-                color: '#2E2B28',
-                border: '1px solid #CDBB9B',
-                borderRadius: '6px',
-              },
-            }}
-          />
-        </div>
+        <ScrollToTop />
+        <AppShell />
       </CartProvider>
     </HashRouter>
   );
 }
-
-export default App;
-// [auto-removed: duplicate export of App]
-// export { App };
