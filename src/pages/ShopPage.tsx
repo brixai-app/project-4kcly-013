@@ -1,38 +1,52 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Search, Sliders, ArrowUpRight, RefreshCw } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { ArrowRight, Filter, Search, Sliders, X } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { FilterSidebar, ProductGrid } from '@/components/StorefrontSections';
-import type { Product, ProductFilterState } from '@/types';
+import { cn } from '@/lib/utils';
+import ProductCard from '@/components/ProductCard';
+import type { Product, ProductFilters } from '@/types';
+
+const categoryFallback = (value?: string) => (value ?? 'all').trim().toLowerCase();
+const money = (value: number, currency = '₹') => `${currency}${new Intl.NumberFormat('en-IN').format(value)}`;
+
+const sortProducts = (items: Product[], sortBy: ProductFilters['sortBy'] = 'featured') => {
+  const list = [...items];
+  if (sortBy === 'price-asc') return list.sort((a, b) => a.price - b.price);
+  if (sortBy === 'price-desc') return list.sort((a, b) => b.price - a.price);
+  if (sortBy === 'name-asc') return list.sort((a, b) => a.name.localeCompare(b.name));
+  if (sortBy === 'newest') return list.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+  return list.sort((a, b) => Number(b.featured ?? false) - Number(a.featured ?? false));
+};
 
 export function ShopPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [filters, setFilters] = useState<Partial<ProductFilterState>>({
-    query: '',
-    sortBy: 'featured',
-    categories: [],
-    genders: [],
-    sizes: [],
-    availability: [],
-    featuredOnly: false,
-    handcraftedOnly: false,
-    priceRange: [0, 100000],
-  });
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  const filters = useMemo<ProductFilters>(() => ({
+    query: searchParams.get('q') ?? '',
+    category: searchParams.get('category') ?? 'all',
+    artisanId: searchParams.get('artisanId') ?? '',
+    minPrice: Number(searchParams.get('minPrice') ?? 0) || undefined,
+    maxPrice: Number(searchParams.get('maxPrice') ?? 0) || undefined,
+    inStock: searchParams.get('inStock') === 'true' ? true : undefined,
+    featured: searchParams.get('featured') === 'true' ? true : undefined,
+    sortBy: (searchParams.get('sortBy') as ProductFilters['sortBy']) ?? 'featured',
+  }), [searchParams]);
 
   useEffect(() => {
     let active = true;
     const load = async () => {
       setLoading(true);
-      setError('');
       try {
-        const res = await fetch('/api/products');
+        const res = await fetch('/api/products', { credentials: 'include' });
         const json = await res.json().catch(() => null);
-        const payload = Array.isArray(json) ? json : (json?.data ?? json?.products ?? json?.items ?? []);
-        const next = Array.isArray(payload) ? payload : [];
-        if (active) setProducts(next);
+        const payload = json?.data ?? json ?? [];
+        const list = Array.isArray(payload) ? payload : Array.isArray(payload?.items) ? payload.items : Array.isArray(payload?.products) ? payload.products : [];
+        if (active) setProducts(list.filter(Boolean));
       } catch {
-        if (active) setError('Unable to load the collection right now.');
+        if (active) setProducts([]);
       } finally {
         if (active) setLoading(false);
       }
@@ -43,116 +57,138 @@ export function ShopPage() {
     };
   }, []);
 
-  const filteredProducts = useMemo(() => {
-    const query = (filters.query ?? '').trim().toLowerCase();
-    const categories = filters.categories ?? [];
-    const genders = filters.genders ?? [];
-    const sizes = filters.sizes ?? [];
-    const availability = filters.availability ?? [];
-    const [minPrice, maxPrice] = filters.priceRange ?? [0, Number.MAX_SAFE_INTEGER];
-
-    const list = products.filter((product) => {
-      const matchesQuery =
-        !query ||
-        [product.name, product.category, product.artisan, product.material, product.color, ...(product.tags ?? [])]
-          .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(query));
-      const matchesCategory = categories.length === 0 || categories.some((category) => String(product.category ?? '').toLowerCase() === String(category ?? '').toLowerCase());
-      const matchesGender = genders.length === 0 || genders.includes(product.gender);
-      const matchesSize = sizes.length === 0 || sizes.some((size) => (product.sizes ?? []).includes(size));
-      const matchesAvailability =
-        availability.length === 0 || availability.includes(product.availability ?? 'in_stock');
-      const matchesPrice = product.price >= minPrice && product.price <= maxPrice;
-      const matchesFeatured = !filters.featuredOnly || !!product.featured;
-      const matchesHandcrafted = !filters.handcraftedOnly || !!product.handcrafted;
-      return matchesQuery && matchesCategory && matchesGender && matchesSize && matchesAvailability && matchesPrice && matchesFeatured && matchesHandcrafted;
+  const categories = useMemo(() => {
+    const map = new Map<string, number>();
+    products.forEach((p) => {
+      const key = categoryFallback(p?.category);
+      map.set(key, (map.get(key) ?? 0) + 1);
     });
+    return [{ label: 'All', value: 'all', count: products.length }, ...Array.from(map.entries()).map(([value, count]) => ({ label: value === 'all' ? 'All' : value.replace(/-/g, ' '), value, count }))];
+  }, [products]);
 
-    const sortBy = filters.sortBy ?? 'featured';
-    return [...list].sort((a, b) => {
-      if (sortBy === 'price-asc') return a.price - b.price;
-      if (sortBy === 'price-desc') return b.price - a.price;
-      if (sortBy === 'rating') return (b.rating ?? 0) - (a.rating ?? 0);
-      if (sortBy === 'newest') return Number(!!b.newArrival) - Number(!!a.newArrival);
-      return Number(!!b.featured) - Number(!!a.featured);
+  const filtered = useMemo(() => {
+    const q = filters.query?.trim().toLowerCase() ?? '';
+    const category = categoryFallback(filters.category);
+    const list = products.filter((p) => {
+      const matchesQuery = !q || [p.name, p.description, p.category, p.material, p.origin, ...(p.colors ?? []), ...(p.sizes ?? [])].some((v) => (v ?? '').toLowerCase().includes(q));
+      const matchesCategory = category === 'all' || categoryFallback(p.category) === category;
+      const matchesArtisan = !filters.artisanId || p.artisanId === filters.artisanId;
+      const matchesMin = filters.minPrice == null || p.price >= filters.minPrice;
+      const matchesMax = filters.maxPrice == null || p.price <= filters.maxPrice;
+      const matchesStock = filters.inStock == null || Boolean(p.inStock ?? true) === filters.inStock;
+      const matchesFeatured = filters.featured == null || Boolean(p.featured ?? false) === filters.featured;
+      return matchesQuery && matchesCategory && matchesArtisan && matchesMin && matchesMax && matchesStock && matchesFeatured;
     });
+    return sortProducts(list, filters.sortBy);
   }, [filters, products]);
 
+  const setFilter = (key: keyof ProductFilters, value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (!value) next.delete(key);
+    else next.set(key, value);
+    setSearchParams(next, { replace: true });
+  };
+
+  const clearFilters = () => setSearchParams({}, { replace: true });
+
   return (
-    <main className="bg-[#F9F5F0] text-[#2E2B28]">
-      <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="flex flex-col gap-6 border border-[#CDBB9B] bg-[#FFFDF9] p-4 sm:p-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#6E6258]">Shop Jootiya</p>
-              <h1 className="mt-2 font-['Bodoni_Moda'] text-4xl font-light tracking-tight sm:text-5xl">
-                Authentic Jodhpuri Mojris, curated with editorial precision.
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-[#6E6258]">
-                Explore handcrafted silhouettes, heritage finishes, and occasion-ready pairs sourced from master artisans.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#6E6258]">
-              <ArrowUpRight className="h-4 w-4" />
-              <span>{filteredProducts.length} pieces</span>
-            </div>
+    <div className="bg-[#F5F1EB] text-[#302D29]">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mb-6 flex items-end justify-between gap-4 border-b border-[#C9BFB1] pb-4">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#71695F]">Shop</p>
+            <h1 className="font-['Bodoni_Moda'] text-4xl font-light tracking-tight sm:text-5xl">Jodhpuri Mojris</h1>
           </div>
+          <button onClick={() => setMobileFiltersOpen((v) => !v)} className="inline-flex items-center gap-2 border border-[#C9BFB1] bg-[#FFFCF7] px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#302D29] lg:hidden">
+            <Sliders className="h-4 w-4" /> Filters
+          </button>
+        </div>
 
-          <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-            <aside className="min-w-0">
-              <div className="sticky top-4">
-                <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#6E6258]">
-                  <Sliders className="h-4 w-4" />
-                  <span>Filters</span>
-                </div>
-                <FilterSidebar
-                  filters={filters}
-                  onFilterChange={(next) => setFilters((prev) => ({ ...prev, ...next }))}
-                  className="rounded-none border border-[#CDBB9B] bg-[#FFFDF9] p-4"
-                />
+        <div className="grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <aside className={cn('space-y-6 lg:sticky lg:top-24 lg:h-fit', mobileFiltersOpen ? 'block' : 'hidden lg:block')}>
+            <div className="border border-[#C9BFB1] bg-[#FFFCF7] p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="min-w-0 truncate text-xs font-semibold uppercase tracking-[0.28em] text-[#71695F]">Filters</h2>
+                <button onClick={clearFilters} className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6B1E1E]">Reset</button>
               </div>
-            </aside>
-
-            <section className="min-w-0">
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <label className="flex min-w-0 flex-1 items-center gap-3 border border-[#CDBB9B] bg-[#FFFDF9] px-3 py-2">
-                  <Search className="h-4 w-4 shrink-0 text-[#6E6258]" />
-                  <input
-                    value={filters.query ?? ''}
-                    onChange={(e) => setFilters((prev) => ({ ...prev, query: e.target.value }))}
-                    placeholder="Search by style, artisan, material..."
-                    className="min-w-0 w-full bg-transparent text-sm outline-none placeholder:text-[#6E6258]"
-                  />
+              <div className="flex flex-col gap-2.5">
+                <label className="flex items-center gap-2 border border-[#C9BFB1] bg-white px-3 py-2">
+                  <Search className="h-4 w-4 shrink-0 text-[#71695F]" />
+                  <input value={filters.query ?? ''} onChange={(e) => setFilter('query', e.target.value)} placeholder="Search mojris" className="min-w-0 w-full bg-transparent text-sm outline-none placeholder:text-[#71695F]" />
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setFilters({ query: '', sortBy: 'featured', categories: [], genders: [], sizes: [], availability: [], featuredOnly: false, handcraftedOnly: false, priceRange: [0, 100000] })}
-                  className="inline-flex items-center gap-2 border border-[#CDBB9B] bg-[#FFFDF9] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#2E2B28] transition-colors hover:bg-[#F9F5F0]"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                  Reset
+                <select value={filters.sortBy ?? 'featured'} onChange={(e) => setFilter('sortBy', e.target.value)} className="border border-[#C9BFB1] bg-white px-3 py-2 text-sm outline-none">
+                  <option value="featured">Featured</option>
+                  <option value="newest">Newest</option>
+                  <option value="price-asc">Price: Low to High</option>
+                  <option value="price-desc">Price: High to Low</option>
+                  <option value="name-asc">Name: A to Z</option>
+                </select>
+                <div className="flex flex-wrap gap-2">
+                  {categories.map((c) => (
+                    <button key={c.value} onClick={() => setFilter('category', c.value)} className={cn('min-w-0 border px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.22em] transition', categoryFallback(filters.category) === c.value ? 'border-[#6B1E1E] bg-[#6B1E1E] text-white' : 'border-[#C9BFB1] bg-white text-[#302D29]')}>
+                      <span className="block truncate">{c.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="border border-[#C9BFB1] bg-[#FFFCF7] p-4">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.28em] text-[#71695F]">Refine</p>
+              <div className="flex flex-col gap-2.5">
+                <button onClick={() => setFilter('inStock', filters.inStock ? '' : 'true')} className="border border-[#C9BFB1] bg-white px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.22em]">
+                  {filters.inStock ? 'In stock only' : 'Show in stock'}
+                </button>
+                <button onClick={() => setFilter('featured', filters.featured ? '' : 'true')} className="border border-[#C9BFB1] bg-white px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.22em]">
+                  {filters.featured ? 'Featured only' : 'Featured pieces'}
                 </button>
               </div>
+            </div>
+          </aside>
 
-              {loading ? (
-                <div className="flex min-h-[40vh] items-center justify-center border border-dashed border-[#CDBB9B] bg-[#FFFDF9]">
-                  <div className="flex items-center gap-3 text-sm text-[#6E6258]">
-                    <motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
-                      <RefreshCw className="h-4 w-4" />
-                    </motion.span>
-                    Loading collection...
-                  </div>
-                </div>
-              ) : error ? (
-                <div className="border border-[#CDBB9B] bg-[#FFFDF9] p-6 text-sm text-[#6E6258]">{error}</div>
-              ) : (
-                <ProductGrid products={filteredProducts} className="min-w-0" />
-              )}
-            </section>
-          </div>
+          <main className="min-w-0">
+            <div className="mb-5 flex flex-col gap-3 border-b border-[#C9BFB1] pb-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-[#71695F]">{loading ? 'Loading collection…' : `${filtered.length} pieces`}</p>
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#71695F]">
+                <Filter className="h-4 w-4" />
+                <span>Editorial masonry</span>
+              </div>
+            </div>
+
+            <div className="mb-6 flex flex-wrap gap-2 lg:hidden">
+              {categories.slice(0, 6).map((c) => (
+                <button key={c.value} onClick={() => setFilter('category', c.value)} className={cn('border px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em]', categoryFallback(filters.category) === c.value ? 'border-[#6B1E1E] bg-[#6B1E1E] text-white' : 'border-[#C9BFB1] bg-[#FFFCF7] text-[#302D29]')}>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+              {filtered.map((product, index) => (
+                <motion.div key={product.id} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, delay: Math.min(index * 0.04, 0.24) }}>
+                  <ProductCard product={product} priority={index < 4} />
+                </motion.div>
+              ))}
+            </div>
+
+            {!loading && filtered.length === 0 && (
+              <div className="mt-10 border border-dashed border-[#C9BFB1] bg-[#FFFCF7] p-8 text-center">
+                <p className="text-sm text-[#71695F]">No pieces match your current filters.</p>
+                <button onClick={clearFilters} className="mt-4 inline-flex items-center gap-2 border border-[#6B1E1E] bg-[#6B1E1E] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-white">
+                  Clear filters <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+
+            <div className="mt-10 flex items-center justify-between border-t border-[#C9BFB1] pt-4">
+              <p className="text-sm text-[#71695F]">Looking for a bespoke pair?</p>
+              <Link to="/custom-order" className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#6B1E1E]">
+                Request custom <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </main>
         </div>
-      </section>
-    </main>
+      </div>
+    </div>
   );
 }
 

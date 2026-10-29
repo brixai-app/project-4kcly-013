@@ -1,90 +1,144 @@
-export type MojriProduct = {
+export type Product = {
   id: string;
   name: string;
   slug: string;
   price: number;
-  description: string;
+  currency?: string;
   category: string;
-  collection: string;
-  artisanId: string;
+  artisanId?: string;
+  description?: string;
   image: string;
-  gallery: string[];
-  sizes: string[];
-  colors: string[];
-  featured?: boolean;
+  images?: string[];
+  sizes?: string[];
+  colors?: string[];
   inStock?: boolean;
-  provenance?: string;
+  featured?: boolean;
+  material?: string;
+  origin?: string;
   care?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type Artisan = {
   id: string;
   name: string;
   slug: string;
-  location: string;
-  specialty: string;
-  story: string;
-  portrait: string;
+  title?: string;
+  location?: string;
+  bio?: string;
+  portrait?: string;
+  specialties?: string[];
   yearsActive?: number;
-  techniques: string[];
+  featured?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type CartItem = {
-  productId: string;
-  quantity: number;
-  size?: string;
-  color?: string;
-};
-
-export type UserSession = {
   id: string;
-  name: string;
-  email: string;
-  avatar?: string;
-  createdAt: string;
-};
-
-export type CheckoutForm = {
-  fullName: string;
-  email: string;
-  phone: string;
-  addressLine1: string;
-  addressLine2?: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
-  paymentMethod: "cod" | "upi" | "card";
-};
-
-export type FilterState = {
-  query: string;
-  category: string;
-  collection: string;
-  artisanId: string;
-  priceRange: [number, number];
-  sortBy: "featured" | "newest" | "price-asc" | "price-desc";
-};
-
-export type OrderItem = {
   productId: string;
+  product?: Product;
   name: string;
   price: number;
   quantity: number;
+  image: string;
   size?: string;
   color?: string;
-  image?: string;
 };
 
 export type Order = {
   id: string;
-  items: OrderItem[];
+  userId?: string;
+  items: CartItem[];
   subtotal: number;
-  shipping: number;
+  shipping?: number;
+  discount?: number;
   total: number;
-  customer: CheckoutForm;
-  createdAt: string;
-  status: "placed" | "processing" | "shipped" | "delivered";
+  currency?: string;
+  status: "pending" | "confirmed" | "packed" | "shipped" | "delivered" | "cancelled";
+  shippingAddress?: string;
+  paymentMethod?: string;
+  promoCode?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
-export default {};
+export type UserProfile = {
+  id: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  avatar?: string;
+  role?: "customer" | "artisan" | "admin";
+  city?: string;
+  country?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type CustomOrderRequest = {
+  id: string;
+  userId?: string;
+  name: string;
+  email: string;
+  phone?: string;
+  occasion?: string;
+  notes?: string;
+  budget?: number;
+  preferredColors?: string[];
+  preferredMaterials?: string[];
+  status?: "new" | "reviewing" | "quoted" | "approved" | "in_progress" | "completed" | "declined";
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type FilterOption = {
+  label: string;
+  value: string;
+  count?: number;
+};
+
+export type ProductFilters = {
+  query?: string;
+  category?: string;
+  artisanId?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  inStock?: boolean;
+  featured?: boolean;
+  sortBy?: "featured" | "newest" | "price-asc" | "price-desc" | "name-asc";
+};
+
+export type ApiResponse<T> = {
+  success: boolean;
+  data?: T;
+  message?: string;
+  error?: string;
+};
+
+export type PaginatedResponse<T> = ApiResponse<T[]> & {
+  page?: number;
+  pageSize?: number;
+  total?: number;
+  totalPages?: number;
+};
+
+export type AuthSessionResponse = ApiResponse<{
+  user: UserProfile | null;
+  sessionId?: string;
+}>;
+
+export default {
+  Product: undefined,
+  Artisan: undefined,
+  CartItem: undefined,
+  Order: undefined,
+  UserProfile: undefined,
+  CustomOrderRequest: undefined,
+  FilterOption: undefined,
+  ProductFilters: undefined,
+  ApiResponse: undefined,
+  PaginatedResponse: undefined,
+  AuthSessionResponse: undefined,
+};
